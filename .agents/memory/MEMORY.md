@@ -1,0 +1,1 @@
+- [Geem bug fixes](geem-bug-fixes.md) — key constraints from the bug-fix session: SQL injection rule, double-sell guard, Clerk v6 type workaround.

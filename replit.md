@@ -1,10 +1,11 @@
-# [Project name]
+# Geem CRM & Shop
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A full-stack business management platform for mobile phone retail. Covers inventory (IMEI-tracked), invoicing, customer ledger, POS, procurement, web shop, SIM management, and dashboards.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- `pnpm --filter @workspace/api-server run dev` — run the API server (port 8080, proxied at `/api`)
+- `pnpm --filter @workspace/geem run dev` — run the frontend (port 18112, proxied at `/`)
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
@@ -14,23 +15,32 @@ _Replace the heading above with the project's name, and this line with one sente
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
+- Frontend: React + Vite, shadcn/ui, TanStack Query, Wouter, Recharts
 - API: Express 5
+- Auth: Clerk (frontend + admin), custom token auth (shop customers)
 - DB: PostgreSQL + Drizzle ORM
 - Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- AI: OpenAI (`gpt-4o-mini`) for product content generation
+- Push: FCM via `@workspace/push`
+- Build: esbuild (CJS bundle for API)
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/api-server/src/routes/` — all Express route handlers
+- `artifacts/geem/src/pages/` — React pages (admin/, shop/, auth/)
+- `artifacts/geem/src/components/` — shared UI components
+- `lib/db/src/schema/` — Drizzle ORM schema (source of truth for DB)
+- `lib/api-spec/openapi.yaml` — OpenAPI spec (source of truth for API contracts)
+- `lib/api-client-react/src/generated/` — generated React Query hooks (do not edit)
+- `lib/api-zod/src/generated/` — generated Zod schemas (do not edit)
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
-
-## Product
-
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Ledger balances always calculated by `recalculateCustomerLedger()` after insert; the `balance: "0"` placeholder is intentional.
+- Inventory sold status protected by `inArray()` pre-check in invoice creation — no `sql.raw` on request body values.
+- Web order shipping only passes successfully-sold inventory IDs into invoice creation.
+- OpenAI model: `gpt-4o-mini` (not `gpt-5-mini` which does not exist).
+- Clerk React v6 `useSignIn()` uses `as any` cast in ShopSignIn.tsx due to signals-based API type mismatch.
 
 ## User preferences
 
@@ -38,7 +48,9 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Do NOT use `sql.raw()` with request body values — always use `inArray()` or parameterised queries.
+- Run `pnpm --filter @workspace/api-spec run codegen` after any OpenAPI spec change before using the generated types.
+- Typecheck with `pnpm --filter @workspace/<slug> run typecheck`, not `build` (build needs `PORT`/`BASE_PATH` from workflow env).
 
 ## Pointers
 

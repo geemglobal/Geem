@@ -1,22 +1,42 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Geem CRM & E-Commerce API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-    description: Health operations
+  - name: auth
+  - name: dashboard
+  - name: inventory
+  - name: brands
+  - name: models
+  - name: categories
+  - name: vendors
+  - name: couriers
+  - name: paymentMethods
+  - name: customers
+  - name: invoices
+  - name: quotations
+  - name: procurement
+  - name: products
+  - name: webOrders
+  - name: shipments
+  - name: serviceTickets
+  - name: vault
+  - name: users
+  - name: settings
+  - name: reports
+  - name: chat
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +44,1984 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # --- AUTH ---
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout
+      responses:
+        "200":
+          description: Logged out
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  # --- DASHBOARD ---
+  /dashboard/stats:
+    get:
+      operationId: getDashboardStats
+      tags: [dashboard]
+      summary: Dashboard summary stats
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
+  /dashboard/revenue:
+    get:
+      operationId: getDashboardRevenue
+      tags: [dashboard]
+      summary: Revenue chart data
+      parameters:
+        - in: query
+          name: period
+          schema:
+            type: string
+            enum: [daily, weekly, monthly]
+      responses:
+        "200":
+          description: Revenue data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RevenuePoint"
+
+  /dashboard/recent-sales:
+    get:
+      operationId: getDashboardRecentSales
+      tags: [dashboard]
+      summary: Recent 10 sales
+      responses:
+        "200":
+          description: Recent sales
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RecentSale"
+
+  # --- INVENTORY ---
+  /inventory:
+    get:
+      operationId: listInventory
+      tags: [inventory]
+      summary: List inventory items
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: brand
+          schema:
+            type: string
+        - in: query
+          name: model
+          schema:
+            type: string
+        - in: query
+          name: ptaStatus
+          schema:
+            type: string
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: limit
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of inventory items
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryListResponse"
+    post:
+      operationId: createInventoryItem
+      tags: [inventory]
+      summary: Add single inventory item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryItemInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryItem"
+
+  /inventory/bulk:
+    post:
+      operationId: bulkCreateInventory
+      tags: [inventory]
+      summary: Bulk add inventory items
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkInventoryInput"
+      responses:
+        "200":
+          description: Bulk import result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkImportResult"
+
+  /inventory/low-stock:
+    get:
+      operationId: getLowStock
+      tags: [inventory]
+      summary: Low stock alerts
+      responses:
+        "200":
+          description: Low stock items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LowStockItem"
+
+  /inventory/pta-pending:
+    get:
+      operationId: getPtaPending
+      tags: [inventory]
+      summary: PTA pending items
+      responses:
+        "200":
+          description: PTA pending
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryItem"
+
+  /inventory/{id}:
+    get:
+      operationId: getInventoryItem
+      tags: [inventory]
+      summary: Get inventory item
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Inventory item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryItem"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateInventoryItem
+      tags: [inventory]
+      summary: Update inventory item
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryItemUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryItem"
+    delete:
+      operationId: deleteInventoryItem
+      tags: [inventory]
+      summary: Delete inventory item
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # --- BRANDS ---
+  /brands:
+    get:
+      operationId: listBrands
+      tags: [brands]
+      summary: List brands
+      responses:
+        "200":
+          description: Brands
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Brand"
+    post:
+      operationId: createBrand
+      tags: [brands]
+      summary: Create brand
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BrandInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Brand"
+
+  /brands/{id}:
+    get:
+      operationId: getBrand
+      tags: [brands]
+      summary: Get brand
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Brand
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Brand"
+    patch:
+      operationId: updateBrand
+      tags: [brands]
+      summary: Update brand
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BrandUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Brand"
+    delete:
+      operationId: deleteBrand
+      tags: [brands]
+      summary: Delete brand
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # --- MODELS ---
+  /models:
+    get:
+      operationId: listModels
+      tags: [models]
+      summary: List models
+      parameters:
+        - in: query
+          name: brandId
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Models
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DeviceModel"
+    post:
+      operationId: createModel
+      tags: [models]
+      summary: Create model
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeviceModelInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceModel"
+
+  /models/{id}:
+    patch:
+      operationId: updateModel
+      tags: [models]
+      summary: Update model
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeviceModelUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceModel"
+    delete:
+      operationId: deleteModel
+      tags: [models]
+      summary: Delete model
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # --- CATEGORIES ---
+  /categories:
+    get:
+      operationId: listCategories
+      tags: [categories]
+      summary: List categories
+      responses:
+        "200":
+          description: Categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Category"
+    post:
+      operationId: createCategory
+      tags: [categories]
+      summary: Create category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+
+  /categories/{id}:
+    patch:
+      operationId: updateCategory
+      tags: [categories]
+      summary: Update category
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+    delete:
+      operationId: deleteCategory
+      tags: [categories]
+      summary: Delete category
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # --- VENDORS ---
+  /vendors:
+    get:
+      operationId: listVendors
+      tags: [vendors]
+      summary: List vendors
+      responses:
+        "200":
+          description: Vendors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Vendor"
+    post:
+      operationId: createVendor
+      tags: [vendors]
+      summary: Create vendor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VendorInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vendor"
+
+  /vendors/{id}:
+    get:
+      operationId: getVendor
+      tags: [vendors]
+      summary: Get vendor
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Vendor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vendor"
+    patch:
+      operationId: updateVendor
+      tags: [vendors]
+      summary: Update vendor
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VendorUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vendor"
+    delete:
+      operationId: deleteVendor
+      tags: [vendors]
+      summary: Delete vendor
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # --- COURIERS ---
+  /couriers:
+    get:
+      operationId: listCouriers
+      tags: [couriers]
+      summary: List couriers
+      responses:
+        "200":
+          description: Couriers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Courier"
+    post:
+      operationId: createCourier
+      tags: [couriers]
+      summary: Create courier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CourierInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Courier"
+
+  /couriers/{id}:
+    patch:
+      operationId: updateCourier
+      tags: [couriers]
+      summary: Update courier
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CourierUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Courier"
+    delete:
+      operationId: deleteCourier
+      tags: [couriers]
+      summary: Delete courier
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # --- PAYMENT METHODS ---
+  /payment-methods:
+    get:
+      operationId: listPaymentMethods
+      tags: [paymentMethods]
+      summary: List payment methods
+      responses:
+        "200":
+          description: Payment methods
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PaymentMethod"
+    post:
+      operationId: createPaymentMethod
+      tags: [paymentMethods]
+      summary: Create payment method
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentMethodInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentMethod"
+
+  /payment-methods/{id}:
+    patch:
+      operationId: updatePaymentMethod
+      tags: [paymentMethods]
+      summary: Update payment method
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentMethodUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentMethod"
+    delete:
+      operationId: deletePaymentMethod
+      tags: [paymentMethods]
+      summary: Delete payment method
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # --- CUSTOMERS ---
+  /customers:
+    get:
+      operationId: listCustomers
+      tags: [customers]
+      summary: List customers
+      parameters:
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: city
+          schema:
+            type: string
+        - in: query
+          name: active
+          schema:
+            type: boolean
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: limit
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Customers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerListResponse"
+    post:
+      operationId: createCustomer
+      tags: [customers]
+      summary: Create customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+
+  /customers/{id}:
+    get:
+      operationId: getCustomer
+      tags: [customers]
+      summary: Get customer
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Customer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+    patch:
+      operationId: updateCustomer
+      tags: [customers]
+      summary: Update customer
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+    delete:
+      operationId: deleteCustomer
+      tags: [customers]
+      summary: Delete customer
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /customers/{id}/ledger:
+    get:
+      operationId: getCustomerLedger
+      tags: [customers]
+      summary: Customer ledger
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Ledger entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LedgerEntry"
+
+  # --- INVOICES ---
+  /invoices:
+    get:
+      operationId: listInvoices
+      tags: [invoices]
+      summary: List invoices
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: customerId
+          schema:
+            type: integer
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: limit
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Invoices
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceListResponse"
+    post:
+      operationId: createInvoice
+      tags: [invoices]
+      summary: Create invoice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoiceInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+
+  /invoices/{id}:
+    get:
+      operationId: getInvoice
+      tags: [invoices]
+      summary: Get invoice
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+    patch:
+      operationId: updateInvoice
+      tags: [invoices]
+      summary: Update invoice
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoiceUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+    delete:
+      operationId: deleteInvoice
+      tags: [invoices]
+      summary: Delete invoice
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /invoices/{id}/payment:
+    post:
+      operationId: recordPayment
+      tags: [invoices]
+      summary: Record payment for invoice
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentInput"
+      responses:
+        "201":
+          description: Payment recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+
+  # --- POS DRAFTS ---
+  /pos/drafts:
+    get:
+      operationId: listPosDrafts
+      tags: [invoices]
+      summary: List POS drafts
+      responses:
+        "200":
+          description: Drafts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PosDraft"
+    post:
+      operationId: createPosDraft
+      tags: [invoices]
+      summary: Save POS draft
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PosDraftInput"
+      responses:
+        "201":
+          description: Draft saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PosDraft"
+
+  /pos/drafts/{id}:
+    delete:
+      operationId: deletePosDraft
+      tags: [invoices]
+      summary: Delete POS draft
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # --- QUOTATIONS ---
+  /quotations:
+    get:
+      operationId: listQuotations
+      tags: [quotations]
+      summary: List quotations
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: customerId
+          schema:
+            type: integer
+        - in: query
+          name: page
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Quotations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Quotation"
+    post:
+      operationId: createQuotation
+      tags: [quotations]
+      summary: Create quotation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuotationInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quotation"
+
+  /quotations/{id}:
+    get:
+      operationId: getQuotation
+      tags: [quotations]
+      summary: Get quotation
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Quotation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quotation"
+    patch:
+      operationId: updateQuotation
+      tags: [quotations]
+      summary: Update quotation
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuotationUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quotation"
+    delete:
+      operationId: deleteQuotation
+      tags: [quotations]
+      summary: Delete quotation
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /quotations/{id}/convert-invoice:
+    post:
+      operationId: convertQuotationToInvoice
+      tags: [quotations]
+      summary: Convert quotation to invoice
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "201":
+          description: Invoice created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+
+  # --- PROCUREMENT ---
+  /procurement/imports:
+    get:
+      operationId: listImportOrders
+      tags: [procurement]
+      summary: List import orders
+      responses:
+        "200":
+          description: Import orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ImportOrder"
+    post:
+      operationId: createImportOrder
+      tags: [procurement]
+      summary: Create import order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportOrderInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportOrder"
+
+  /procurement/imports/{id}:
+    get:
+      operationId: getImportOrder
+      tags: [procurement]
+      summary: Get import order
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Import order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportOrder"
+    patch:
+      operationId: updateImportOrder
+      tags: [procurement]
+      summary: Update import order
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportOrderUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportOrder"
+
+  /procurement/grn:
+    get:
+      operationId: listGrn
+      tags: [procurement]
+      summary: List GRN records
+      responses:
+        "200":
+          description: GRN list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Grn"
+    post:
+      operationId: createGrn
+      tags: [procurement]
+      summary: Create GRN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GrnInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Grn"
+
+  # --- PRODUCTS (E-COMMERCE) ---
+  /products:
+    get:
+      operationId: listProducts
+      tags: [products]
+      summary: List products
+      parameters:
+        - in: query
+          name: published
+          schema:
+            type: boolean
+        - in: query
+          name: categoryId
+          schema:
+            type: integer
+        - in: query
+          name: brandId
+          schema:
+            type: integer
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Products
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductListResponse"
+    post:
+      operationId: createProduct
+      tags: [products]
+      summary: Create product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+
+  /products/{id}:
+    get:
+      operationId: getProduct
+      tags: [products]
+      summary: Get product
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+    patch:
+      operationId: updateProduct
+      tags: [products]
+      summary: Update product
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+    delete:
+      operationId: deleteProduct
+      tags: [products]
+      summary: Delete product
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # --- WEB ORDERS ---
+  /web-orders:
+    get:
+      operationId: listWebOrders
+      tags: [webOrders]
+      summary: List web/e-commerce orders
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: paymentStatus
+          schema:
+            type: string
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Web orders
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebOrderListResponse"
+    post:
+      operationId: createWebOrder
+      tags: [webOrders]
+      summary: Create web order (public checkout)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebOrderInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebOrder"
+
+  /web-orders/{id}:
+    get:
+      operationId: getWebOrder
+      tags: [webOrders]
+      summary: Get web order
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Web order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebOrder"
+    patch:
+      operationId: updateWebOrder
+      tags: [webOrders]
+      summary: Update web order status
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebOrderUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebOrder"
+
+  /web-orders/track:
+    get:
+      operationId: trackWebOrder
+      tags: [webOrders]
+      summary: Track order by number (public)
+      parameters:
+        - in: query
+          name: orderNumber
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Order tracking info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebOrder"
+
+  # --- SHIPMENTS ---
+  /shipments:
+    get:
+      operationId: listShipments
+      tags: [shipments]
+      summary: List shipments
+      responses:
+        "200":
+          description: Shipments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Shipment"
+    post:
+      operationId: createShipment
+      tags: [shipments]
+      summary: Create shipment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShipmentInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shipment"
+
+  /shipments/{id}:
+    get:
+      operationId: getShipment
+      tags: [shipments]
+      summary: Get shipment
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Shipment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shipment"
+    patch:
+      operationId: updateShipment
+      tags: [shipments]
+      summary: Update shipment
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShipmentUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shipment"
+
+  # --- SERVICE TICKETS ---
+  /service-tickets:
+    get:
+      operationId: listServiceTickets
+      tags: [serviceTickets]
+      summary: List service tickets
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: customerId
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Tickets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ServiceTicket"
+    post:
+      operationId: createServiceTicket
+      tags: [serviceTickets]
+      summary: Create service ticket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceTicketInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceTicket"
+
+  /service-tickets/{id}:
+    get:
+      operationId: getServiceTicket
+      tags: [serviceTickets]
+      summary: Get service ticket
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Ticket
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceTicket"
+    patch:
+      operationId: updateServiceTicket
+      tags: [serviceTickets]
+      summary: Update service ticket
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceTicketUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceTicket"
+
+  # --- PLATFORM VAULT ---
+  /vault:
+    get:
+      operationId: listVaultEntries
+      tags: [vault]
+      summary: List platform vault entries
+      responses:
+        "200":
+          description: Vault entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VaultEntry"
+    post:
+      operationId: createVaultEntry
+      tags: [vault]
+      summary: Create vault entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VaultEntryInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultEntry"
+
+  /vault/{id}:
+    patch:
+      operationId: updateVaultEntry
+      tags: [vault]
+      summary: Update vault entry
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VaultEntryUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultEntry"
+    delete:
+      operationId: deleteVaultEntry
+      tags: [vault]
+      summary: Delete vault entry
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # --- USERS ---
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List users
+      responses:
+        "200":
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Create user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/{id}:
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Update user
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    delete:
+      operationId: deleteUser
+      tags: [users]
+      summary: Delete user
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # --- SETTINGS ---
+  /settings/company:
+    get:
+      operationId: getCompanySettings
+      tags: [settings]
+      summary: Get company settings
+      responses:
+        "200":
+          description: Company settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompanySettings"
+    patch:
+      operationId: updateCompanySettings
+      tags: [settings]
+      summary: Update company settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompanySettingsUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompanySettings"
+
+  /settings/invoice:
+    get:
+      operationId: getInvoiceSettings
+      tags: [settings]
+      summary: Get invoice settings
+      responses:
+        "200":
+          description: Invoice settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceSettings"
+    patch:
+      operationId: updateInvoiceSettings
+      tags: [settings]
+      summary: Update invoice settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoiceSettingsUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceSettings"
+
+  # --- REPORTS ---
+  /reports/sales:
+    get:
+      operationId: getSalesReport
+      tags: [reports]
+      summary: Sales report
+      parameters:
+        - in: query
+          name: from
+          schema:
+            type: string
+        - in: query
+          name: to
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Sales report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SalesReport"
+
+  /reports/stock:
+    get:
+      operationId: getStockReport
+      tags: [reports]
+      summary: Stock report
+      responses:
+        "200":
+          description: Stock report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockReport"
+
+  /reports/profit-loss:
+    get:
+      operationId: getProfitLossReport
+      tags: [reports]
+      summary: Profit and loss report
+      parameters:
+        - in: query
+          name: from
+          schema:
+            type: string
+        - in: query
+          name: to
+          schema:
+            type: string
+      responses:
+        "200":
+          description: P&L report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfitLossReport"
+
+  /reports/customer-dues:
+    get:
+      operationId: getCustomerDuesReport
+      tags: [reports]
+      summary: Customer dues report
+      responses:
+        "200":
+          description: Customer dues
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CustomerDue"
+
+  # --- CHAT ---
+  /chat/sessions:
+    get:
+      operationId: listChatSessions
+      tags: [chat]
+      summary: List chat sessions
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Chat sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChatSession"
+
+  /chat/sessions/{id}/messages:
+    get:
+      operationId: getChatMessages
+      tags: [chat]
+      summary: Get messages for a chat session
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChatMessage"
+    post:
+      operationId: sendChatMessage
+      tags: [chat]
+      summary: Send message in chat session
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatMessageInput"
+      responses:
+        "201":
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatMessage"
+
+  # ============================================================
 components:
   schemas:
     HealthStatus:
@@ -34,3 +2032,1721 @@ components:
       required:
         - status
 
+    # --- AUTH ---
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+
+    AuthResponse:
+      type: object
+      required: [user, token]
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        token:
+          type: string
+
+    User:
+      type: object
+      required: [id, name, email, role, active]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+        active:
+          type: boolean
+        lastLogin:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    UserInput:
+      type: object
+      required: [name, email, password, role]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+        role:
+          type: string
+        active:
+          type: boolean
+
+    UserUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+        active:
+          type: boolean
+
+    # --- DASHBOARD ---
+    DashboardStats:
+      type: object
+      required: [totalProductsInStock, totalSalesToday, totalOrdersPending, totalOverdueInvoices, totalCustomers, lowStockCount, ptaPendingCount, unreadChats]
+      properties:
+        totalProductsInStock:
+          type: integer
+        totalSalesToday:
+          type: number
+        totalOrdersPending:
+          type: integer
+        totalOverdueInvoices:
+          type: number
+        totalCustomers:
+          type: integer
+        lowStockCount:
+          type: integer
+        ptaPendingCount:
+          type: integer
+        unreadChats:
+          type: integer
+        totalInvoicesOutstanding:
+          type: number
+        totalInvoicesOverdue:
+          type: number
+
+    RevenuePoint:
+      type: object
+      required: [label, revenue]
+      properties:
+        label:
+          type: string
+        revenue:
+          type: number
+        orders:
+          type: integer
+
+    RecentSale:
+      type: object
+      required: [id, invoiceNumber, customerName, amount, status, date]
+      properties:
+        id:
+          type: integer
+        invoiceNumber:
+          type: string
+        customerName:
+          type: string
+        amount:
+          type: number
+        status:
+          type: string
+        date:
+          type: string
+
+    # --- INVENTORY ---
+    InventoryItem:
+      type: object
+      required: [id, imei, productName, brandName, modelName, status, ptaStatus, landedCost, sellingPrice, purchaseDate, warrantyExpiry]
+      properties:
+        id:
+          type: integer
+        imei:
+          type: string
+        deviceId:
+          type: ["string", "null"]
+        iccid:
+          type: ["string", "null"]
+        msisdn:
+          type: ["string", "null"]
+        productName:
+          type: string
+        brandName:
+          type: string
+        modelName:
+          type: string
+        brandId:
+          type: integer
+        modelId:
+          type: integer
+        categoryId:
+          type: ["integer", "null"]
+        vendorId:
+          type: ["integer", "null"]
+        status:
+          type: string
+          enum: [unassigned, in_stock, reserved, sold, returned, replaced, damaged]
+        ptaStatus:
+          type: string
+          enum: [approved, pending]
+        psid:
+          type: ["string", "null"]
+        landedCost:
+          type: number
+        sellingPrice:
+          type: number
+        purchaseDate:
+          type: string
+        warrantyExpiry:
+          type: string
+        supplierInvoiceNumber:
+          type: ["string", "null"]
+        grnNumber:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    InventoryItemInput:
+      type: object
+      required: [imei, brandId, modelId, landedCost, sellingPrice, purchaseDate, ptaStatus]
+      properties:
+        imei:
+          type: string
+        deviceId:
+          type: string
+        iccid:
+          type: string
+        msisdn:
+          type: string
+        brandId:
+          type: integer
+        modelId:
+          type: integer
+        categoryId:
+          type: integer
+        vendorId:
+          type: integer
+        ptaStatus:
+          type: string
+        psid:
+          type: string
+        landedCost:
+          type: number
+        sellingPrice:
+          type: number
+        purchaseDate:
+          type: string
+        warrantyDays:
+          type: integer
+        supplierInvoiceNumber:
+          type: string
+        notes:
+          type: string
+
+    InventoryItemUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+        ptaStatus:
+          type: string
+        psid:
+          type: string
+        sellingPrice:
+          type: number
+        notes:
+          type: string
+
+    InventoryListResponse:
+      type: object
+      required: [items, total, page, limit]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InventoryItem"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+
+    BulkInventoryInput:
+      type: object
+      required: [brandId, modelId, imeis, landedCost, sellingPrice, purchaseDate, ptaStatus]
+      properties:
+        brandId:
+          type: integer
+        modelId:
+          type: integer
+        imeis:
+          type: array
+          items:
+            type: string
+        deviceIds:
+          type: array
+          items:
+            type: string
+        landedCost:
+          type: number
+        sellingPrice:
+          type: number
+        purchaseDate:
+          type: string
+        ptaStatus:
+          type: string
+        psid:
+          type: string
+        vendorId:
+          type: integer
+
+    BulkImportResult:
+      type: object
+      required: [imported, skipped, errors]
+      properties:
+        imported:
+          type: integer
+        skipped:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: string
+
+    LowStockItem:
+      type: object
+      required: [productName, brandName, modelName, currentStock, reorderLevel]
+      properties:
+        productName:
+          type: string
+        brandName:
+          type: string
+        modelName:
+          type: string
+        currentStock:
+          type: integer
+        reorderLevel:
+          type: integer
+        deficit:
+          type: integer
+
+    # --- BRANDS ---
+    Brand:
+      type: object
+      required: [id, name, active]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        deviceIdMandatory:
+          type: boolean
+        active:
+          type: boolean
+        modelsCount:
+          type: integer
+        createdAt:
+          type: string
+
+    BrandInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        deviceIdMandatory:
+          type: boolean
+        active:
+          type: boolean
+
+    BrandUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        deviceIdMandatory:
+          type: boolean
+        active:
+          type: boolean
+
+    # --- MODELS ---
+    DeviceModel:
+      type: object
+      required: [id, brandId, name, active]
+      properties:
+        id:
+          type: integer
+        brandId:
+          type: integer
+        brandName:
+          type: string
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        hasImei:
+          type: boolean
+        hasDeviceId:
+          type: boolean
+        hasIccid:
+          type: boolean
+        hasMsisdn:
+          type: boolean
+        deviceIdMandatory:
+          type: boolean
+        warrantyDays:
+          type: integer
+        active:
+          type: boolean
+        createdAt:
+          type: string
+
+    DeviceModelInput:
+      type: object
+      required: [brandId, name]
+      properties:
+        brandId:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        hasImei:
+          type: boolean
+        hasDeviceId:
+          type: boolean
+        hasIccid:
+          type: boolean
+        hasMsisdn:
+          type: boolean
+        deviceIdMandatory:
+          type: boolean
+        warrantyDays:
+          type: integer
+        active:
+          type: boolean
+
+    DeviceModelUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        warrantyDays:
+          type: integer
+        active:
+          type: boolean
+
+    # --- CATEGORIES ---
+    Category:
+      type: object
+      required: [id, name, active]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        parentId:
+          type: ["integer", "null"]
+        parentName:
+          type: ["string", "null"]
+        active:
+          type: boolean
+        productsCount:
+          type: integer
+
+    CategoryInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        parentId:
+          type: integer
+        active:
+          type: boolean
+
+    CategoryUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        parentId:
+          type: integer
+        active:
+          type: boolean
+
+    # --- VENDORS ---
+    Vendor:
+      type: object
+      required: [id, name, active]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        contactPerson:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        taxNumber:
+          type: ["string", "null"]
+        paymentTerms:
+          type: ["string", "null"]
+        ledgerBalance:
+          type: number
+        active:
+          type: boolean
+        createdAt:
+          type: string
+
+    VendorInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        contactPerson:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        address:
+          type: string
+        taxNumber:
+          type: string
+        paymentTerms:
+          type: string
+
+    VendorUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        contactPerson:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        address:
+          type: string
+        active:
+          type: boolean
+
+    # --- COURIERS ---
+    Courier:
+      type: object
+      required: [id, name, active]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        apiProvider:
+          type: ["string", "null"]
+        active:
+          type: boolean
+        ledgerBalance:
+          type: number
+        createdAt:
+          type: string
+
+    CourierInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        apiProvider:
+          type: string
+        apiKey:
+          type: string
+        apiPassword:
+          type: string
+        active:
+          type: boolean
+
+    CourierUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        active:
+          type: boolean
+
+    # --- PAYMENT METHODS ---
+    PaymentMethod:
+      type: object
+      required: [id, name, type, active]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        type:
+          type: string
+        active:
+          type: boolean
+        accountDetails:
+          type: ["string", "null"]
+
+    PaymentMethodInput:
+      type: object
+      required: [name, type]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        active:
+          type: boolean
+        accountDetails:
+          type: string
+
+    PaymentMethodUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        active:
+          type: boolean
+        accountDetails:
+          type: string
+
+    # --- CUSTOMERS ---
+    Customer:
+      type: object
+      required: [id, name, mobile, active]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        mobile:
+          type: string
+        cnic:
+          type: ["string", "null"]
+        vehicleNumber:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        city:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        ledgerBalance:
+          type: number
+        active:
+          type: boolean
+        createdAt:
+          type: string
+
+    CustomerInput:
+      type: object
+      required: [name, mobile]
+      properties:
+        name:
+          type: string
+        mobile:
+          type: string
+        cnic:
+          type: string
+        vehicleNumber:
+          type: string
+        email:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        notes:
+          type: string
+
+    CustomerUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        mobile:
+          type: string
+        cnic:
+          type: string
+        vehicleNumber:
+          type: string
+        email:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        notes:
+          type: string
+        active:
+          type: boolean
+
+    CustomerListResponse:
+      type: object
+      required: [customers, total, page, limit]
+      properties:
+        customers:
+          type: array
+          items:
+            $ref: "#/components/schemas/Customer"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+
+    LedgerEntry:
+      type: object
+      required: [id, date, type, description, debit, credit, balance]
+      properties:
+        id:
+          type: integer
+        date:
+          type: string
+        type:
+          type: string
+        description:
+          type: string
+        reference:
+          type: ["string", "null"]
+        debit:
+          type: number
+        credit:
+          type: number
+        balance:
+          type: number
+
+    # --- INVOICES ---
+    InvoiceItem:
+      type: object
+      required: [id, description, qty, price, amount]
+      properties:
+        id:
+          type: integer
+        description:
+          type: string
+        imei:
+          type: ["string", "null"]
+        qty:
+          type: number
+        price:
+          type: number
+        taxRate:
+          type: number
+        amount:
+          type: number
+
+    InvoiceItemInput:
+      type: object
+      required: [description, qty, price]
+      properties:
+        description:
+          type: string
+        imei:
+          type: string
+        inventoryItemId:
+          type: integer
+        qty:
+          type: number
+        price:
+          type: number
+        taxRate:
+          type: number
+
+    Invoice:
+      type: object
+      required: [id, invoiceNumber, status, date, customerId, customerName, total, paid, balanceDue]
+      properties:
+        id:
+          type: integer
+        invoiceNumber:
+          type: string
+        status:
+          type: string
+          enum: [draft, sent, paid, partial, overdue, cancelled]
+        date:
+          type: string
+        dueDate:
+          type: ["string", "null"]
+        customerId:
+          type: integer
+        customerName:
+          type: string
+        subtotal:
+          type: number
+        discount:
+          type: number
+        tax:
+          type: number
+        shipping:
+          type: number
+        total:
+          type: number
+        paid:
+          type: number
+        balanceDue:
+          type: number
+        notes:
+          type: ["string", "null"]
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceItem"
+        payments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Payment"
+        createdAt:
+          type: string
+
+    InvoiceInput:
+      type: object
+      required: [customerId, date, items]
+      properties:
+        customerId:
+          type: integer
+        invoiceNumber:
+          type: string
+        date:
+          type: string
+        dueDate:
+          type: string
+        paymentTerms:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceItemInput"
+        discount:
+          type: number
+        tax:
+          type: number
+        shipping:
+          type: number
+        notes:
+          type: string
+        status:
+          type: string
+
+    InvoiceUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+        dueDate:
+          type: string
+        notes:
+          type: string
+        discount:
+          type: number
+
+    InvoiceListResponse:
+      type: object
+      required: [invoices, total, page, limit, summary]
+      properties:
+        invoices:
+          type: array
+          items:
+            $ref: "#/components/schemas/Invoice"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+        summary:
+          $ref: "#/components/schemas/InvoiceSummary"
+
+    InvoiceSummary:
+      type: object
+      required: [overdue, draft, unpaid, paid]
+      properties:
+        overdue:
+          type: number
+        overdueCount:
+          type: integer
+        draft:
+          type: number
+        unpaid:
+          type: number
+        paid:
+          type: number
+
+    Payment:
+      type: object
+      required: [id, date, method, amount]
+      properties:
+        id:
+          type: integer
+        date:
+          type: string
+        method:
+          type: string
+        amount:
+          type: number
+        transactionId:
+          type: ["string", "null"]
+        memo:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    PaymentInput:
+      type: object
+      required: [date, method, amount]
+      properties:
+        date:
+          type: string
+        method:
+          type: string
+        amount:
+          type: number
+        transactionId:
+          type: string
+        memo:
+          type: string
+
+    PosDraft:
+      type: object
+      required: [id, customerName, itemsCount, total, createdAt]
+      properties:
+        id:
+          type: integer
+        customerId:
+          type: ["integer", "null"]
+        customerName:
+          type: string
+        itemsCount:
+          type: integer
+        total:
+          type: number
+        cartData:
+          type: string
+        createdAt:
+          type: string
+
+    PosDraftInput:
+      type: object
+      required: [cartData, total]
+      properties:
+        customerId:
+          type: integer
+        customerName:
+          type: string
+        total:
+          type: number
+        cartData:
+          type: string
+
+    # --- QUOTATIONS ---
+    Quotation:
+      type: object
+      required: [id, quotationNumber, status, date, customerId, customerName, total]
+      properties:
+        id:
+          type: integer
+        quotationNumber:
+          type: string
+        status:
+          type: string
+          enum: [draft, sent, viewed, accepted, declined, expired]
+        date:
+          type: string
+        expiryDate:
+          type: ["string", "null"]
+        customerId:
+          type: integer
+        customerName:
+          type: string
+        total:
+          type: number
+        notes:
+          type: ["string", "null"]
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceItem"
+        createdAt:
+          type: string
+
+    QuotationInput:
+      type: object
+      required: [customerId, date, items]
+      properties:
+        customerId:
+          type: integer
+        date:
+          type: string
+        expiryDate:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceItemInput"
+        discount:
+          type: number
+        tax:
+          type: number
+        notes:
+          type: string
+
+    QuotationUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+        expiryDate:
+          type: string
+        notes:
+          type: string
+
+    # --- PROCUREMENT ---
+    ImportOrder:
+      type: object
+      required: [id, importOrderNumber, vendorId, vendorName, currency, total, paymentStatus, shipmentStatus]
+      properties:
+        id:
+          type: integer
+        importOrderNumber:
+          type: string
+        vendorId:
+          type: integer
+        vendorName:
+          type: string
+        orderDate:
+          type: string
+        expectedArrival:
+          type: ["string", "null"]
+        currency:
+          type: string
+        exchangeRate:
+          type: number
+        total:
+          type: number
+        shippingCost:
+          type: number
+        paymentStatus:
+          type: string
+        shipmentStatus:
+          type: string
+        trackingNumber:
+          type: ["string", "null"]
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceItem"
+        createdAt:
+          type: string
+
+    ImportOrderInput:
+      type: object
+      required: [vendorId, currency, items]
+      properties:
+        vendorId:
+          type: integer
+        importOrderNumber:
+          type: string
+        orderDate:
+          type: string
+        expectedArrival:
+          type: string
+        currency:
+          type: string
+        exchangeRate:
+          type: number
+        shippingCost:
+          type: number
+        trackingNumber:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceItemInput"
+
+    ImportOrderUpdate:
+      type: object
+      properties:
+        paymentStatus:
+          type: string
+        shipmentStatus:
+          type: string
+        trackingNumber:
+          type: string
+        expectedArrival:
+          type: string
+
+    Grn:
+      type: object
+      required: [id, grnNumber, importOrderId, receivedDate, status, itemsCount]
+      properties:
+        id:
+          type: integer
+        grnNumber:
+          type: string
+        importOrderId:
+          type: integer
+        importOrderNumber:
+          type: string
+        receivedDate:
+          type: string
+        status:
+          type: string
+        itemsCount:
+          type: integer
+        createdAt:
+          type: string
+
+    GrnInput:
+      type: object
+      required: [importOrderId, receivedDate]
+      properties:
+        importOrderId:
+          type: integer
+        receivedDate:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              imei:
+                type: string
+              deviceId:
+                type: string
+
+    # --- PRODUCTS ---
+    Product:
+      type: object
+      required: [id, title, slug, published]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        slug:
+          type: string
+        brandId:
+          type: ["integer", "null"]
+        brandName:
+          type: ["string", "null"]
+        categoryId:
+          type: ["integer", "null"]
+        categoryName:
+          type: ["string", "null"]
+        price:
+          type: number
+        shortDescription:
+          type: ["string", "null"]
+        longDescription:
+          type: ["string", "null"]
+        featuredImage:
+          type: ["string", "null"]
+        published:
+          type: boolean
+        featured:
+          type: boolean
+        metaTitle:
+          type: ["string", "null"]
+        metaDescription:
+          type: ["string", "null"]
+        stockCount:
+          type: integer
+        createdAt:
+          type: string
+
+    ProductInput:
+      type: object
+      required: [title, price]
+      properties:
+        title:
+          type: string
+        slug:
+          type: string
+        brandId:
+          type: integer
+        categoryId:
+          type: integer
+        price:
+          type: number
+        shortDescription:
+          type: string
+        longDescription:
+          type: string
+        featuredImage:
+          type: string
+        published:
+          type: boolean
+        featured:
+          type: boolean
+        metaTitle:
+          type: string
+        metaDescription:
+          type: string
+
+    ProductUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+        price:
+          type: number
+        shortDescription:
+          type: string
+        longDescription:
+          type: string
+        featuredImage:
+          type: string
+        published:
+          type: boolean
+        featured:
+          type: boolean
+
+    ProductListResponse:
+      type: object
+      required: [products, total, page]
+      properties:
+        products:
+          type: array
+          items:
+            $ref: "#/components/schemas/Product"
+        total:
+          type: integer
+        page:
+          type: integer
+
+    # --- WEB ORDERS ---
+    WebOrder:
+      type: object
+      required: [id, orderNumber, status, paymentStatus, customerName, customerMobile, total]
+      properties:
+        id:
+          type: integer
+        orderNumber:
+          type: string
+        status:
+          type: string
+          enum: [new, confirmed, processing, shipped, delivered, cancelled]
+        paymentStatus:
+          type: string
+          enum: [pending, verified, rejected, cod]
+        customerName:
+          type: string
+        customerMobile:
+          type: string
+        customerEmail:
+          type: ["string", "null"]
+        customerAddress:
+          type: string
+        customerCity:
+          type: string
+        paymentMethod:
+          type: string
+        transactionId:
+          type: ["string", "null"]
+        subtotal:
+          type: number
+        shipping:
+          type: number
+        total:
+          type: number
+        courierCn:
+          type: ["string", "null"]
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceItem"
+        createdAt:
+          type: string
+
+    WebOrderInput:
+      type: object
+      required: [customerName, customerMobile, customerAddress, customerCity, paymentMethod, items]
+      properties:
+        customerName:
+          type: string
+        customerMobile:
+          type: string
+        customerEmail:
+          type: string
+        customerAddress:
+          type: string
+        customerCity:
+          type: string
+        paymentMethod:
+          type: string
+        transactionId:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              productId:
+                type: integer
+              qty:
+                type: integer
+              price:
+                type: number
+
+    WebOrderUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+        paymentStatus:
+          type: string
+        courierCn:
+          type: string
+        rejectionReason:
+          type: string
+
+    WebOrderListResponse:
+      type: object
+      required: [orders, total, page]
+      properties:
+        orders:
+          type: array
+          items:
+            $ref: "#/components/schemas/WebOrder"
+        total:
+          type: integer
+        page:
+          type: integer
+        summary:
+          type: object
+          properties:
+            new:
+              type: integer
+            confirmed:
+              type: integer
+            processing:
+              type: integer
+            shipped:
+              type: integer
+            delivered:
+              type: integer
+            cancelled:
+              type: integer
+
+    # --- SHIPMENTS ---
+    Shipment:
+      type: object
+      required: [id, invoiceId, courierId, status, destination]
+      properties:
+        id:
+          type: integer
+        invoiceId:
+          type: ["integer", "null"]
+        webOrderId:
+          type: ["integer", "null"]
+        courierId:
+          type: integer
+        courierName:
+          type: string
+        cn:
+          type: ["string", "null"]
+        status:
+          type: string
+        destination:
+          type: string
+        codAmount:
+          type: number
+        shippingCharges:
+          type: number
+        slipLink:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    ShipmentInput:
+      type: object
+      required: [courierId, destination]
+      properties:
+        invoiceId:
+          type: integer
+        webOrderId:
+          type: integer
+        courierId:
+          type: integer
+        destination:
+          type: string
+        weight:
+          type: number
+        pieces:
+          type: integer
+        codAmount:
+          type: number
+        shippingCharges:
+          type: number
+
+    ShipmentUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+        cn:
+          type: string
+        slipLink:
+          type: string
+
+    # --- SERVICE TICKETS ---
+    ServiceTicket:
+      type: object
+      required: [id, ticketNumber, status, customerId, customerName, issueDescription]
+      properties:
+        id:
+          type: integer
+        ticketNumber:
+          type: string
+        status:
+          type: string
+          enum: [received, diagnosing, repaired, replaced, closed]
+        customerId:
+          type: integer
+        customerName:
+          type: string
+        invoiceId:
+          type: ["integer", "null"]
+        inventoryItemId:
+          type: ["integer", "null"]
+        imei:
+          type: ["string", "null"]
+        productName:
+          type: ["string", "null"]
+        warrantyValid:
+          type: boolean
+        issueDescription:
+          type: string
+        resolutionNotes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    ServiceTicketInput:
+      type: object
+      required: [customerId, issueDescription]
+      properties:
+        customerId:
+          type: integer
+        invoiceId:
+          type: integer
+        inventoryItemId:
+          type: integer
+        issueDescription:
+          type: string
+
+    ServiceTicketUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+        resolutionNotes:
+          type: string
+        replacementItemId:
+          type: integer
+
+    # --- VAULT ---
+    VaultEntry:
+      type: object
+      required: [id, name, url]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        url:
+          type: string
+        loginUrl:
+          type: ["string", "null"]
+        ipPort:
+          type: ["string", "null"]
+        smsApnNotes:
+          type: ["string", "null"]
+        remarks:
+          type: ["string", "null"]
+        favorite:
+          type: boolean
+        createdAt:
+          type: string
+
+    VaultEntryInput:
+      type: object
+      required: [name, url]
+      properties:
+        name:
+          type: string
+        url:
+          type: string
+        loginUrl:
+          type: string
+        ipPort:
+          type: string
+        smsApnNotes:
+          type: string
+        remarks:
+          type: string
+        favorite:
+          type: boolean
+
+    VaultEntryUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        url:
+          type: string
+        loginUrl:
+          type: string
+        ipPort:
+          type: string
+        remarks:
+          type: string
+        favorite:
+          type: boolean
+
+    # --- SETTINGS ---
+    CompanySettings:
+      type: object
+      required: [id, companyName]
+      properties:
+        id:
+          type: integer
+        companyName:
+          type: string
+        logo:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        currency:
+          type: string
+        timezone:
+          type: string
+        taxNumber:
+          type: ["string", "null"]
+        whatsappNumber:
+          type: ["string", "null"]
+
+    CompanySettingsUpdate:
+      type: object
+      properties:
+        companyName:
+          type: string
+        logo:
+          type: string
+        address:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        currency:
+          type: string
+        taxNumber:
+          type: string
+        whatsappNumber:
+          type: string
+
+    InvoiceSettings:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: integer
+        invoicePrefix:
+          type: string
+        nextInvoiceNumber:
+          type: integer
+        defaultPaymentTerms:
+          type: string
+        defaultTaxRate:
+          type: number
+        defaultNotes:
+          type: ["string", "null"]
+        defaultFooter:
+          type: ["string", "null"]
+        pdfTemplate:
+          type: string
+
+    InvoiceSettingsUpdate:
+      type: object
+      properties:
+        invoicePrefix:
+          type: string
+        nextInvoiceNumber:
+          type: integer
+        defaultPaymentTerms:
+          type: string
+        defaultTaxRate:
+          type: number
+        defaultNotes:
+          type: string
+        defaultFooter:
+          type: string
+        pdfTemplate:
+          type: string
+
+    # --- REPORTS ---
+    SalesReport:
+      type: object
+      required: [totalAmount, totalInvoices, averageInvoiceValue, items]
+      properties:
+        totalAmount:
+          type: number
+        totalInvoices:
+          type: integer
+        averageInvoiceValue:
+          type: number
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecentSale"
+
+    StockReport:
+      type: object
+      required: [totalItems, byStatus, items]
+      properties:
+        totalItems:
+          type: integer
+        byStatus:
+          type: object
+          properties:
+            in_stock:
+              type: integer
+            sold:
+              type: integer
+            reserved:
+              type: integer
+            damaged:
+              type: integer
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              productName:
+                type: string
+              brandName:
+                type: string
+              modelName:
+                type: string
+              inStock:
+                type: integer
+              reserved:
+                type: integer
+              sold:
+                type: integer
+              damaged:
+                type: integer
+
+    ProfitLossReport:
+      type: object
+      required: [revenue, cogs, grossProfit, expenses, netProfit]
+      properties:
+        revenue:
+          type: number
+        cogs:
+          type: number
+        grossProfit:
+          type: number
+        expenses:
+          type: number
+        courierCharges:
+          type: number
+        netProfit:
+          type: number
+        chartData:
+          type: array
+          items:
+            $ref: "#/components/schemas/RevenuePoint"
+
+    CustomerDue:
+      type: object
+      required: [customerId, customerName, customerMobile, totalInvoiced, totalPaid, balanceDue]
+      properties:
+        customerId:
+          type: integer
+        customerName:
+          type: string
+        customerMobile:
+          type: string
+        totalInvoiced:
+          type: number
+        totalPaid:
+          type: number
+        balanceDue:
+          type: number
+
+    # --- CHAT ---
+    ChatSession:
+      type: object
+      required: [id, status, createdAt]
+      properties:
+        id:
+          type: integer
+        customerName:
+          type: ["string", "null"]
+        customerEmail:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [open, waiting, assigned, closed]
+        aiHandled:
+          type: boolean
+        unreadCount:
+          type: integer
+        lastMessage:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    ChatMessage:
+      type: object
+      required: [id, sessionId, role, content, createdAt]
+      properties:
+        id:
+          type: integer
+        sessionId:
+          type: integer
+        role:
+          type: string
+          enum: [customer, agent, ai, system]
+        content:
+          type: string
+        createdAt:
+          type: string
+
+    ChatMessageInput:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+        role:
+          type: string
+
+    # ============================================================

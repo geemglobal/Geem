@@ -11,6 +11,13 @@ if (!process.env.DATABASE_URL) {
 }
 
 export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+// Force every connection to use UTC so timestamp columns are always
+// stored and read in UTC regardless of the Postgres server's system timezone.
+pool.on("connect", (client) => {
+  client.query("SET timezone='UTC'").catch(() => { /* ignore */ });
+});
+
 export const db = drizzle(pool, { schema });
 
 export * from "./schema";

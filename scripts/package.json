@@ -5,10 +5,23 @@
   "type": "module",
   "scripts": {
     "hello": "tsx ./src/hello.ts",
+    "seed-products": "tsx ./src/seed-products.ts",
+    "seed-categories": "tsx ./src/seed-categories.ts",
+    "seed-security-products": "tsx ./src/seed-security-products.ts",
+    "migrate-sim": "tsx ./src/migrate-sim.ts",
+    "migrate-users": "tsx ./src/migrate-users-permissions.ts",
+    "migrate-returns-refund": "tsx ./src/migrate-returns-refund.ts",
+    "migrate-shop-sessions": "tsx ./src/migrate-shop-sessions.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@workspace/db": "workspace:*",
+    "drizzle-orm": "catalog:",
+    "pg": "^8.20.0"
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "@types/pg": "^8.20.0",
     "tsx": "catalog:"
   }
 }
