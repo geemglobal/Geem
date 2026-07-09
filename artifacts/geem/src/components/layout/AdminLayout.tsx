@@ -140,7 +140,7 @@ function SidebarContent({
       <div className="p-4 border-b border-sidebar-border flex-shrink-0">
         <div className="flex items-center gap-2">
           {logo ? (
-            <img src={logo} alt="Logo" className="h-8 w-8 rounded-lg object-contain flex-shrink-0 bg-white" />
+            <img src={logo} alt="Logo" className="h-8 w-8 rounded-lg object-contain flex-shrink-0" />
           ) : (
             <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm flex-shrink-0">
               G
