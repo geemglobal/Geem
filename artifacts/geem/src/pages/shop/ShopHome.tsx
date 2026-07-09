@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { axiosInstance } from "@/lib/axios";
 import { ShopLayout } from "./ShopLayout";
@@ -85,7 +86,22 @@ function ProductCard({ product }: { product: Product }) {
   );
 }
 
+// Fetch banner from company settings (module-level cache shared with ShopLayout)
+let _homeBannerCached: string | null | undefined = undefined; // undefined = not yet loaded
+function useCompanyBanner() {
+  const [banner, setBanner] = useState<string | null>(_homeBannerCached ?? null);
+  useEffect(() => {
+    if (_homeBannerCached !== undefined) { setBanner(_homeBannerCached); return; }
+    fetch("/api/shop/seo-config").then(r => r.json()).then((d: { banner?: string | null }) => {
+      _homeBannerCached = d.banner ?? null;
+      setBanner(_homeBannerCached);
+    }).catch(() => { _homeBannerCached = null; });
+  }, []);
+  return banner;
+}
+
 export default function ShopHome() {
+  const companyBanner = useCompanyBanner();
   useSEO({
     title: "Military-Grade Security Equipment, Spy Cameras & GPS Trackers in Pakistan | Geem",
     description: "Pakistan's specialist supplier of military-grade security equipment: spy cameras, RF detectors, GPS trackers, counter-surveillance devices, covert communications. Custom agency imports. Nationwide delivery.",
@@ -117,6 +133,12 @@ export default function ShopHome() {
 
       {/* ── Hero ── */}
       <section className="relative bg-gray-950 text-white overflow-hidden">
+        {/* Company banner image — shown as hero background when uploaded in Settings */}
+        {companyBanner && (
+          <div className="absolute inset-0">
+            <img src={companyBanner} alt="" className="w-full h-full object-cover object-center" aria-hidden="true" />
+          </div>
+        )}
         <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-gray-950 to-black opacity-90" />
         <div className="absolute inset-0" style={{ backgroundImage: "radial-gradient(circle at 20% 50%, rgba(220,38,38,0.08) 0%, transparent 60%), radial-gradient(circle at 80% 20%, rgba(59,130,246,0.08) 0%, transparent 50%)" }} />
         <div className="relative max-w-7xl mx-auto px-4 py-16 md:py-28">

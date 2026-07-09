@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,9 +15,22 @@ import {
 
 const BASE_PATH = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+let _suCachedLogo: string | null = null;
+function useCompanyLogo() {
+  const [logo, setLogo] = useState<string>(_suCachedLogo ?? `${BASE_PATH}/geem-logo.svg`);
+  useEffect(() => {
+    if (_suCachedLogo) return;
+    fetch("/api/shop/seo-config").then(r => r.json()).then((d: { logo?: string | null }) => {
+      if (d.logo) { _suCachedLogo = d.logo; setLogo(d.logo); }
+    }).catch(() => {});
+  }, []);
+  return logo;
+}
+
 type Step = "form" | "channel" | "otp" | "done";
 
 export default function ShopSignUp() {
+  const companyLogo = useCompanyLogo();
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
@@ -100,7 +113,7 @@ export default function ShopSignUp() {
         {/* Logo */}
         <div className="text-center mb-8">
           <Link href="/shop">
-            <img src={`${BASE_PATH}/geem-logo.svg`} alt="Geem" className="h-10 w-auto mx-auto cursor-pointer" />
+            <img src={companyLogo} alt="Geem" className="h-10 w-auto mx-auto cursor-pointer" />
           </Link>
           <h1 className="mt-4 text-2xl font-bold text-slate-900">
             {step === "done" ? "Account Verified!" : "Create a Geem account"}

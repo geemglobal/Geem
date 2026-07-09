@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,21 @@ import { Eye, EyeOff, LogIn, Shield } from "lucide-react";
 
 const BASE_PATH = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+// Fetch company logo from settings (with module-level cache)
+let _siCachedLogo: string | null = null;
+function useCompanyLogo() {
+  const [logo, setLogo] = useState<string>(_siCachedLogo ?? `${BASE_PATH}/geem-logo.svg`);
+  useEffect(() => {
+    if (_siCachedLogo) return;
+    fetch("/api/shop/seo-config").then(r => r.json()).then((d: { logo?: string | null }) => {
+      if (d.logo) { _siCachedLogo = d.logo; setLogo(d.logo); }
+    }).catch(() => {});
+  }, []);
+  return logo;
+}
+
 export default function ShopSignIn() {
+  const companyLogo = useCompanyLogo();
   const { login, isLoaded } = useShopAuth();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { signIn } = useSignIn() as any;
@@ -62,7 +76,7 @@ export default function ShopSignIn() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Link href="/shop">
-            <img src={`${BASE_PATH}/geem-logo.svg`} alt="Geem" className="h-10 w-auto mx-auto cursor-pointer" />
+            <img src={companyLogo} alt="Geem" className="h-10 w-auto mx-auto cursor-pointer" />
           </Link>
           <h1 className="mt-4 text-2xl font-bold text-slate-900">Sign in to your account</h1>
           <p className="mt-1 text-sm text-slate-500">Access your orders and account details</p>

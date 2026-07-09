@@ -167,7 +167,7 @@ router.get("/shop/products/:slug", async (req, res): Promise<void> => {
 router.get("/shop/seo-config", async (req, res): Promise<void> => {
   const [gaRow] = await db.select().from(integrationSettingsTable).where(eq(integrationSettingsTable.type, "google_analytics"));
   const [scRow] = await db.select().from(integrationSettingsTable).where(eq(integrationSettingsTable.type, "google_search_console"));
-  const [company] = await db.select({ companyName: companySettingsTable.companyName, logo: companySettingsTable.logo, favicon: companySettingsTable.favicon, primaryColor: companySettingsTable.primaryColor, borderRadius: companySettingsTable.borderRadius }).from(companySettingsTable);
+  const [company] = await db.select({ companyName: companySettingsTable.companyName, logo: companySettingsTable.logo, favicon: companySettingsTable.favicon, banner: companySettingsTable.banner, primaryColor: companySettingsTable.primaryColor, borderRadius: companySettingsTable.borderRadius }).from(companySettingsTable);
 
   let gaId: string | null = null;
   let scVerification: string | null = null;
@@ -185,6 +185,7 @@ router.get("/shop/seo-config", async (req, res): Promise<void> => {
     companyName: company?.companyName ?? "Geem",
     logo: company?.logo ?? null,
     favicon: company?.favicon ?? null,
+    banner: company?.banner ?? null,
     primaryColor: company?.primaryColor ?? "#2563eb",
     borderRadius: company?.borderRadius ?? "md",
   });

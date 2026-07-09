@@ -45,7 +45,7 @@ const FOOTER_LINKS = {
   ],
 };
 
-interface ShopBranding { companyName: string; logo: string | null; favicon: string | null; }
+interface ShopBranding { companyName: string; logo: string | null; favicon: string | null; banner: string | null; }
 let cachedBranding: ShopBranding | null = null;
 
 export function ShopLayout({ children }: { children: React.ReactNode }) {
@@ -56,7 +56,7 @@ export function ShopLayout({ children }: { children: React.ReactNode }) {
   const searchRef = useRef<HTMLFormElement>(null);
   const { count } = useCart();
   const [location, setLocation] = useLocation();
-  const [branding, setBranding] = useState<ShopBranding>(cachedBranding ?? { companyName: "Geem", logo: null, favicon: null });
+  const [branding, setBranding] = useState<ShopBranding>(cachedBranding ?? { companyName: "Geem", logo: null, favicon: null, banner: null });
   const { customer, getToken } = useShopAuth();
 
   const authHeader = () => { const t = getToken(); return t ? { Authorization: `Bearer ${t}` } : {}; };
@@ -92,7 +92,7 @@ export function ShopLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (cachedBranding) return;
     fetch("/api/shop/seo-config").then(r => r.json()).then((d: ShopBranding & Record<string, unknown>) => {
-      const b: ShopBranding = { companyName: d.companyName ?? "Geem", logo: d.logo ?? null, favicon: d.favicon ?? null };
+      const b: ShopBranding = { companyName: d.companyName ?? "Geem", logo: d.logo ?? null, favicon: d.favicon ?? null, banner: (d.banner as string | null) ?? null };
       cachedBranding = b; setBranding(b);
     }).catch(() => {});
   }, []);

@@ -9,7 +9,20 @@ import { ArrowLeft, Eye, EyeOff, CheckCircle2, Loader2 } from "lucide-react";
 
 const BASE_PATH = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+let _rpCachedLogo: string | null = null;
+function useCompanyLogo() {
+  const [logo, setLogo] = useState<string>(_rpCachedLogo ?? `${BASE_PATH}/geem-logo.svg`);
+  useEffect(() => {
+    if (_rpCachedLogo) return;
+    fetch("/api/shop/seo-config").then(r => r.json()).then((d: { logo?: string | null }) => {
+      if (d.logo) { _rpCachedLogo = d.logo; setLogo(d.logo); }
+    }).catch(() => {});
+  }, []);
+  return logo;
+}
+
 export default function ShopResetPassword() {
+  const companyLogo = useCompanyLogo();
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
@@ -49,7 +62,7 @@ export default function ShopResetPassword() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Link href="/shop">
-            <img src={`${BASE_PATH}/geem-logo.svg`} alt="Geem" className="h-10 w-auto mx-auto cursor-pointer" />
+            <img src={companyLogo} alt="Geem" className="h-10 w-auto mx-auto cursor-pointer" />
           </Link>
           <h1 className="mt-4 text-2xl font-bold text-slate-900">
             {success ? "Password Updated!" : "Set a New Password"}

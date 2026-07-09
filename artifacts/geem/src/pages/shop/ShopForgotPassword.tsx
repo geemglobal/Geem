@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,9 +13,22 @@ import {
 
 const BASE_PATH = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+let _fpCachedLogo: string | null = null;
+function useCompanyLogo() {
+  const [logo, setLogo] = useState<string>(_fpCachedLogo ?? `${BASE_PATH}/geem-logo.svg`);
+  useEffect(() => {
+    if (_fpCachedLogo) return;
+    fetch("/api/shop/seo-config").then(r => r.json()).then((d: { logo?: string | null }) => {
+      if (d.logo) { _fpCachedLogo = d.logo; setLogo(d.logo); }
+    }).catch(() => {});
+  }, []);
+  return logo;
+}
+
 type Step = "identifier" | "channel" | "otp" | "reset" | "done";
 
 export default function ShopForgotPassword() {
+  const companyLogo = useCompanyLogo();
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
@@ -89,7 +102,7 @@ export default function ShopForgotPassword() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Link href="/shop">
-            <img src={`${BASE_PATH}/geem-logo.svg`} alt="Geem" className="h-10 w-auto mx-auto cursor-pointer" />
+            <img src={companyLogo} alt="Geem" className="h-10 w-auto mx-auto cursor-pointer" />
           </Link>
           <h1 className="mt-4 text-2xl font-bold text-slate-900">
             {step === "done" ? "Password Updated!" : "Reset Your Password"}

@@ -215,7 +215,7 @@ router.post("/system/restore", upload.single("backup"), async (req: Request, res
         const cols = Object.keys(rows[0]);
         const colList = cols.map(c => `"${c}"`).join(", ");
         for (const row of rows) {
-          const vals = cols.map((_, i) => `${i + 1}`).join(", ");
+          const vals = cols.map((_, i) => `$${i + 1}`).join(", ");
           await client.query(`INSERT INTO "${tableName}" (${colList}) VALUES (${vals})`, cols.map(c => row[c] ?? null));
         }
         restoredTables++;
