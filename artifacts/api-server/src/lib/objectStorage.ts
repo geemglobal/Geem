@@ -16,6 +16,23 @@ function ensureDir(dir: string) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
+// Detect content type from file signature (magic bytes) when the file has
+// no extension — this is the case for all uploads, which are stored as
+// bare UUIDs under UPLOADS_DIR/uploads/<uuid>.
+function sniffContentType(data: Buffer): string | null {
+  if (data.length >= 8 && data[0] === 0x89 && data[1] === 0x50 && data[2] === 0x4e && data[3] === 0x47) return "image/png";
+  if (data.length >= 3 && data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff) return "image/jpeg";
+  if (data.length >= 6 && data.subarray(0, 6).toString("ascii") === "GIF87a") return "image/gif";
+  if (data.length >= 6 && data.subarray(0, 6).toString("ascii") === "GIF89a") return "image/gif";
+  if (data.length >= 12 && data.subarray(0, 4).toString("ascii") === "RIFF" && data.subarray(8, 12).toString("ascii") === "WEBP") return "image/webp";
+  if (data.length >= 4 && data[0] === 0x00 && data[1] === 0x00 && data[2] === 0x01 && data[3] === 0x00) return "image/x-icon";
+  if (data.length >= 4 && data.subarray(0, 4).toString("ascii") === "%PDF") return "application/pdf";
+  // SVG / XML is text-based — sniff the first non-whitespace chars.
+  const head = data.subarray(0, Math.min(data.length, 512)).toString("utf8").trimStart();
+  if (head.startsWith("<?xml") || head.startsWith("<svg")) return "image/svg+xml";
+  return null;
+}
+
 export class ObjectNotFoundError extends Error {
   constructor() {
     super("Object not found");
@@ -64,9 +81,13 @@ export class ObjectStorageService {
     const mime: Record<string, string> = {
       ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
       ".gif": "image/gif", ".webp": "image/webp", ".svg": "image/svg+xml",
-      ".pdf": "application/pdf", ".mp4": "video/mp4",
+      ".pdf": "application/pdf", ".mp4": "video/mp4", ".ico": "image/x-icon",
     };
-    const contentType = mime[ext] || "application/octet-stream";
+    // Uploaded files are stored as bare UUIDs with no extension, so extension
+    // lookup almost always misses. Sniff the actual bytes as a fallback —
+    // otherwise every upload silently falls back to application/octet-stream
+    // and browsers refuse to render it as an image.
+    const contentType = mime[ext] || sniffContentType(data) || "application/octet-stream";
     return new Response(data, {
       headers: {
         "Content-Type": contentType,
