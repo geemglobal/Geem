@@ -13,38 +13,18 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 150
 
 const WORKSPACE_ROOT = path.resolve("/home/runner/workspace");
 
-const BACKUP_TABLES = [
-  "users",
-  "brands",
-  "categories",
-  "device_models",
-  "customers",
-  "products",
-  "inventory_items",
-  "imei_pool",
-  "invoices",
-  "invoice_items",
-  "payments",
-  "pos_drafts",
-  "invoice_settings",
-  "quotations",
-  "quotation_items",
-  "pre_orders",
-  "pre_order_items",
-  "web_orders",
-  "procurement_orders",
-  "procurement_items",
-  "shipments",
-  "service_tickets",
-  "chat_messages",
-  "vault_items",
-  "ledger_entries",
-  "visitor_logs",
-  "payment_methods",
-  "courier_accounts",
-  "vendors",
-  "app_settings",
-];
+// Tables that should never be included in a backup/restore (internal Replit / session state).
+const SKIP_TABLES = new Set(["drizzle_migrations"]);
+
+/** Return all public base tables in the connected database. */
+async function getAllTables(): Promise<string[]> {
+  const result = await pool.query<{ table_name: string }>(
+    `SELECT table_name FROM information_schema.tables
+     WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+     ORDER BY table_name`
+  );
+  return result.rows.map(r => r.table_name).filter(t => !SKIP_TABLES.has(t));
+}
 
 async function getAuthUserId(req: Request): Promise<number | null> {
   const auth = req.headers.authorization;
@@ -52,16 +32,12 @@ async function getAuthUserId(req: Request): Promise<number | null> {
   return getUserIdFromToken(auth.slice(7));
 }
 
-// GET /system/info — list of backup tables and server info
+// GET /system/info — list of all tables and server info
 router.get("/system/info", async (req: Request, res: Response): Promise<void> => {
   const userId = await getAuthUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
 
-  const result = await pool.query<{ table_name: string }>(
-    `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' ORDER BY table_name`
-  );
-  const tables = result.rows.map(r => r.table_name);
-
+  const tables = await getAllTables();
   const rowCounts: Record<string, number> = {};
   for (const t of tables) {
     try {
@@ -80,26 +56,27 @@ router.get("/system/info", async (req: Request, res: Response): Promise<void> =>
   });
 });
 
-// GET /system/backup — download full database backup as ZIP
+// GET /system/backup — download full database backup as ZIP (all tables, dynamic)
 router.get("/system/backup", async (req: Request, res: Response): Promise<void> => {
   const userId = await getAuthUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
 
   const zip = new AdmZip();
   const tableCounts: Record<string, number> = {};
+  const tables = await getAllTables();
 
-  for (const table of BACKUP_TABLES) {
+  for (const table of tables) {
     try {
       const result = await pool.query(`SELECT * FROM "${table}"`);
       zip.addFile(`data/${table}.json`, Buffer.from(JSON.stringify(result.rows, null, 2), "utf-8"));
       tableCounts[table] = result.rowCount ?? 0;
     } catch {
-      // skip tables that don't exist yet
+      // skip views or tables we can't read
     }
   }
 
   const manifest = {
-    version: "1.0",
+    version: "2.0",
     app: "Geem CRM",
     createdAt: new Date().toISOString(),
     tables: tableCounts,
@@ -113,6 +90,13 @@ router.get("/system/backup", async (req: Request, res: Response): Promise<void> 
 });
 
 // POST /system/restore — restore database from a backup ZIP
+/** Reject identifier strings that are not safe bare PostgreSQL identifiers. */
+function assertSafeIdentifier(name: string, kind: string): void {
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
+    throw new Error(`Unsafe ${kind} identifier rejected: ${JSON.stringify(name)}`);
+  }
+}
+
 router.post("/system/restore", upload.single("backup"), async (req: Request, res: Response): Promise<void> => {
   const userId = await getAuthUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
@@ -121,23 +105,35 @@ router.post("/system/restore", upload.single("backup"), async (req: Request, res
   let restoredTables = 0;
   let restoredRows = 0;
   const errors: string[] = [];
+  const restoredTableNames: string[] = [];
 
+  // Checkout a single client so SET LOCAL session_replication_role applies to
+  // every statement in this restore operation without leaking to other callers.
+  const client = await pool.connect();
   try {
     const zip = new AdmZip(req.file.buffer);
     const manifestEntry = zip.getEntry("manifest.json");
     if (!manifestEntry) {
       res.status(400).json({ error: "Invalid backup: missing manifest.json" });
+      client.release();
       return;
     }
     const manifest = JSON.parse(manifestEntry.getData().toString("utf-8")) as { version: string; app: string; createdAt: string };
 
-    const dataEntries = zip.getEntries().filter(e => e.entryName.startsWith("data/") && e.entryName.endsWith(".json"));
+    // Build an allowlist of tables that actually exist in this database.
+    const allowedTables = new Set(await getAllTables());
 
-    // Disable FK checks
-    await pool.query("SET session_replication_role = replica");
+    const dataEntries = zip.getEntries().filter(e => e.entryName.startsWith("data/") && e.entryName.endsWith(".json"));
 
     for (const entry of dataEntries) {
       const tableName = path.basename(entry.entryName, ".json");
+
+      // Allowlist check — reject tables not present in the current schema.
+      if (!allowedTables.has(tableName)) {
+        errors.push(`${tableName}: not a known table — skipped`);
+        continue;
+      }
+
       let rows: Record<string, unknown>[];
       try {
         rows = JSON.parse(entry.getData().toString("utf-8")) as Record<string, unknown>[];
@@ -146,33 +142,71 @@ router.post("/system/restore", upload.single("backup"), async (req: Request, res
         continue;
       }
 
+      // Each table is restored inside its own transaction so a bad row never
+      // leaves another table half-wiped.
       try {
-        await pool.query(`TRUNCATE TABLE "${tableName}" RESTART IDENTITY`);
+        await client.query("BEGIN");
+        // Disable FK checks only for this transaction on this connection.
+        await client.query("SET LOCAL session_replication_role = replica");
+
+        await client.query(`TRUNCATE TABLE "${tableName}" RESTART IDENTITY`);
 
         if (rows.length > 0) {
+          // Validate every column name against the safe-identifier rule before
+          // building any SQL — reject the whole table if any name looks unsafe.
           const cols = Object.keys(rows[0]);
+          for (const col of cols) assertSafeIdentifier(col, "column");
+
           const colList = cols.map(c => `"${c}"`).join(", ");
           for (const row of rows) {
-            const vals = cols.map((_, i) => `$${i + 1}`).join(", ");
-            await pool.query(
+            const vals = cols.map((_, i) => `${i + 1}`).join(", ");
+            await client.query(
               `INSERT INTO "${tableName}" (${colList}) VALUES (${vals})`,
               cols.map(c => row[c] ?? null)
             );
           }
         }
 
+        await client.query("COMMIT");
         restoredTables++;
         restoredRows += rows.length;
+        restoredTableNames.push(tableName);
       } catch (err) {
-        errors.push(`${tableName}: ${String(err).slice(0, 120)}`);
+        await client.query("ROLLBACK").catch(() => {});
+        errors.push(`${tableName}: ${String(err).slice(0, 200)}`);
       }
     }
 
-    await pool.query("SET session_replication_role = DEFAULT");
+    // Reset all serial sequences for restored tables so new inserts don't
+    // collide with restored IDs. Uses information_schema to find every serial
+    // column — not just "id" — on each table.
+    for (const tableName of restoredTableNames) {
+      try {
+        const seqResult = await client.query<{ column_name: string }>(
+          `SELECT c.column_name
+           FROM information_schema.columns c
+           WHERE c.table_schema = 'public'
+             AND c.table_name   = $1
+             AND c.column_default LIKE 'nextval(%'`,
+          [tableName]
+        );
+        for (const { column_name } of seqResult.rows) {
+          await client.query(
+            `SELECT setval(
+               pg_get_serial_sequence('"${tableName}"', '${column_name}'),
+               COALESCE((SELECT MAX("${column_name}") FROM "${tableName}"), 0) + 1,
+               false
+             )`
+          );
+        }
+      } catch { /* table has no serial columns — fine */ }
+    }
+
     res.json({ ok: true, restoredTables, restoredRows, errors, manifest });
   } catch (err) {
-    await pool.query("SET session_replication_role = DEFAULT").catch(() => {});
     res.status(500).json({ error: String(err) });
+  } finally {
+    client.release();
   }
 });
 

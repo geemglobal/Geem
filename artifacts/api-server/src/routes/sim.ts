@@ -14,10 +14,15 @@ import { runExpiryAlertJob } from "../lib/sim-expiry-alerts";
 const router: IRouter = Router();
 
 /* eslint-disable-next-line @typescript-eslint/no-unnecessary-condition */
-const APP_KEY: string = process.env.SIM_APP_KEY
-  ?? (() => { throw new Error("SIM_APP_KEY environment variable is required"); })();
-const APP_SECRET: string = process.env.SIM_APP_SECRET
-  ?? (() => { throw new Error("SIM_APP_SECRET environment variable is required"); })();
+// Lazy — only blow up when a SIM route is actually called, not at startup.
+const APP_KEY: string = process.env.SIM_APP_KEY ?? "";
+const APP_SECRET: string = process.env.SIM_APP_SECRET ?? "";
+
+function requireSimKeys(): void {
+  if (!APP_KEY || !APP_SECRET) {
+    throw new Error("SIM_APP_KEY and SIM_APP_SECRET environment variables are required for SIM routes");
+  }
+}
 const API_BASE = "https://api.yourchat.top";
 
 interface ApiResponse<T = unknown> {
@@ -44,6 +49,7 @@ function createSign(params: Record<string, unknown>, timestamp: string): string 
 }
 
 async function callApi<T>(endpoint: string, params: Record<string, unknown> = {}): Promise<ApiResponse<T>> {
+  requireSimKeys();
   const timestamp = Date.now().toString();
   const sign = createSign(params, timestamp);
   const res = await fetch(`${API_BASE}${endpoint}`, {

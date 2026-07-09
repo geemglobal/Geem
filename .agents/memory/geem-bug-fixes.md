@@ -48,3 +48,28 @@ Applied in both `inventory.ts` and `product_ai.ts`.
 
 **`return res.status(N).json(...)` pattern is a TypeScript error in Express 5.**  
 Routes typed as `Promise<void>` cannot return a `Response`. Always split: `res.status(N).json(...); return;`
+
+---
+
+**`/system/backup` backs up ALL public tables dynamically (not a hardcoded list).**  
+`getAllTables()` queries `information_schema.tables` (schema=public, type=BASE TABLE) and skips `drizzle_migrations`. Backup manifest version bumped to `"2.0"`.
+
+**Why:** The old `BACKUP_TABLES` list used stale table names (pre_orders, vault_items, courier_accounts…) that don't exist in the current schema — backups were mostly empty.
+
+---
+
+**`/system/restore` safe-restore rules (all must hold):**
+1. Check out a single `pool.connect()` client — `SET LOCAL session_replication_role = replica` is session-scoped and must stay on one connection.
+2. Each table is restored inside its own `BEGIN/COMMIT` transaction; `ROLLBACK` on failure so no table ends up half-wiped.
+3. Table names are allowlisted against `getAllTables()` — unknown names from the ZIP are skipped with an error message.
+4. Column names from JSON keys are validated with `assertSafeIdentifier()` (`/^[a-zA-Z_][a-zA-Z0-9_]*$/`) before building any SQL.
+5. After restore, sequences are reset by querying `information_schema.columns` for every `column_default LIKE 'nextval(%'` column (not just `id`), then calling `setval(..., max+1, false)`.
+
+**Why:** Original restore had: pool-level FK disable (leaks across connections), no table-name allowlist (SQLi via crafted ZIP), and only reset the `id` sequence (other serial columns would collide on new inserts).
+
+---
+
+**SIM routes (`sim.ts`) require `SIM_APP_KEY` and `SIM_APP_SECRET`.**  
+Both default to `""` at module load to avoid crashing the server on startup. `requireSimKeys()` is called inside `callApi()` so every SIM route fails fast with a clear config error, not a generic upstream 502.
+
+**Why:** Module-level throw crashed the entire API server when SIM credentials were absent.
