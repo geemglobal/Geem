@@ -20,16 +20,18 @@ function ensureDir(dir: string) {
 // no extension — this is the case for all uploads, which are stored as
 // bare UUIDs under UPLOADS_DIR/uploads/<uuid>.
 function sniffContentType(data: Buffer): string | null {
-  if (data.length >= 8 && data[0] === 0x89 && data[1] === 0x50 && data[2] === 0x4e && data[3] === 0x47) return "image/png";
+  const PNG_SIG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  if (data.length >= 8 && PNG_SIG.every((b, i) => data[i] === b)) return "image/png";
   if (data.length >= 3 && data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff) return "image/jpeg";
   if (data.length >= 6 && data.subarray(0, 6).toString("ascii") === "GIF87a") return "image/gif";
   if (data.length >= 6 && data.subarray(0, 6).toString("ascii") === "GIF89a") return "image/gif";
   if (data.length >= 12 && data.subarray(0, 4).toString("ascii") === "RIFF" && data.subarray(8, 12).toString("ascii") === "WEBP") return "image/webp";
   if (data.length >= 4 && data[0] === 0x00 && data[1] === 0x00 && data[2] === 0x01 && data[3] === 0x00) return "image/x-icon";
   if (data.length >= 4 && data.subarray(0, 4).toString("ascii") === "%PDF") return "application/pdf";
-  // SVG / XML is text-based — sniff the first non-whitespace chars.
-  const head = data.subarray(0, Math.min(data.length, 512)).toString("utf8").trimStart();
-  if (head.startsWith("<?xml") || head.startsWith("<svg")) return "image/svg+xml";
+  // SVG only — require an actual <svg root element, not just any XML document,
+  // so generic XML doesn't get promoted to a scriptable image type.
+  const head = data.subarray(0, Math.min(data.length, 1024)).toString("utf8").trimStart();
+  if (/^(<\?xml[^>]*>\s*)?(<!--.*?-->\s*)*<svg[\s>]/is.test(head)) return "image/svg+xml";
   return null;
 }
 
