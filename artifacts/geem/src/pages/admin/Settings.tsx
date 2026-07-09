@@ -237,6 +237,11 @@ export default function Settings() {
   const [rcSiteKey, setRcSiteKey] = useState("");
   const [rcSecretKey, setRcSecretKey] = useState("");
 
+  // Which integration card is open for editing (null = all locked / collapsed when configured).
+  const [editingInt, setEditingInt] = useState<string | null>(null);
+  // Reset editing state when tab changes so integrations re-lock on tab switch.
+  useEffect(() => { setEditingInt(null); }, [tab]);
+
   // ── queries ───────────────────────────────────────────────────────────────
   const { data: company } = useQuery({ queryKey: ["settings-company"], queryFn: () => axiosInstance.get<CompanySettings>("/settings/company").then(r => r.data) });
   const { data: invoice } = useQuery({ queryKey: ["settings-invoice"], queryFn: () => axiosInstance.get<InvoiceSettings>("/settings/invoice").then(r => r.data) });
@@ -552,7 +557,20 @@ export default function Settings() {
               </div>
               <p className="text-sm text-muted-foreground">Send invoices, receipts, and notifications by email.</p>
             </CardHeader>
-            {emailEnabled && (
+            {emailEnabled && emailInt && editingInt !== "email" && (
+              <CardContent>
+                <div className="flex items-center justify-between p-3 bg-green-50 border border-green-100 rounded-lg">
+                  <div className="flex items-center gap-2 text-sm text-green-800">
+                    <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+                    <span>Email configured — credentials hidden to prevent accidental edits.</span>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => setEditingInt("email")}>
+                    <Pencil className="h-3.5 w-3.5 mr-1" />Edit
+                  </Button>
+                </div>
+              </CardContent>
+            )}
+            {emailEnabled && (!emailInt || editingInt === "email") && (
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <Field label="SMTP Host"><Input value={ec("host")} onChange={e => setEmailCfg(f => ({ ...f, host: e.target.value }))} placeholder="smtp.gmail.com" /></Field>
@@ -592,7 +610,7 @@ export default function Settings() {
                     {testEmailLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                     <span className="ml-2">Test</span>
                   </Button>
-                  <Button onClick={() => saveIntegration("email", emailEnabled, emailCfg, "int-email")}>Save</Button>
+                  <Button onClick={() => { saveIntegration("email", emailEnabled, emailCfg, "int-email"); setEditingInt(null); }}>Save</Button>
                 </div>
               </CardContent>
             )}
@@ -615,7 +633,20 @@ export default function Settings() {
               </div>
               <p className="text-sm text-muted-foreground">Send order confirmations and alerts by SMS.</p>
             </CardHeader>
-            {smsEnabled && (
+            {smsEnabled && smsInt && editingInt !== "sms" && (
+              <CardContent>
+                <div className="flex items-center justify-between p-3 bg-green-50 border border-green-100 rounded-lg">
+                  <div className="flex items-center gap-2 text-sm text-green-800">
+                    <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+                    <span>SMS configured — credentials hidden to prevent accidental edits.</span>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => setEditingInt("sms")}>
+                    <Pencil className="h-3.5 w-3.5 mr-1" />Edit
+                  </Button>
+                </div>
+              </CardContent>
+            )}
+            {smsEnabled && (!smsInt || editingInt === "sms") && (
               <CardContent className="space-y-4">
                 <Field label="SMS Provider">
                   <Select value={sc("provider")} onValueChange={v => setSmsCfg(f => ({ ...f, provider: v }))}>
@@ -661,7 +692,7 @@ export default function Settings() {
                     {testSmsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                     <span className="ml-2">Test</span>
                   </Button>
-                  <Button onClick={() => saveIntegration("sms", smsEnabled, smsCfg, "int-sms")}>Save</Button>
+                  <Button onClick={() => { saveIntegration("sms", smsEnabled, smsCfg, "int-sms"); setEditingInt(null); }}>Save</Button>
                 </div>
               </CardContent>
             )}
@@ -687,7 +718,20 @@ export default function Settings() {
               </div>
               <p className="text-sm text-muted-foreground">Send order updates and invoices via WhatsApp.</p>
             </CardHeader>
-            {waEnabled && (
+            {waEnabled && waInt && editingInt !== "wa" && (
+              <CardContent>
+                <div className="flex items-center justify-between p-3 bg-green-50 border border-green-100 rounded-lg">
+                  <div className="flex items-center gap-2 text-sm text-green-800">
+                    <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+                    <span>WhatsApp configured — credentials hidden to prevent accidental edits.</span>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => setEditingInt("wa")}>
+                    <Pencil className="h-3.5 w-3.5 mr-1" />Edit
+                  </Button>
+                </div>
+              </CardContent>
+            )}
+            {waEnabled && (!waInt || editingInt === "wa") && (
               <CardContent className="space-y-4">
                 <Field label="WhatsApp Provider">
                   <Select value={wc("provider")} onValueChange={v => setWaCfg(f => ({ ...f, provider: v }))}>
@@ -737,7 +781,7 @@ export default function Settings() {
                     {testWaLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                     <span className="ml-2">Test</span>
                   </Button>
-                  <Button onClick={() => saveIntegration("whatsapp", waEnabled, waCfg, "int-whatsapp")}>Save</Button>
+                  <Button onClick={() => { saveIntegration("whatsapp", waEnabled, waCfg, "int-whatsapp"); setEditingInt(null); }}>Save</Button>
                 </div>
               </CardContent>
             )}
@@ -770,20 +814,34 @@ export default function Settings() {
               <p className="text-sm text-muted-foreground">Track visitors, page views, and shop performance in Google Analytics.</p>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Field label="Measurement ID">
-                <Input
-                  value={gaMeasurementId}
-                  onChange={e => setGaMeasurementId(e.target.value)}
-                  placeholder="G-XXXXXXXXXX"
-                />
-              </Field>
-              <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 text-xs text-amber-800 space-y-1">
-                <p className="font-semibold">How to get your Measurement ID:</p>
-                <p>Go to <strong>analytics.google.com</strong> → Admin → Data Streams → your stream → copy the Measurement ID (starts with G-).</p>
-              </div>
-              <Button onClick={() => saveIntegration("google_analytics", gaEnabled, { measurementId: gaMeasurementId }, "int-google-analytics")}>
-                Save Analytics Settings
-              </Button>
+              {gaEnabled && gaInt && editingInt !== "ga" ? (
+                <div className="flex items-center justify-between p-3 bg-green-50 border border-green-100 rounded-lg">
+                  <div className="flex items-center gap-2 text-sm text-green-800">
+                    <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+                    <span>Google Analytics configured — details hidden to prevent accidental edits.</span>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => setEditingInt("ga")}>
+                    <Pencil className="h-3.5 w-3.5 mr-1" />Edit
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <Field label="Measurement ID">
+                    <Input
+                      value={gaMeasurementId}
+                      onChange={e => setGaMeasurementId(e.target.value)}
+                      placeholder="G-XXXXXXXXXX"
+                    />
+                  </Field>
+                  <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 text-xs text-amber-800 space-y-1">
+                    <p className="font-semibold">How to get your Measurement ID:</p>
+                    <p>Go to <strong>analytics.google.com</strong> → Admin → Data Streams → your stream → copy the Measurement ID (starts with G-).</p>
+                  </div>
+                  <Button onClick={() => { saveIntegration("google_analytics", gaEnabled, { measurementId: gaMeasurementId }, "int-google-analytics"); setEditingInt(null); }}>
+                    Save Analytics Settings
+                  </Button>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -803,24 +861,38 @@ export default function Settings() {
               <p className="text-sm text-muted-foreground">Verify site ownership so Google shows your pages in Search Console.</p>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Field label="Verification Token">
-                <Input
-                  value={scVerificationTag}
-                  onChange={e => setScVerificationTag(e.target.value)}
-                  placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                />
-              </Field>
-              <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-blue-800 space-y-1">
-                <p className="font-semibold">How to verify ownership:</p>
-                <p>Go to <strong>search.google.com/search-console</strong> → Add property → enter <strong>geem.pk</strong> → choose "HTML tag" method → copy only the <strong>content</strong> value from the meta tag (not the full tag).</p>
-              </div>
-              <div className="bg-slate-50 border rounded p-3 text-xs text-slate-600">
-                <p className="font-medium mb-1">Sitemap URL (submit to Search Console):</p>
-                <code className="font-mono select-all">https://geem.pk/api/sitemap.xml</code>
-              </div>
-              <Button onClick={() => saveIntegration("google_search_console", scEnabled, { verificationTag: scVerificationTag }, "int-google-sc")}>
-                Save Search Console Settings
-              </Button>
+              {scEnabled && scInt && editingInt !== "sc" ? (
+                <div className="flex items-center justify-between p-3 bg-green-50 border border-green-100 rounded-lg">
+                  <div className="flex items-center gap-2 text-sm text-green-800">
+                    <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+                    <span>Search Console configured — token hidden to prevent accidental edits.</span>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => setEditingInt("sc")}>
+                    <Pencil className="h-3.5 w-3.5 mr-1" />Edit
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <Field label="Verification Token">
+                    <Input
+                      value={scVerificationTag}
+                      onChange={e => setScVerificationTag(e.target.value)}
+                      placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                    />
+                  </Field>
+                  <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-blue-800 space-y-1">
+                    <p className="font-semibold">How to verify ownership:</p>
+                    <p>Go to <strong>search.google.com/search-console</strong> → Add property → enter <strong>geem.pk</strong> → choose "HTML tag" method → copy only the <strong>content</strong> value from the meta tag (not the full tag).</p>
+                  </div>
+                  <div className="bg-slate-50 border rounded p-3 text-xs text-slate-600">
+                    <p className="font-medium mb-1">Sitemap URL (submit to Search Console):</p>
+                    <code className="font-mono select-all">https://geem.pk/api/sitemap.xml</code>
+                  </div>
+                  <Button onClick={() => { saveIntegration("google_search_console", scEnabled, { verificationTag: scVerificationTag }, "int-google-sc"); setEditingInt(null); }}>
+                    Save Search Console Settings
+                  </Button>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -840,20 +912,34 @@ export default function Settings() {
               <p className="text-sm text-muted-foreground">Protects sign-up, login, and checkout from bots. Invisible to real customers.</p>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Field label="Site Key (public — goes in the frontend)">
-                <Input value={rcSiteKey} onChange={e => setRcSiteKey(e.target.value)} placeholder="6Lc..." />
-              </Field>
-              <Field label="Secret Key (private — stays on the server)">
-                <Input value={rcSecretKey} onChange={e => setRcSecretKey(e.target.value)} placeholder="6Lc..." type="password" />
-              </Field>
-              <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 text-xs text-amber-800 space-y-1">
-                <p className="font-semibold">How to get your keys:</p>
-                <p>Go to <strong>google.com/recaptcha/admin</strong> → Create → choose <strong>reCAPTCHA v3</strong> → add domains <code>geem.pk</code> and <code>erp.geem.pk</code> → copy both keys here.</p>
-                <p className="mt-1 text-amber-700">⚠️ After saving, you must <strong>rebuild and redeploy</strong> the shop and admin frontends for the Site Key change to take effect.</p>
-              </div>
-              <Button onClick={() => saveIntegration("recaptcha", rcEnabled, { siteKey: rcSiteKey, secretKey: rcSecretKey }, "int-recaptcha")}>
-                Save reCAPTCHA Settings
-              </Button>
+              {rcEnabled && rcInt && editingInt !== "rc" ? (
+                <div className="flex items-center justify-between p-3 bg-green-50 border border-green-100 rounded-lg">
+                  <div className="flex items-center gap-2 text-sm text-green-800">
+                    <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+                    <span>reCAPTCHA configured — keys hidden to prevent accidental edits.</span>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => setEditingInt("rc")}>
+                    <Pencil className="h-3.5 w-3.5 mr-1" />Edit
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <Field label="Site Key (public — goes in the frontend)">
+                    <Input value={rcSiteKey} onChange={e => setRcSiteKey(e.target.value)} placeholder="6Lc..." />
+                  </Field>
+                  <Field label="Secret Key (private — stays on the server)">
+                    <Input value={rcSecretKey} onChange={e => setRcSecretKey(e.target.value)} placeholder="6Lc..." type="password" />
+                  </Field>
+                  <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 text-xs text-amber-800 space-y-1">
+                    <p className="font-semibold">How to get your keys:</p>
+                    <p>Go to <strong>google.com/recaptcha/admin</strong> → Create → choose <strong>reCAPTCHA v3</strong> → add domains <code>geem.pk</code> and <code>erp.geem.pk</code> → copy both keys here.</p>
+                    <p className="mt-1 text-amber-700">⚠️ After saving, you must <strong>rebuild and redeploy</strong> the shop and admin frontends for the Site Key change to take effect.</p>
+                  </div>
+                  <Button onClick={() => { saveIntegration("recaptcha", rcEnabled, { siteKey: rcSiteKey, secretKey: rcSecretKey }, "int-recaptcha"); setEditingInt(null); }}>
+                    Save reCAPTCHA Settings
+                  </Button>
+                </>
+              )}
             </CardContent>
           </Card>
 

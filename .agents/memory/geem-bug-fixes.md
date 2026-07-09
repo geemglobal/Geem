@@ -59,13 +59,14 @@ Routes typed as `Promise<void>` cannot return a `Response`. Always split: `res.s
 ---
 
 **`/system/restore` safe-restore rules (all must hold):**
-1. Check out a single `pool.connect()` client — `SET LOCAL session_replication_role = replica` is session-scoped and must stay on one connection.
-2. Each table is restored inside its own `BEGIN/COMMIT` transaction; `ROLLBACK` on failure so no table ends up half-wiped.
-3. Table names are allowlisted against `getAllTables()` — unknown names from the ZIP are skipped with an error message.
-4. Column names from JSON keys are validated with `assertSafeIdentifier()` (`/^[a-zA-Z_][a-zA-Z0-9_]*$/`) before building any SQL.
-5. After restore, sequences are reset by querying `information_schema.columns` for every `column_default LIKE 'nextval(%'` column (not just `id`), then calling `setval(..., max+1, false)`.
+1. Check out a single `pool.connect()` client for the whole restore transaction.
+2. **Do NOT use `session_replication_role`** — Replit's managed PostgreSQL denies it (not a superuser).
+3. **Do NOT use `TRUNCATE ... CASCADE`** — it propagates to FK-related tables NOT in the backup and deletes data that can't be recovered.
+4. Correct approach: `topologicalTableOrder()` (Kahn's algo on FK graph from `information_schema`), then DELETE in *reverse* topo order (children first), then INSERT in *forward* topo order (parents first). Wrap the entire DELETE + INSERT loop in a single `BEGIN/COMMIT`; `ROLLBACK` on any error.
+5. Table names allowlisted against `getAllTables()`, column names validated with `assertSafeIdentifier()` before building any SQL.
+6. After `COMMIT`, reset sequences: `information_schema.columns WHERE column_default LIKE 'nextval(%'` → `setval(..., max+1, false)`.
 
-**Why:** Original restore had: pool-level FK disable (leaks across connections), no table-name allowlist (SQLi via crafted ZIP), and only reset the `id` sequence (other serial columns would collide on new inserts).
+**Why:** Managed PG = no superuser. TRUNCATE CASCADE wiped tables outside the backup set. DELETE + topo order satisfies FK constraints without any privilege escalation.
 
 ---
 

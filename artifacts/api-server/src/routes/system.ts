@@ -97,116 +97,161 @@ function assertSafeIdentifier(name: string, kind: string): void {
   }
 }
 
+/**
+ * Topologically sort tables so parent tables (referenced by FKs) come first.
+ * Uses Kahn's algorithm on the FK dependency graph from information_schema.
+ * Cyclic tables (shouldn't happen in clean schemas) are appended at the end.
+ */
+async function topologicalTableOrder(tables: string[]): Promise<string[]> {
+  const tableSet = new Set(tables);
+  const { rows: fkRows } = await pool.query<{ child: string; parent: string }>(
+    `SELECT tc.table_name AS child, ccu.table_name AS parent
+     FROM information_schema.table_constraints tc
+     JOIN information_schema.key_column_usage kcu
+       ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+     JOIN information_schema.constraint_column_usage ccu
+       ON ccu.constraint_name = tc.constraint_name AND ccu.table_schema = tc.table_schema
+     WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = 'public'`
+  );
+
+  const inDegree = new Map<string, number>(tables.map(t => [t, 0]));
+  const adj = new Map<string, string[]>(tables.map(t => [t, []]));
+
+  for (const { child, parent } of fkRows) {
+    if (!tableSet.has(child) || !tableSet.has(parent) || child === parent) continue;
+    inDegree.set(child, (inDegree.get(child) ?? 0) + 1);
+    adj.get(parent)!.push(child);
+  }
+
+  const queue = tables.filter(t => (inDegree.get(t) ?? 0) === 0);
+  const sorted: string[] = [];
+  while (queue.length > 0) {
+    const t = queue.shift()!;
+    sorted.push(t);
+    for (const child of adj.get(t) ?? []) {
+      const deg = (inDegree.get(child) ?? 0) - 1;
+      inDegree.set(child, deg);
+      if (deg === 0) queue.push(child);
+    }
+  }
+  // Append any cyclic stragglers
+  const seen = new Set(sorted);
+  for (const t of tables) { if (!seen.has(t)) sorted.push(t); }
+  return sorted;
+}
+
 router.post("/system/restore", upload.single("backup"), async (req: Request, res: Response): Promise<void> => {
   const userId = await getAuthUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   if (!req.file) { res.status(400).json({ error: "No file uploaded" }); return; }
 
-  let restoredTables = 0;
-  let restoredRows = 0;
   const errors: string[] = [];
-  const restoredTableNames: string[] = [];
 
-  // Checkout a single client so SET LOCAL session_replication_role applies to
-  // every statement in this restore operation without leaking to other callers.
-  const client = await pool.connect();
   try {
     const zip = new AdmZip(req.file.buffer);
     const manifestEntry = zip.getEntry("manifest.json");
     if (!manifestEntry) {
       res.status(400).json({ error: "Invalid backup: missing manifest.json" });
-      client.release();
       return;
     }
     const manifest = JSON.parse(manifestEntry.getData().toString("utf-8")) as { version: string; app: string; createdAt: string };
 
-    // Build an allowlist of tables that actually exist in this database.
+    // Build allowlist from live schema.
     const allowedTables = new Set(await getAllTables());
 
-    const dataEntries = zip.getEntries().filter(e => e.entryName.startsWith("data/") && e.entryName.endsWith(".json"));
-
-    for (const entry of dataEntries) {
+    // Parse + validate all ZIP entries before touching the database.
+    const tableData = new Map<string, Record<string, unknown>[]>();
+    for (const entry of zip.getEntries()) {
+      if (!entry.entryName.startsWith("data/") || !entry.entryName.endsWith(".json")) continue;
       const tableName = path.basename(entry.entryName, ".json");
-
-      // Allowlist check — reject tables not present in the current schema.
       if (!allowedTables.has(tableName)) {
         errors.push(`${tableName}: not a known table — skipped`);
         continue;
       }
-
+      try { assertSafeIdentifier(tableName, "table"); } catch (e) { errors.push(`${tableName}: ${String(e)}`); continue; }
       let rows: Record<string, unknown>[];
-      try {
-        rows = JSON.parse(entry.getData().toString("utf-8")) as Record<string, unknown>[];
-      } catch {
-        errors.push(`${tableName}: failed to parse JSON`);
-        continue;
+      try { rows = JSON.parse(entry.getData().toString("utf-8")) as Record<string, unknown>[]; }
+      catch { errors.push(`${tableName}: failed to parse JSON`); continue; }
+      if (rows.length > 0) {
+        try { for (const col of Object.keys(rows[0])) assertSafeIdentifier(col, "column"); }
+        catch (e) { errors.push(`${tableName}: ${String(e)}`); continue; }
+      }
+      tableData.set(tableName, rows);
+    }
+
+    const tablesToRestore = [...tableData.keys()];
+    if (tablesToRestore.length === 0) {
+      res.json({ ok: true, restoredTables: 0, restoredRows: 0, errors, manifest });
+      return;
+    }
+
+    // Topological sort so INSERT respects FK constraints (parents inserted first).
+    const topoOrder = await topologicalTableOrder(tablesToRestore);
+
+    // Single atomic transaction:
+    //   1. TRUNCATE all restore targets at once — CASCADE handles FK deps
+    //      without requiring session_replication_role (no superuser needed).
+    //   2. INSERT rows in topological order (parents before children).
+    //   3. ROLLBACK on any failure so the database is never left half-wiped.
+    const client = await pool.connect();
+    let restoredTables = 0, restoredRows = 0;
+    const restoredTableNames: string[] = [];
+    try {
+      await client.query("BEGIN");
+
+      // Delete in REVERSE topological order (children first, parents last)
+      // so FK constraints are never violated during deletion.
+      // Using DELETE (not TRUNCATE CASCADE) so ONLY the targeted tables are
+      // cleared — TRUNCATE CASCADE would propagate to FK-related tables that
+      // are NOT part of this backup and erase data that can't be restored.
+      for (const tableName of [...topoOrder].reverse()) {
+        await client.query(`DELETE FROM "${tableName}"`);
       }
 
-      // Each table is restored inside its own transaction so a bad row never
-      // leaves another table half-wiped.
-      try {
-        await client.query("BEGIN");
-        // Disable FK checks only for this transaction on this connection.
-        await client.query("SET LOCAL session_replication_role = replica");
-
-        await client.query(`TRUNCATE TABLE "${tableName}" RESTART IDENTITY`);
-
-        if (rows.length > 0) {
-          // Validate every column name against the safe-identifier rule before
-          // building any SQL — reject the whole table if any name looks unsafe.
-          const cols = Object.keys(rows[0]);
-          for (const col of cols) assertSafeIdentifier(col, "column");
-
-          const colList = cols.map(c => `"${c}"`).join(", ");
-          for (const row of rows) {
-            const vals = cols.map((_, i) => `${i + 1}`).join(", ");
-            await client.query(
-              `INSERT INTO "${tableName}" (${colList}) VALUES (${vals})`,
-              cols.map(c => row[c] ?? null)
-            );
-          }
+      // Insert in FORWARD topological order (parents first, children last).
+      for (const tableName of topoOrder) {
+        const rows = tableData.get(tableName) ?? [];
+        if (rows.length === 0) { restoredTables++; restoredTableNames.push(tableName); continue; }
+        const cols = Object.keys(rows[0]);
+        const colList = cols.map(c => `"${c}"`).join(", ");
+        for (const row of rows) {
+          const vals = cols.map((_, i) => `${i + 1}`).join(", ");
+          await client.query(`INSERT INTO "${tableName}" (${colList}) VALUES (${vals})`, cols.map(c => row[c] ?? null));
         }
-
-        await client.query("COMMIT");
         restoredTables++;
         restoredRows += rows.length;
         restoredTableNames.push(tableName);
-      } catch (err) {
-        await client.query("ROLLBACK").catch(() => {});
-        errors.push(`${tableName}: ${String(err).slice(0, 200)}`);
       }
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => {});
+      client.release();
+      res.status(500).json({ error: `Restore failed and was fully rolled back: ${String(err)}` });
+      return;
     }
+    client.release();
 
-    // Reset all serial sequences for restored tables so new inserts don't
-    // collide with restored IDs. Uses information_schema to find every serial
-    // column — not just "id" — on each table.
+    // Reset sequences so future inserts don't collide with restored IDs.
     for (const tableName of restoredTableNames) {
       try {
-        const seqResult = await client.query<{ column_name: string }>(
-          `SELECT c.column_name
-           FROM information_schema.columns c
-           WHERE c.table_schema = 'public'
-             AND c.table_name   = $1
-             AND c.column_default LIKE 'nextval(%'`,
+        const seqResult = await pool.query<{ column_name: string }>(
+          `SELECT column_name FROM information_schema.columns
+           WHERE table_schema = 'public' AND table_name = $1
+             AND column_default LIKE 'nextval(%'`,
           [tableName]
         );
         for (const { column_name } of seqResult.rows) {
-          await client.query(
-            `SELECT setval(
-               pg_get_serial_sequence('"${tableName}"', '${column_name}'),
-               COALESCE((SELECT MAX("${column_name}") FROM "${tableName}"), 0) + 1,
-               false
-             )`
+          await pool.query(
+            `SELECT setval(pg_get_serial_sequence('"${tableName}"', '${column_name}'),
+               COALESCE((SELECT MAX("${column_name}") FROM "${tableName}"), 0) + 1, false)`
           );
         }
-      } catch { /* table has no serial columns — fine */ }
+      } catch { /* no serial columns on this table */ }
     }
 
     res.json({ ok: true, restoredTables, restoredRows, errors, manifest });
   } catch (err) {
     res.status(500).json({ error: String(err) });
-  } finally {
-    client.release();
   }
 });
 

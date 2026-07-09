@@ -124,7 +124,7 @@ export function ShopLayout({ children }: { children: React.ReactNode }) {
         <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center justify-between gap-4">
           {/* Logo (small, sticky only) */}
           <Link href="/shop">
-            <img src="/geem-logo-banner.svg" alt="Geem" className="h-8 w-auto cursor-pointer" />
+            <img src={branding.logo ?? "/geem-logo-banner.svg"} alt={branding.companyName} className="h-8 w-auto cursor-pointer" />
           </Link>
 
           {/* Desktop Nav */}
@@ -376,7 +376,7 @@ export function ShopLayout({ children }: { children: React.ReactNode }) {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-10">
             <div className="md:col-span-1">
               <div className="flex items-center mb-3">
-                <img src="/geem-logo-banner.svg" alt="Geem" className="h-9 w-auto brightness-0 invert" />
+                <img src={branding.logo ?? "/geem-logo-banner.svg"} alt={branding.companyName} className="h-9 w-auto brightness-0 invert" />
               </div>
               <p className="text-sm font-bold text-gray-100 leading-snug mb-2">
                 Military-Grade<br />Security &amp; Surveillance<br />Equipment
