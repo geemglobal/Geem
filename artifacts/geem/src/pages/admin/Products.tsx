@@ -332,7 +332,7 @@ export default function Products() {
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
                 <Label>Title *</Label>
-                <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Samsung Galaxy S24 Ultra 12GB/256GB" />
+                <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Yuntrack CJ780 4G LTE Vehicle GPS Tracker" />
               </div>
               <div>
                 <Label>URL Slug</Label>
