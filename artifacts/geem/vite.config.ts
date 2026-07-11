@@ -37,9 +37,9 @@ const pwaManifest =
         ],
       }
     : {
-        name: "Geem — Security Equipment Shop",
+        name: "Geem.pk — Security & Surveillance Equipment",
         short_name: "Geem Shop",
-        description: "Pakistan's specialist security & surveillance equipment supplier",
+        description: "Pakistan's specialist security, surveillance & GPS tracking equipment",
         theme_color: "#dc2626",
         background_color: "#0a0a0a",
         display: "standalone" as const,

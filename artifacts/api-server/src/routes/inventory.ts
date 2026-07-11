@@ -32,33 +32,34 @@ async function generateProductContent(title: string, brandName: string, priceStr
       max_completion_tokens: 1800,
       messages: [{
         role: "user",
-        content: `You are a senior SEO content strategist and e-commerce copywriter for Geem.pk — Pakistan's most trusted IMEI-verified mobile phone retailer (crm.geem.pk / geem.pk).
+        content: `You are a senior SEO content strategist and e-commerce copywriter for Geem.pk — Pakistan's specialist security & surveillance equipment supplier (geem.pk).
 
-Your task: write a complete, professional, Google-ranking product listing for this device.
+Your task: write a complete, professional, Google-ranking product listing for this item.
 
-Device: ${title}
+Product: ${title}
 Brand: ${brandName}
 Price (PKR): ${priceStr}
 Market: Pakistan
-Store: Geem.pk — specialises in PTA-approved, IMEI-verified smartphones with manufacturer warranty
+Store: Geem.pk — specialists in spy cameras, GPS trackers, Lawmate surveillance, signal detectors, CCTV, and professional security equipment
 
 RULES:
-- Use real, accurate specs for this exact device model (you know them)
+- Use real, accurate features/specs for this exact product (you know them)
 - Never invent specs — if unsure of a spec, describe benefits instead
 - Natural language only — no bullet lists in longDescription
-- Pakistan-centric search intent: buyers search "[model] price in pakistan", "buy [model] online pakistan", "[model] pta approved"
+- Pakistan-centric search intent: buyers search "[product] price in pakistan", "buy [product] online pakistan"
 - Do NOT repeat the same phrase more than twice across all fields
+- Do NOT mention mobile phones or smartphones
 
 Return ONLY valid JSON (no markdown, no code fences) with exactly these fields:
 
 {
-  "title": "Professional product title for the shop listing. Format: '[Brand] [Full Model Name] [Storage/RAM variant if known, e.g. 256GB 8GB RAM]'. Include colour only if it is a core product differentiator. Max 80 chars.",
-  "shortDescription": "One punchy sentence (max 140 chars) that leads with the device's most desirable feature for Pakistani buyers — camera, battery, chipset, or value. End with: 'PTA approved & IMEI verified at Geem.pk.'",
-  "longDescription": "Write EXACTLY 3 focused paragraphs separated by a blank line. Paragraph 1 (Headline & Overview, ~60 words): Open with the device name and its headline positioning (flagship / mid-range / budget). Name 2–3 standout features with real detail (e.g. exact chipset, camera megapixels, battery mAh, display size & refresh rate). Paragraph 2 (Key Specs & Daily Experience, ~80 words): Cover real specs — processor, RAM & storage options, main + selfie camera, battery + charging speed, display tech, OS version, 5G/4G. Tie each spec to a real-world benefit Pakistani users care about (gaming, photography, WhatsApp & social media, durability). Paragraph 3 (Why Buy from Geem.pk, ~60 words): Emphasise PTA approved, IMEI verified, 100% original with box, manufacturer warranty, easy nationwide delivery across Pakistan (Karachi, Lahore, Islamabad and beyond), secure payment, and Geem.pk's after-sales support. Close with a natural call-to-action.",
-  "tags": "Exactly 12 lowercase comma-separated tags. Must include: brand slug, full model slug, 'pta approved', 'imei verified', 'buy online pakistan', one chipset tag (e.g. 'snapdragon 8 gen 3'), one camera tag (e.g. '200mp camera'), relevant tier tag (flagship / mid-range / budget), 'geem.pk', plus 3 model-specific feature tags.",
-  "metaTitle": "Google title tag — max 60 chars. Format: '[Model Name] Price in Pakistan | Geem.pk'. Include storage if space allows.",
-  "metaDescription": "Google meta description — max 155 chars. Must include: model name, 'best price in Pakistan', at least one key spec, 'PTA approved', and 'Geem.pk'. Write as a compelling reason to click, not a list.",
-  "metaKeywords": "Exactly 15 comma-separated phrases targeting real Pakistani search queries. Include: '[model] price in pakistan', 'buy [model] online', '[model] pta approved', '[model] specifications', '[brand] [model] pakistan', '[model] imei verified', '[model] original price', plus 8 more long-tail variants."
+  "title": "Professional product title. Format: '[Brand] [Full Model Name]'. Max 80 chars.",
+  "shortDescription": "One punchy sentence (max 140 chars) with the product's key feature. End with: 'Available at Geem.pk Pakistan.'",
+  "longDescription": "Write EXACTLY 3 focused paragraphs separated by a blank line. P1 (~60 words): Product name, primary use case, 2-3 standout features with real detail. P2 (~80 words): Real specs and real-world use cases for Pakistani security professionals, agencies, families and businesses. P3 (~60 words): Why buy from Geem.pk — 100% original, genuine, warranty, discreet nationwide delivery (Karachi, Lahore, Islamabad), secure payment, expert support, on-demand agency import. Close with a call to action.",
+  "tags": "Exactly 12 lowercase comma-separated tags. Include: brand slug, product slug, 'buy online pakistan', one use-case tag (e.g. 'hidden camera', 'vehicle tracker', 'rf detector'), 'security equipment pakistan', 'surveillance pakistan', 'geem.pk', plus 5 product-specific feature/use tags.",
+  "metaTitle": "Google title tag — max 60 chars. Format: '[Product Name] Price in Pakistan | Geem.pk'.",
+  "metaDescription": "Google meta description — max 155 chars. Include: product name, 'best price in Pakistan', one key feature, 'Geem.pk'. Compelling reason to click.",
+  "metaKeywords": "Exactly 15 comma-separated phrases: '[product] price in pakistan', 'buy [product] online pakistan', '[product] pakistan', '[brand] [product] pakistan', '[product] original', plus 10 more long-tail variants including use-case queries."
 }`,
       }],
     });
@@ -75,19 +76,16 @@ const router: IRouter = Router();
 
 // Brand-name → stock photo mapping for auto-created shop products
 const BRAND_IMAGES: Record<string, string> = {
-  apple:    "https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=800&q=80",
-  samsung:  "https://images.unsplash.com/photo-1610945415295-d9bbf067e59c?w=800&q=80",
-  xiaomi:   "https://images.unsplash.com/photo-1598327106026-d9521da673d1?w=800&q=80",
-  huawei:   "https://images.unsplash.com/photo-1556656793-08538906a9f8?w=800&q=80",
-  oneplus:  "https://images.unsplash.com/photo-1565849904461-04a58ad377e0?w=800&q=80",
-  oppo:     "https://images.unsplash.com/photo-1605170439002-90845e8c0137?w=800&q=80",
-  realme:   "https://images.unsplash.com/photo-1598327106026-d9521da673d1?w=800&q=80",
-  vivo:     "https://images.unsplash.com/photo-1607936854279-55e8a4c64888?w=800&q=80",
-  nokia:    "https://images.unsplash.com/photo-1601784551446-20c9e07cdbdb?w=800&q=80",
-  motorola: "https://images.unsplash.com/photo-1601758177266-bc599de87707?w=800&q=80",
-  tecno:    "https://images.unsplash.com/photo-1556656793-08538906a9f8?w=800&q=80",
-  infinix:  "https://images.unsplash.com/photo-1556656793-08538906a9f8?w=800&q=80",
+  lawmate:   "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=80",
+  yuntrack:  "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&q=80",
+  micodus:   "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&q=80",
+  hikvision: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=80",
+  dahua:     "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=80",
+  reolink:   "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=80",
+  concox:    "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&q=80",
+  gosafe:    "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&q=80",
 };
+const DEFAULT_PRODUCT_IMAGE = "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=80";
 
 function toSlug(s: string): string {
   return s.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "").replace(/-+/g, "-").replace(/^-|-$/g, "");
@@ -399,8 +397,8 @@ async function resolveCategory(brandName: string, modelName: string): Promise<nu
     }
   }
 
-  // Final fallback — Smartphones
-  return byName("Smartphones");
+  // Final fallback — no category assigned for unknown items
+  return null;
 }
 
 /** Create or update a shop product based on an inventory entry. Never throws — errors are swallowed. */
@@ -422,12 +420,12 @@ async function upsertProductFromInventory(brandId: number, modelId: number, sell
     const catId = await resolveCategory(brand.name, model.name);
     const cat = catId ? { id: catId } : null;
 
-    const featuredImage = BRAND_IMAGES[brand.name.toLowerCase()] ?? "https://images.unsplash.com/photo-1556656793-08538906a9f8?w=800&q=80";
+    const featuredImage = BRAND_IMAGES[brand.name.toLowerCase()] ?? DEFAULT_PRODUCT_IMAGE;
 
     // SEO fields computed once for both insert and update
     const metaTitle = `${title} Price in Pakistan — Buy Online at Geem.pk`;
-    const metaDescription = `Buy ${title} online in Pakistan at the best price. PTA approved, IMEI verified, 100% original with manufacturer warranty. Fast nationwide delivery. Order now at Geem.pk.`;
-    const metaKeywords = `${title}, ${title} price in pakistan, buy ${title} online, ${brand.name} mobile price pakistan, ${title} pta approved, ${title} geem.pk`;
+    const metaDescription = `Buy ${title} online in Pakistan at the best price. 100% original, genuine product with manufacturer warranty. Fast nationwide delivery. Order now at Geem.pk.`;
+    const metaKeywords = `${title}, ${title} price in pakistan, buy ${title} online, ${brand.name} ${title} pakistan, ${title} price pakistan, ${title} geem.pk`;
 
     // Primary lookup: exact slug match
     let [existing] = await db.select({ id: productsTable.id, metaTitle: productsTable.metaTitle }).from(productsTable).where(eq(productsTable.slug, slug));
@@ -476,13 +474,13 @@ async function upsertProductFromInventory(brandId: number, modelId: number, sell
       const finalSlug = toSlug(finalTitle);
 
       const shortDescription = ai?.shortDescription
-        ?? `Buy ${finalTitle} in Pakistan at the best price — PTA Approved, IMEI Verified, 100% Original with manufacturer warranty. Order now at Geem.pk.`;
+        ?? `Buy ${finalTitle} in Pakistan at the best price — 100% original, genuine product with manufacturer warranty. Order now at Geem.pk.`;
 
       const longDescription = ai?.longDescription
-        ?? `${finalTitle} is available at Geem.pk — Pakistan's most trusted mobile phone retailer.\n\nPowered by the latest processor and built for the demands of modern life, ${finalTitle} delivers outstanding performance for everyday use, gaming, photography, and more.\n\nWhy buy from Geem.pk? Every device is PTA approved and IMEI verified. You receive a 100% original handset with complete box accessories and manufacturer warranty. We offer nationwide delivery across Pakistan — Karachi, Lahore, Islamabad, and beyond — with secure payment and dedicated after-sales support. Order today or contact us on WhatsApp for the latest price.`;
+        ?? `${finalTitle} is available at Geem.pk — Pakistan's specialist security and surveillance equipment supplier.\n\nProfessionally sourced and tested for reliability, ${finalTitle} delivers outstanding performance for security and surveillance applications.\n\nWhy buy from Geem.pk? You receive a 100% original, genuine product with manufacturer warranty and professional packaging. We offer nationwide delivery across Pakistan — Karachi, Lahore, Islamabad, and beyond — with secure payment and dedicated after-sales support. Order today or contact us on WhatsApp for the latest price.`;
 
       const tags = ai?.tags
-        ?? [brand.name.toLowerCase(), toSlug(model.name), "smartphone", "pta approved", "imei verified", "buy online pakistan", "mobile phone pakistan", "geem.pk"].join(",");
+        ?? [brand.name.toLowerCase(), toSlug(model.name), "security equipment", "buy online pakistan", "surveillance pakistan", "pakistan", "geem.pk", "original"].join(",");
 
       await db.insert(productsTable).values({
         title: finalTitle,

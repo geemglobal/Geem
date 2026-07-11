@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useToast } from "@/hooks/use-toast";
 import { ImageUpload } from "@/components/ImageUpload";
+import { MultiImageUpload } from "@/components/MultiImageUpload";
 import { Plus, Package, Trash2, Pencil, Sparkles, X, GripVertical, Images } from "lucide-react";
 
 interface Product {
@@ -317,13 +318,13 @@ export default function Products() {
                   ))}
                 </div>
               )}
-              {/* Upload new gallery image */}
-              <ImageUpload
-                value={null}
-                onChange={addGalleryImage}
-                label="Add Gallery Photo"
+              {/* Upload multiple gallery images at once */}
+              <MultiImageUpload
+                onAdd={addGalleryImage}
+                label="Add Multiple Gallery Photos"
+                maxFiles={20}
               />
-              <p className="text-xs text-muted-foreground mt-1">Upload multiple photos — first is shown in grid, all shown in product detail slider</p>
+              <p className="text-xs text-muted-foreground mt-1">Select multiple photos at once — first is shown in grid, all shown in product detail slider (min 4 recommended)</p>
             </div>
           )}
 
