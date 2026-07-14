@@ -139,13 +139,11 @@ function SidebarContent({
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
       <div className="p-4 border-b border-sidebar-border flex-shrink-0">
         <div className="flex items-center gap-2">
-          {logo ? (
-            <img src={logo} alt="Logo" className="h-8 w-8 rounded-lg object-contain flex-shrink-0" />
-          ) : (
-            <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm flex-shrink-0">
-              G
-            </div>
-          )}
+          <img
+            src={logo ?? "/favicon.svg"}
+            alt="Logo"
+            className="h-8 w-8 rounded-lg object-contain flex-shrink-0 bg-primary"
+          />
           <div>
             <p className="font-bold text-sm leading-none">Geem CRM</p>
             <p className="text-xs text-sidebar-foreground/60 mt-0.5">Management System</p>
@@ -350,7 +348,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       )}
 
       <div className="flex flex-1 min-h-0">
-        <aside className="hidden lg:flex w-60 flex-col flex-shrink-0 border-r border-sidebar-border">
+        <aside className="hidden lg:flex w-60 flex-col flex-shrink-0 border-r border-sidebar-border overflow-hidden">
           <SidebarContent {...sidebarProps} />
         </aside>
 
