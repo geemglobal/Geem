@@ -655,14 +655,23 @@ export default function Settings() {
               <p className="text-sm text-muted-foreground">Send invoices, receipts, and notifications by email.</p>
             </CardHeader>
             {emailEnabled && emailInt && editingInt !== "email" && (
-              <CardContent>
-                <div className="flex items-center justify-between p-3 bg-green-50 border border-green-100 rounded-lg">
-                  <div className="flex items-center gap-2 text-sm text-green-800">
-                    <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
-                    <span>Email configured — credentials hidden to prevent accidental edits.</span>
-                  </div>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-100 rounded-lg text-xs text-green-800">
+                  <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+                  <span>Email active — settings are read-only. Click <strong>Edit</strong> to make changes.</span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                  <div><p className="text-xs text-muted-foreground mb-0.5">SMTP Host</p><p className="font-medium font-mono">{ec("host") || "—"}</p></div>
+                  <div><p className="text-xs text-muted-foreground mb-0.5">Port</p><p className="font-medium">{emailCfg.port ?? 587} — {emailCfg.port === 465 ? "SSL/TLS" : "STARTTLS"}</p></div>
+                  <div><p className="text-xs text-muted-foreground mb-0.5">Username / Email</p><p className="font-medium">{ec("user") || "—"}</p></div>
+                  <div><p className="text-xs text-muted-foreground mb-0.5">Password</p><p className="font-medium tracking-widest text-muted-foreground">••••••••</p></div>
+                  <div><p className="text-xs text-muted-foreground mb-0.5">From Name</p><p className="font-medium">{ec("fromName") || "—"}</p></div>
+                  <div><p className="text-xs text-muted-foreground mb-0.5">From Email</p><p className="font-medium">{ec("fromEmail") || "—"}</p></div>
+                  {ec("adminEmail") && <div className="col-span-2"><p className="text-xs text-muted-foreground mb-0.5">Admin Alert Email</p><p className="font-medium">{ec("adminEmail")}</p></div>}
+                </div>
+                <div className="flex justify-end">
                   <Button size="sm" variant="outline" onClick={() => setEditingInt("email")}>
-                    <Pencil className="h-3.5 w-3.5 mr-1" />Edit
+                    <Pencil className="h-3.5 w-3.5 mr-1.5" />Edit Settings
                   </Button>
                 </div>
               </CardContent>
@@ -731,14 +740,31 @@ export default function Settings() {
               <p className="text-sm text-muted-foreground">Send order confirmations and alerts by SMS.</p>
             </CardHeader>
             {smsEnabled && smsInt && editingInt !== "sms" && (
-              <CardContent>
-                <div className="flex items-center justify-between p-3 bg-green-50 border border-green-100 rounded-lg">
-                  <div className="flex items-center gap-2 text-sm text-green-800">
-                    <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
-                    <span>SMS configured — credentials hidden to prevent accidental edits.</span>
-                  </div>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-100 rounded-lg text-xs text-green-800">
+                  <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+                  <span>SMS active — settings are read-only. Click <strong>Edit</strong> to make changes.</span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                  <div className="col-span-2"><p className="text-xs text-muted-foreground mb-0.5">Provider</p><p className="font-medium capitalize">{sc("provider") || "—"}</p></div>
+                  {sc("provider") === "twilio" && <>
+                    <div><p className="text-xs text-muted-foreground mb-0.5">Account SID</p><p className="font-medium font-mono">{sc("accountSid") ? sc("accountSid").slice(0, 8) + "••••••••" : "—"}</p></div>
+                    <div><p className="text-xs text-muted-foreground mb-0.5">Auth Token</p><p className="font-medium tracking-widest text-muted-foreground">••••••••</p></div>
+                    <div><p className="text-xs text-muted-foreground mb-0.5">From Number</p><p className="font-medium">{sc("fromNumber") || "—"}</p></div>
+                  </>}
+                  {sc("provider") === "ultramsg" && <>
+                    <div><p className="text-xs text-muted-foreground mb-0.5">Instance ID</p><p className="font-medium font-mono">{sc("instanceId") || "—"}</p></div>
+                    <div><p className="text-xs text-muted-foreground mb-0.5">Token</p><p className="font-medium tracking-widest text-muted-foreground">••••••••</p></div>
+                  </>}
+                  {sc("provider") === "generic" && <>
+                    <div className="col-span-2"><p className="text-xs text-muted-foreground mb-0.5">API URL</p><p className="font-medium font-mono">{sc("apiUrl") || "—"}</p></div>
+                    <div><p className="text-xs text-muted-foreground mb-0.5">API Key</p><p className="font-medium tracking-widest text-muted-foreground">••••••••</p></div>
+                    <div><p className="text-xs text-muted-foreground mb-0.5">Sender ID</p><p className="font-medium">{sc("senderId") || "—"}</p></div>
+                  </>}
+                </div>
+                <div className="flex justify-end">
                   <Button size="sm" variant="outline" onClick={() => setEditingInt("sms")}>
-                    <Pencil className="h-3.5 w-3.5 mr-1" />Edit
+                    <Pencil className="h-3.5 w-3.5 mr-1.5" />Edit Settings
                   </Button>
                 </div>
               </CardContent>
@@ -816,14 +842,29 @@ export default function Settings() {
               <p className="text-sm text-muted-foreground">Send order updates and invoices via WhatsApp.</p>
             </CardHeader>
             {waEnabled && waInt && editingInt !== "wa" && (
-              <CardContent>
-                <div className="flex items-center justify-between p-3 bg-green-50 border border-green-100 rounded-lg">
-                  <div className="flex items-center gap-2 text-sm text-green-800">
-                    <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
-                    <span>WhatsApp configured — credentials hidden to prevent accidental edits.</span>
-                  </div>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-100 rounded-lg text-xs text-green-800">
+                  <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+                  <span>WhatsApp active — settings are read-only. Click <strong>Edit</strong> to make changes.</span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                  <div className="col-span-2"><p className="text-xs text-muted-foreground mb-0.5">Provider</p><p className="font-medium">{wc("provider") === "ultramsg" ? "UltraMsg" : wc("provider") === "whatsapp_business" ? "WhatsApp Business Cloud API (Meta)" : wc("provider") === "generic" ? "Generic HTTP Gateway" : "—"}</p></div>
+                  {wc("provider") === "ultramsg" && <>
+                    <div><p className="text-xs text-muted-foreground mb-0.5">Instance ID</p><p className="font-medium font-mono">{wc("instanceId") || "—"}</p></div>
+                    <div><p className="text-xs text-muted-foreground mb-0.5">Token</p><p className="font-medium tracking-widest text-muted-foreground">••••••••</p></div>
+                  </>}
+                  {wc("provider") === "whatsapp_business" && <>
+                    <div><p className="text-xs text-muted-foreground mb-0.5">Phone Number ID</p><p className="font-medium font-mono">{wc("phoneNumberId") || "—"}</p></div>
+                    <div><p className="text-xs text-muted-foreground mb-0.5">Access Token</p><p className="font-medium tracking-widest text-muted-foreground">••••••••</p></div>
+                  </>}
+                  {wc("provider") === "generic" && <>
+                    <div className="col-span-2"><p className="text-xs text-muted-foreground mb-0.5">API URL</p><p className="font-medium font-mono">{wc("apiUrl") || "—"}</p></div>
+                    <div><p className="text-xs text-muted-foreground mb-0.5">API Key</p><p className="font-medium tracking-widest text-muted-foreground">••••••••</p></div>
+                  </>}
+                </div>
+                <div className="flex justify-end">
                   <Button size="sm" variant="outline" onClick={() => setEditingInt("wa")}>
-                    <Pencil className="h-3.5 w-3.5 mr-1" />Edit
+                    <Pencil className="h-3.5 w-3.5 mr-1.5" />Edit Settings
                   </Button>
                 </div>
               </CardContent>
