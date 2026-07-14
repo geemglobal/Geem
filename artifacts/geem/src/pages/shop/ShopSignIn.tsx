@@ -13,7 +13,7 @@ const BASE_PATH = import.meta.env.BASE_URL.replace(/\/$/, "");
 // Fetch company logo from settings (with module-level cache)
 let _siCachedLogo: string | null = null;
 function useCompanyLogo() {
-  const [logo, setLogo] = useState<string>(_siCachedLogo ?? `${BASE_PATH}/geem-logo.svg`);
+  const [logo, setLogo] = useState<string>(_siCachedLogo ?? `${BASE_PATH}/geem-logo-banner.svg`);
   useEffect(() => {
     if (_siCachedLogo) return;
     fetch("/api/shop/seo-config").then(r => r.json()).then((d: { logo?: string | null }) => {
