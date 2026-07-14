@@ -910,8 +910,8 @@ export default function Settings() {
               </div>
               <p className="text-sm text-muted-foreground">Track visitors, page views, and shop performance in Google Analytics.</p>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {gaEnabled && gaInt && editingInt !== "ga" ? (
+            {gaEnabled && gaInt && editingInt !== "ga" && (
+              <CardContent>
                 <div className="flex items-center justify-between p-3 bg-green-50 border border-green-100 rounded-lg">
                   <div className="flex items-center gap-2 text-sm text-green-800">
                     <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
@@ -921,25 +921,31 @@ export default function Settings() {
                     <Pencil className="h-3.5 w-3.5 mr-1" />Edit
                   </Button>
                 </div>
-              ) : (
-                <>
-                  <Field label="Measurement ID">
-                    <Input
-                      value={gaMeasurementId}
-                      onChange={e => setGaMeasurementId(e.target.value)}
-                      placeholder="G-XXXXXXXXXX"
-                    />
-                  </Field>
-                  <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 text-xs text-amber-800 space-y-1">
-                    <p className="font-semibold">How to get your Measurement ID:</p>
-                    <p>Go to <strong>analytics.google.com</strong> → Admin → Data Streams → your stream → copy the Measurement ID (starts with G-).</p>
-                  </div>
-                  <Button onClick={() => { saveIntegration("google_analytics", gaEnabled, { measurementId: gaMeasurementId }, "int-google-analytics"); setEditingInt(null); }}>
-                    Save Analytics Settings
-                  </Button>
-                </>
-              )}
-            </CardContent>
+              </CardContent>
+            )}
+            {gaEnabled && (!gaInt || editingInt === "ga") && (
+              <CardContent className="space-y-4">
+                <Field label="Measurement ID">
+                  <Input
+                    value={gaMeasurementId}
+                    onChange={e => setGaMeasurementId(e.target.value)}
+                    placeholder="G-XXXXXXXXXX"
+                  />
+                </Field>
+                <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 text-xs text-amber-800 space-y-1">
+                  <p className="font-semibold">How to get your Measurement ID:</p>
+                  <p>Go to <strong>analytics.google.com</strong> → Admin → Data Streams → your stream → copy the Measurement ID (starts with G-).</p>
+                </div>
+                <Button onClick={() => { saveIntegration("google_analytics", gaEnabled, { measurementId: gaMeasurementId }, "int-google-analytics"); setEditingInt(null); }}>
+                  Save Analytics Settings
+                </Button>
+              </CardContent>
+            )}
+            {!gaEnabled && (
+              <CardContent>
+                <p className="text-sm text-muted-foreground">Toggle the switch above to configure Google Analytics.</p>
+              </CardContent>
+            )}
           </Card>
 
           {/* Google Search Console */}
@@ -957,8 +963,8 @@ export default function Settings() {
               </div>
               <p className="text-sm text-muted-foreground">Verify site ownership so Google shows your pages in Search Console.</p>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {scEnabled && scInt && editingInt !== "sc" ? (
+            {scEnabled && scInt && editingInt !== "sc" && (
+              <CardContent>
                 <div className="flex items-center justify-between p-3 bg-green-50 border border-green-100 rounded-lg">
                   <div className="flex items-center gap-2 text-sm text-green-800">
                     <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
@@ -968,29 +974,35 @@ export default function Settings() {
                     <Pencil className="h-3.5 w-3.5 mr-1" />Edit
                   </Button>
                 </div>
-              ) : (
-                <>
-                  <Field label="Verification Token">
-                    <Input
-                      value={scVerificationTag}
-                      onChange={e => setScVerificationTag(e.target.value)}
-                      placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                    />
-                  </Field>
-                  <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-blue-800 space-y-1">
-                    <p className="font-semibold">How to verify ownership:</p>
-                    <p>Go to <strong>search.google.com/search-console</strong> → Add property → enter <strong>geem.pk</strong> → choose "HTML tag" method → copy only the <strong>content</strong> value from the meta tag (not the full tag).</p>
-                  </div>
-                  <div className="bg-slate-50 border rounded p-3 text-xs text-slate-600">
-                    <p className="font-medium mb-1">Sitemap URL (submit to Search Console):</p>
-                    <code className="font-mono select-all">https://geem.pk/api/sitemap.xml</code>
-                  </div>
-                  <Button onClick={() => { saveIntegration("google_search_console", scEnabled, { verificationTag: scVerificationTag }, "int-google-sc"); setEditingInt(null); }}>
-                    Save Search Console Settings
-                  </Button>
-                </>
-              )}
-            </CardContent>
+              </CardContent>
+            )}
+            {scEnabled && (!scInt || editingInt === "sc") && (
+              <CardContent className="space-y-4">
+                <Field label="Verification Token">
+                  <Input
+                    value={scVerificationTag}
+                    onChange={e => setScVerificationTag(e.target.value)}
+                    placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                  />
+                </Field>
+                <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-blue-800 space-y-1">
+                  <p className="font-semibold">How to verify ownership:</p>
+                  <p>Go to <strong>search.google.com/search-console</strong> → Add property → enter <strong>geem.pk</strong> → choose "HTML tag" method → copy only the <strong>content</strong> value from the meta tag (not the full tag).</p>
+                </div>
+                <div className="bg-slate-50 border rounded p-3 text-xs text-slate-600">
+                  <p className="font-medium mb-1">Sitemap URL (submit to Search Console):</p>
+                  <code className="font-mono select-all">https://geem.pk/api/sitemap.xml</code>
+                </div>
+                <Button onClick={() => { saveIntegration("google_search_console", scEnabled, { verificationTag: scVerificationTag }, "int-google-sc"); setEditingInt(null); }}>
+                  Save Search Console Settings
+                </Button>
+              </CardContent>
+            )}
+            {!scEnabled && (
+              <CardContent>
+                <p className="text-sm text-muted-foreground">Toggle the switch above to configure Google Search Console.</p>
+              </CardContent>
+            )}
           </Card>
 
           {/* Google reCAPTCHA */}
@@ -1008,8 +1020,8 @@ export default function Settings() {
               </div>
               <p className="text-sm text-muted-foreground">Protects sign-up, login, and checkout from bots. Invisible to real customers.</p>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {rcEnabled && rcInt && editingInt !== "rc" ? (
+            {rcEnabled && rcInt && editingInt !== "rc" && (
+              <CardContent>
                 <div className="flex items-center justify-between p-3 bg-green-50 border border-green-100 rounded-lg">
                   <div className="flex items-center gap-2 text-sm text-green-800">
                     <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
@@ -1019,25 +1031,31 @@ export default function Settings() {
                     <Pencil className="h-3.5 w-3.5 mr-1" />Edit
                   </Button>
                 </div>
-              ) : (
-                <>
-                  <Field label="Site Key (public — goes in the frontend)">
-                    <Input value={rcSiteKey} onChange={e => setRcSiteKey(e.target.value)} placeholder="6Lc..." />
-                  </Field>
-                  <Field label="Secret Key (private — stays on the server)">
-                    <Input value={rcSecretKey} onChange={e => setRcSecretKey(e.target.value)} placeholder="6Lc..." type="password" />
-                  </Field>
-                  <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 text-xs text-amber-800 space-y-1">
-                    <p className="font-semibold">How to get your keys:</p>
-                    <p>Go to <strong>google.com/recaptcha/admin</strong> → Create → choose <strong>reCAPTCHA v3</strong> → add domains <code>geem.pk</code> and <code>erp.geem.pk</code> → copy both keys here.</p>
-                    <p className="mt-1 text-amber-700">⚠️ After saving, you must <strong>rebuild and redeploy</strong> the shop and admin frontends for the Site Key change to take effect.</p>
-                  </div>
-                  <Button onClick={() => { saveIntegration("recaptcha", rcEnabled, { siteKey: rcSiteKey, secretKey: rcSecretKey }, "int-recaptcha"); setEditingInt(null); }}>
-                    Save reCAPTCHA Settings
-                  </Button>
-                </>
-              )}
-            </CardContent>
+              </CardContent>
+            )}
+            {rcEnabled && (!rcInt || editingInt === "rc") && (
+              <CardContent className="space-y-4">
+                <Field label="Site Key (public — goes in the frontend)">
+                  <Input value={rcSiteKey} onChange={e => setRcSiteKey(e.target.value)} placeholder="6Lc..." />
+                </Field>
+                <Field label="Secret Key (private — stays on the server)">
+                  <Input value={rcSecretKey} onChange={e => setRcSecretKey(e.target.value)} placeholder="6Lc..." type="password" />
+                </Field>
+                <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 text-xs text-amber-800 space-y-1">
+                  <p className="font-semibold">How to get your keys:</p>
+                  <p>Go to <strong>google.com/recaptcha/admin</strong> → Create → choose <strong>reCAPTCHA v3</strong> → add domains <code>geem.pk</code> and <code>erp.geem.pk</code> → copy both keys here.</p>
+                  <p className="mt-1 text-amber-700">⚠️ After saving, you must <strong>rebuild and redeploy</strong> the shop and admin frontends for the Site Key change to take effect.</p>
+                </div>
+                <Button onClick={() => { saveIntegration("recaptcha", rcEnabled, { siteKey: rcSiteKey, secretKey: rcSecretKey }, "int-recaptcha"); setEditingInt(null); }}>
+                  Save reCAPTCHA Settings
+                </Button>
+              </CardContent>
+            )}
+            {!rcEnabled && (
+              <CardContent>
+                <p className="text-sm text-muted-foreground">Toggle the switch above to configure Google reCAPTCHA.</p>
+              </CardContent>
+            )}
           </Card>
 
           {/* SEO Tips */}
