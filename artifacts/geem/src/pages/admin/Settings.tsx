@@ -952,14 +952,17 @@ export default function Settings() {
               <p className="text-sm text-muted-foreground">Track visitors, page views, and shop performance in Google Analytics.</p>
             </CardHeader>
             {gaEnabled && gaInt && editingInt !== "ga" && (
-              <CardContent>
-                <div className="flex items-center justify-between p-3 bg-green-50 border border-green-100 rounded-lg">
-                  <div className="flex items-center gap-2 text-sm text-green-800">
-                    <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
-                    <span>Google Analytics configured — details hidden to prevent accidental edits.</span>
-                  </div>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-100 rounded-lg text-xs text-green-800">
+                  <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+                  <span>Google Analytics active — settings are read-only. Click <strong>Edit</strong> to make changes.</span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                  <div><p className="text-xs text-muted-foreground mb-0.5">Measurement ID</p><p className="font-medium font-mono">{gaMeasurementId || "—"}</p></div>
+                </div>
+                <div className="flex justify-end">
                   <Button size="sm" variant="outline" onClick={() => setEditingInt("ga")}>
-                    <Pencil className="h-3.5 w-3.5 mr-1" />Edit
+                    <Pencil className="h-3.5 w-3.5 mr-1.5" />Edit Settings
                   </Button>
                 </div>
               </CardContent>
@@ -1005,14 +1008,18 @@ export default function Settings() {
               <p className="text-sm text-muted-foreground">Verify site ownership so Google shows your pages in Search Console.</p>
             </CardHeader>
             {scEnabled && scInt && editingInt !== "sc" && (
-              <CardContent>
-                <div className="flex items-center justify-between p-3 bg-green-50 border border-green-100 rounded-lg">
-                  <div className="flex items-center gap-2 text-sm text-green-800">
-                    <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
-                    <span>Search Console configured — token hidden to prevent accidental edits.</span>
-                  </div>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-100 rounded-lg text-xs text-green-800">
+                  <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+                  <span>Search Console active — settings are read-only. Click <strong>Edit</strong> to make changes.</span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                  <div className="col-span-2"><p className="text-xs text-muted-foreground mb-0.5">Verification Token</p><p className="font-medium font-mono break-all">{scVerificationTag || "—"}</p></div>
+                  <div className="col-span-2"><p className="text-xs text-muted-foreground mb-0.5">Sitemap URL</p><p className="font-medium font-mono text-xs">https://geem.pk/api/sitemap.xml</p></div>
+                </div>
+                <div className="flex justify-end">
                   <Button size="sm" variant="outline" onClick={() => setEditingInt("sc")}>
-                    <Pencil className="h-3.5 w-3.5 mr-1" />Edit
+                    <Pencil className="h-3.5 w-3.5 mr-1.5" />Edit Settings
                   </Button>
                 </div>
               </CardContent>
@@ -1062,14 +1069,18 @@ export default function Settings() {
               <p className="text-sm text-muted-foreground">Protects sign-up, login, and checkout from bots. Invisible to real customers.</p>
             </CardHeader>
             {rcEnabled && rcInt && editingInt !== "rc" && (
-              <CardContent>
-                <div className="flex items-center justify-between p-3 bg-green-50 border border-green-100 rounded-lg">
-                  <div className="flex items-center gap-2 text-sm text-green-800">
-                    <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
-                    <span>reCAPTCHA configured — keys hidden to prevent accidental edits.</span>
-                  </div>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-100 rounded-lg text-xs text-green-800">
+                  <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+                  <span>reCAPTCHA active — settings are read-only. Click <strong>Edit</strong> to make changes.</span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                  <div><p className="text-xs text-muted-foreground mb-0.5">Site Key (public)</p><p className="font-medium font-mono">{rcSiteKey || "—"}</p></div>
+                  <div><p className="text-xs text-muted-foreground mb-0.5">Secret Key (private)</p><p className="font-medium tracking-widest text-muted-foreground">••••••••</p></div>
+                </div>
+                <div className="flex justify-end">
                   <Button size="sm" variant="outline" onClick={() => setEditingInt("rc")}>
-                    <Pencil className="h-3.5 w-3.5 mr-1" />Edit
+                    <Pencil className="h-3.5 w-3.5 mr-1.5" />Edit Settings
                   </Button>
                 </div>
               </CardContent>
