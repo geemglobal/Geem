@@ -187,6 +187,9 @@ export default function Settings() {
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
 
+  // ── company read-only lock ────────────────────────────────────────────────
+  const [editingCompany, setEditingCompany] = useState(false);
+
   // ── edit user dialog ──────────────────────────────────────────────────────
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editTarget, setEditTarget] = useState<UserRecord | null>(null);
@@ -255,7 +258,15 @@ export default function Settings() {
   const { data: scInt }    = useQuery<IntegrationData>({ queryKey: ["int-google-sc"],        queryFn: () => axiosInstance.get("/settings/integrations/google_search_console").then(r => r.data), enabled: tab === "seo" });
   const { data: rcInt }    = useQuery<IntegrationData>({ queryKey: ["int-recaptcha"],         queryFn: () => axiosInstance.get("/settings/integrations/recaptcha").then(r => r.data),              enabled: tab === "seo" });
 
-  useEffect(() => { if (company) setCompanyForm(company); }, [company]);
+  useEffect(() => {
+    if (company) {
+      setCompanyForm(company);
+      // Auto-lock to read-only when real data is saved (logo, favicon, or phone present)
+      if (company.logo || company.favicon || company.phone || company.email) {
+        setEditingCompany(false);
+      }
+    }
+  }, [company]);
   useEffect(() => { if (invoice) setInvoiceForm(invoice); }, [invoice]);
 
   useEffect(() => { if (emailInt) { setEmailEnabled(emailInt.enabled); setEmailCfg(v => ({ ...v, ...emailInt.config })); } }, [emailInt]);
@@ -270,9 +281,11 @@ export default function Settings() {
     mutationFn: (d: Partial<CompanySettings>) => axiosInstance.patch("/settings/company", d).then(r => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["settings-company"] });
+      qc.invalidateQueries({ queryKey: ["company-settings-logo"] });
       toast({ title: "Company settings saved" });
       if (companyForm.primaryColor) applyPrimaryColor(companyForm.primaryColor);
       if (companyForm.borderRadius) applyBorderRadius(companyForm.borderRadius);
+      setEditingCompany(false);
     },
   });
   const saveInvoice  = useMutation({ mutationFn: (d: Partial<InvoiceSettings>) => axiosInstance.patch("/settings/invoice", d).then(r => r.data), onSuccess: () => { qc.invalidateQueries({ queryKey: ["settings-invoice"] }); toast({ title: "Invoice settings saved" }); } });
@@ -382,139 +395,223 @@ export default function Settings() {
 
       {/* ── COMPANY ─────────────────────────────────────────────────────── */}
       {tab === "company" && (
-        <Card>
-          <CardHeader><CardTitle>Company Information</CardTitle></CardHeader>
-          <CardContent className="space-y-4 max-w-xl">
-            <Field label="Company Name"><Input value={companyForm.companyName ?? ""} onChange={e => setCompanyForm(f => ({ ...f, companyName: e.target.value }))} /></Field>
-
-            <ImageUploadField
-              label="Company Logo"
-              hint="Used in the shop header, footer, and printed invoices. PNG or SVG recommended."
-              value={companyForm.logo ?? null}
-              onChange={url => setCompanyForm(f => ({ ...f, logo: url || null }))}
-            />
-
-            <ImageUploadField
-              label="Favicon"
-              hint="Browser tab icon. Use a square image (32×32 or 64×64 px) in PNG or ICO format."
-              value={companyForm.favicon ?? null}
-              onChange={url => setCompanyForm(f => ({ ...f, favicon: url || null }))}
-              previewClass="!object-contain p-1"
-            />
-
-            <ImageUploadField
-              label="Banner / Cover Image"
-              hint="Wide banner shown on the shop homepage and marketing materials. Recommended: 1200×400 px JPG or PNG."
-              value={companyForm.banner ?? null}
-              onChange={url => setCompanyForm(f => ({ ...f, banner: url || null }))}
-              previewClass="!object-cover"
-              aspectClass="aspect-[3/1]"
-            />
-
-            <Field label="Phone"><Input value={companyForm.phone ?? ""} onChange={e => setCompanyForm(f => ({ ...f, phone: e.target.value }))} placeholder="+92 21 1234567" /></Field>
-            <Field label="Email"><Input value={companyForm.email ?? ""} onChange={e => setCompanyForm(f => ({ ...f, email: e.target.value }))} placeholder="info@geem.pk" /></Field>
-            <Field label="WhatsApp Number"><Input value={companyForm.whatsappNumber ?? ""} onChange={e => setCompanyForm(f => ({ ...f, whatsappNumber: e.target.value }))} placeholder="+92300-1234567" /></Field>
-            {/* ── Appearance ─────────────────────────────────────────── */}
-            <div className="space-y-4 rounded-xl border bg-muted/30 p-4">
-              <div className="flex items-center gap-2 text-sm font-semibold">
-                <Palette className="h-4 w-4 text-primary" />
-                Appearance
-              </div>
-
-              {/* Primary Color */}
-              <div className="space-y-2">
-                <Label>Brand / Theme Color</Label>
-                <p className="text-xs text-muted-foreground">Applied to buttons, links, badges, and accents across the entire app.</p>
-                <div className="flex flex-wrap gap-2 pb-1">
-                  {PRESET_COLORS.map(({ name, hex }) => (
-                    <button
-                      key={hex}
-                      title={name}
-                      type="button"
-                      onClick={() => {
-                        setCompanyForm(f => ({ ...f, primaryColor: hex }));
-                        applyPrimaryColor(hex);
-                      }}
-                      className={`h-8 w-8 rounded-full border-2 transition-all hover:scale-110 focus:outline-none ${
-                        (companyForm.primaryColor ?? "#2563eb") === hex
-                          ? "border-foreground ring-2 ring-offset-1 ring-foreground/30 scale-110"
-                          : "border-white/80 shadow"
-                      }`}
-                      style={{ backgroundColor: hex }}
-                    />
-                  ))}
+        <>
+          {/* ── Read-only summary — shown when company is saved and not editing ── */}
+          {!editingCompany && company && (company.logo || company.favicon || company.phone || company.email) && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Company Information</CardTitle>
+                  <Button size="sm" variant="outline" onClick={() => setEditingCompany(true)}>
+                    <Pencil className="h-3.5 w-3.5 mr-1.5" />Edit Settings
+                  </Button>
                 </div>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="color"
-                    className="h-9 w-14 rounded border cursor-pointer p-0.5"
-                    value={companyForm.primaryColor ?? "#2563eb"}
-                    onChange={e => {
-                      setCompanyForm(f => ({ ...f, primaryColor: e.target.value }));
-                      applyPrimaryColor(e.target.value);
-                    }}
-                  />
-                  <Input
-                    className="w-32 font-mono"
-                    value={companyForm.primaryColor ?? "#2563eb"}
-                    onChange={e => {
-                      setCompanyForm(f => ({ ...f, primaryColor: e.target.value }));
-                      if (/^#[0-9a-fA-F]{6}$/.test(e.target.value)) applyPrimaryColor(e.target.value);
-                    }}
-                    placeholder="#2563eb"
-                  />
-                  <div
-                    className="h-9 flex-1 max-w-[120px] rounded-md text-xs flex items-center justify-center text-white font-medium shadow-sm"
-                    style={{ backgroundColor: companyForm.primaryColor ?? "#2563eb" }}
-                  >
-                    Preview
+              </CardHeader>
+              <CardContent className="space-y-5 max-w-xl">
+                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-100 rounded-lg text-xs text-green-800">
+                  <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+                  <span>Company settings saved — click <strong>Edit Settings</strong> to make changes.</span>
+                </div>
+
+                {/* Logo + Favicon previews */}
+                <div className="flex gap-4 items-start flex-wrap">
+                  {company.logo && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Logo</p>
+                      <div className="w-36 h-16 border rounded-lg bg-muted flex items-center justify-center overflow-hidden">
+                        <img src={company.logo} alt="Logo" className="object-contain w-full h-full p-2" />
+                      </div>
+                    </div>
+                  )}
+                  {company.favicon && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Favicon</p>
+                      <div className="w-16 h-16 border rounded-lg bg-muted flex items-center justify-center overflow-hidden">
+                        <img src={company.favicon} alt="Favicon" className="object-contain w-full h-full p-1" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Banner preview */}
+                {company.banner && (
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Banner / Cover Image</p>
+                    <div className="w-full aspect-[3/1] border rounded-lg bg-muted overflow-hidden">
+                      <img src={company.banner} alt="Banner" className="object-cover w-full h-full" />
+                    </div>
+                  </div>
+                )}
+
+                {/* Company detail rows */}
+                <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                  <div><p className="text-xs text-muted-foreground mb-0.5">Company Name</p><p className="font-medium">{company.companyName}</p></div>
+                  {company.phone && <div><p className="text-xs text-muted-foreground mb-0.5">Phone</p><p className="font-medium">{company.phone}</p></div>}
+                  {company.email && <div><p className="text-xs text-muted-foreground mb-0.5">Email</p><p className="font-medium">{company.email}</p></div>}
+                  {company.whatsappNumber && <div><p className="text-xs text-muted-foreground mb-0.5">WhatsApp</p><p className="font-medium">{company.whatsappNumber}</p></div>}
+                  {company.taxNumber && <div><p className="text-xs text-muted-foreground mb-0.5">Tax Number (NTN/STRN)</p><p className="font-medium">{company.taxNumber}</p></div>}
+                  <div><p className="text-xs text-muted-foreground mb-0.5">Currency</p><p className="font-medium">{company.currency}</p></div>
+                  {company.address && <div className="col-span-2"><p className="text-xs text-muted-foreground mb-0.5">Address</p><p className="font-medium">{company.address}</p></div>}
+                </div>
+
+                {/* Theme color swatch */}
+                <div className="flex items-center gap-3 pt-1">
+                  <p className="text-xs text-muted-foreground">Theme Color</p>
+                  <div className="h-6 w-6 rounded-full border-2 border-white shadow-sm" style={{ backgroundColor: company.primaryColor }} />
+                  <span className="text-xs font-mono text-muted-foreground">{company.primaryColor}</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ── Edit form — shown when editing or no saved data yet ── */}
+          {(editingCompany || !company || (!company.logo && !company.favicon && !company.phone && !company.email)) && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Company Information</CardTitle>
+                  {editingCompany && (
+                    <Button size="sm" variant="ghost" onClick={() => setEditingCompany(false)}>Cancel</Button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4 max-w-xl">
+                <Field label="Company Name"><Input value={companyForm.companyName ?? ""} onChange={e => setCompanyForm(f => ({ ...f, companyName: e.target.value }))} /></Field>
+
+                <ImageUploadField
+                  label="Company Logo"
+                  hint="Used in the shop header, footer, and all auth pages. PNG or SVG recommended."
+                  value={companyForm.logo ?? null}
+                  onChange={url => setCompanyForm(f => ({ ...f, logo: url || null }))}
+                />
+
+                <ImageUploadField
+                  label="Favicon"
+                  hint="Browser tab icon. Use a square image (32×32 or 64×64 px) in PNG or ICO format."
+                  value={companyForm.favicon ?? null}
+                  onChange={url => setCompanyForm(f => ({ ...f, favicon: url || null }))}
+                  previewClass="!object-contain p-1"
+                />
+
+                <ImageUploadField
+                  label="Banner / Cover Image"
+                  hint="Wide banner shown on the shop homepage hero section. Recommended: 1200×400 px JPG or PNG."
+                  value={companyForm.banner ?? null}
+                  onChange={url => setCompanyForm(f => ({ ...f, banner: url || null }))}
+                  previewClass="!object-cover"
+                  aspectClass="aspect-[3/1]"
+                />
+
+                <Field label="Phone"><Input value={companyForm.phone ?? ""} onChange={e => setCompanyForm(f => ({ ...f, phone: e.target.value }))} placeholder="+92 21 1234567" /></Field>
+                <Field label="Email"><Input value={companyForm.email ?? ""} onChange={e => setCompanyForm(f => ({ ...f, email: e.target.value }))} placeholder="info@geem.pk" /></Field>
+                <Field label="WhatsApp Number"><Input value={companyForm.whatsappNumber ?? ""} onChange={e => setCompanyForm(f => ({ ...f, whatsappNumber: e.target.value }))} placeholder="+92300-1234567" /></Field>
+
+                {/* ── Appearance ─────────────────────────────────────────── */}
+                <div className="space-y-4 rounded-xl border bg-muted/30 p-4">
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <Palette className="h-4 w-4 text-primary" />
+                    Appearance
+                  </div>
+
+                  {/* Primary Color */}
+                  <div className="space-y-2">
+                    <Label>Brand / Theme Color</Label>
+                    <p className="text-xs text-muted-foreground">Applied to buttons, links, badges, and accents across the entire app.</p>
+                    <div className="flex flex-wrap gap-2 pb-1">
+                      {PRESET_COLORS.map(({ name, hex }) => (
+                        <button
+                          key={hex}
+                          title={name}
+                          type="button"
+                          onClick={() => {
+                            setCompanyForm(f => ({ ...f, primaryColor: hex }));
+                            applyPrimaryColor(hex);
+                          }}
+                          className={`h-8 w-8 rounded-full border-2 transition-all hover:scale-110 focus:outline-none ${
+                            (companyForm.primaryColor ?? "#2563eb") === hex
+                              ? "border-foreground ring-2 ring-offset-1 ring-foreground/30 scale-110"
+                              : "border-white/80 shadow"
+                          }`}
+                          style={{ backgroundColor: hex }}
+                        />
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="color"
+                        className="h-9 w-14 rounded border cursor-pointer p-0.5"
+                        value={companyForm.primaryColor ?? "#2563eb"}
+                        onChange={e => {
+                          setCompanyForm(f => ({ ...f, primaryColor: e.target.value }));
+                          applyPrimaryColor(e.target.value);
+                        }}
+                      />
+                      <Input
+                        className="w-32 font-mono"
+                        value={companyForm.primaryColor ?? "#2563eb"}
+                        onChange={e => {
+                          setCompanyForm(f => ({ ...f, primaryColor: e.target.value }));
+                          if (/^#[0-9a-fA-F]{6}$/.test(e.target.value)) applyPrimaryColor(e.target.value);
+                        }}
+                        placeholder="#2563eb"
+                      />
+                      <div
+                        className="h-9 flex-1 max-w-[120px] rounded-md text-xs flex items-center justify-center text-white font-medium shadow-sm"
+                        style={{ backgroundColor: companyForm.primaryColor ?? "#2563eb" }}
+                      >
+                        Preview
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Border Radius */}
+                  <div className="space-y-2">
+                    <Label>Corner Style</Label>
+                    <p className="text-xs text-muted-foreground">Controls roundness of buttons, cards, and input fields.</p>
+                    <div className="flex gap-2 flex-wrap">
+                      {RADIUS_OPTIONS.map(({ value, label, preview }) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => {
+                            setCompanyForm(f => ({ ...f, borderRadius: value }));
+                            applyBorderRadius(value);
+                          }}
+                          className={`flex flex-col items-center gap-1.5 px-3 py-2 rounded-lg border text-xs transition-all ${
+                            (companyForm.borderRadius ?? "md") === value
+                              ? "border-primary bg-primary/10 text-primary font-semibold"
+                              : "border-border hover:border-primary/40"
+                          }`}
+                        >
+                          <div
+                            className="w-8 h-8 bg-primary/20 border-2 border-primary/40"
+                            style={{ borderRadius: preview }}
+                          />
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <Separator />
-
-              {/* Border Radius */}
-              <div className="space-y-2">
-                <Label>Corner Style</Label>
-                <p className="text-xs text-muted-foreground">Controls roundness of buttons, cards, and input fields.</p>
-                <div className="flex gap-2 flex-wrap">
-                  {RADIUS_OPTIONS.map(({ value, label, preview }) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => {
-                        setCompanyForm(f => ({ ...f, borderRadius: value }));
-                        applyBorderRadius(value);
-                      }}
-                      className={`flex flex-col items-center gap-1.5 px-3 py-2 rounded-lg border text-xs transition-all ${
-                        (companyForm.borderRadius ?? "md") === value
-                          ? "border-primary bg-primary/10 text-primary font-semibold"
-                          : "border-border hover:border-primary/40"
-                      }`}
-                    >
-                      <div
-                        className="w-8 h-8 bg-primary/20 border-2 border-primary/40"
-                        style={{ borderRadius: preview }}
-                      />
-                      {label}
-                    </button>
-                  ))}
+                <Field label="Address"><Input value={companyForm.address ?? ""} onChange={e => setCompanyForm(f => ({ ...f, address: e.target.value }))} /></Field>
+                <Field label="Tax Number (NTN/STRN)"><Input value={companyForm.taxNumber ?? ""} onChange={e => setCompanyForm(f => ({ ...f, taxNumber: e.target.value }))} /></Field>
+                <Field label="Currency">
+                  <Select value={companyForm.currency ?? "PKR"} onValueChange={v => setCompanyForm(f => ({ ...f, currency: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value="PKR">PKR — Pakistani Rupee</SelectItem><SelectItem value="USD">USD — US Dollar</SelectItem></SelectContent>
+                  </Select>
+                </Field>
+                <div className="flex gap-2">
+                  <Button onClick={() => saveCompany.mutate(companyForm)} disabled={saveCompany.isPending}>{saveCompany.isPending ? "Saving…" : "Save Company Settings"}</Button>
+                  {editingCompany && <Button variant="outline" onClick={() => setEditingCompany(false)}>Cancel</Button>}
                 </div>
-              </div>
-            </div>
-
-            <Field label="Address"><Input value={companyForm.address ?? ""} onChange={e => setCompanyForm(f => ({ ...f, address: e.target.value }))} /></Field>
-            <Field label="Tax Number (NTN/STRN)"><Input value={companyForm.taxNumber ?? ""} onChange={e => setCompanyForm(f => ({ ...f, taxNumber: e.target.value }))} /></Field>
-            <Field label="Currency">
-              <Select value={companyForm.currency ?? "PKR"} onValueChange={v => setCompanyForm(f => ({ ...f, currency: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="PKR">PKR — Pakistani Rupee</SelectItem><SelectItem value="USD">USD — US Dollar</SelectItem></SelectContent>
-              </Select>
-            </Field>
-            <Button onClick={() => saveCompany.mutate(companyForm)} disabled={saveCompany.isPending}>{saveCompany.isPending ? "Saving…" : "Save Company Settings"}</Button>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          )}
+        </>
       )}
 
       {/* ── INVOICE ─────────────────────────────────────────────────────── */}

@@ -13,24 +13,12 @@ import {
   ArrowLeft, Clock
 } from "lucide-react";
 
-const BASE_PATH = import.meta.env.BASE_URL.replace(/\/$/, "");
-
-let _suCachedLogo: string | null = null;
-function useCompanyLogo() {
-  const [logo, setLogo] = useState<string>(_suCachedLogo ?? `${BASE_PATH}/geem-logo.svg`);
-  useEffect(() => {
-    if (_suCachedLogo) return;
-    fetch("/api/shop/seo-config").then(r => r.json()).then((d: { logo?: string | null }) => {
-      if (d.logo) { _suCachedLogo = d.logo; setLogo(d.logo); }
-    }).catch(() => {});
-  }, []);
-  return logo;
-}
+import { useShopBranding } from "@/lib/shopBranding";
 
 type Step = "form" | "channel" | "otp" | "done";
 
 export default function ShopSignUp() {
-  const companyLogo = useCompanyLogo();
+  const branding = useShopBranding();
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
@@ -113,7 +101,7 @@ export default function ShopSignUp() {
         {/* Logo */}
         <div className="text-center mb-8">
           <Link href="/shop">
-            <img src={companyLogo} alt="Geem" className="h-10 w-auto mx-auto cursor-pointer" />
+            <img src={branding.logo ?? "/geem-logo-banner.svg"} alt={branding.companyName} className="h-10 w-auto mx-auto cursor-pointer" />
           </Link>
           <h1 className="mt-4 text-2xl font-bold text-slate-900">
             {step === "done" ? "Account Verified!" : "Create a Geem account"}

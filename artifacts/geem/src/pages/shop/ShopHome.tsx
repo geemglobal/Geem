@@ -9,6 +9,7 @@ import { useCart } from "@/contexts/CartContext";
 import { useToast } from "@/hooks/use-toast";
 import { openWhatsApp, GEEM_WA } from "@/lib/whatsapp";
 import { useSEO } from "@/hooks/useSEO";
+import { useShopBranding } from "@/lib/shopBranding";
 import {
   Package, Star, ArrowRight, Shield, Truck, Award, MessageCircle, ShoppingCart,
   Camera, MapPin, Radio, Lock, Eye, Wifi, CheckCircle2, Phone, Zap,
@@ -86,22 +87,8 @@ function ProductCard({ product }: { product: Product }) {
   );
 }
 
-// Fetch banner from company settings (module-level cache shared with ShopLayout)
-let _homeBannerCached: string | null | undefined = undefined; // undefined = not yet loaded
-function useCompanyBanner() {
-  const [banner, setBanner] = useState<string | null>(_homeBannerCached ?? null);
-  useEffect(() => {
-    if (_homeBannerCached !== undefined) { setBanner(_homeBannerCached); return; }
-    fetch("/api/shop/seo-config").then(r => r.json()).then((d: { banner?: string | null }) => {
-      _homeBannerCached = d.banner ?? null;
-      setBanner(_homeBannerCached);
-    }).catch(() => { _homeBannerCached = null; });
-  }, []);
-  return banner;
-}
-
 export default function ShopHome() {
-  const companyBanner = useCompanyBanner();
+  const branding = useShopBranding();
   useSEO({
     title: "Military-Grade Security Equipment, Spy Cameras & GPS Trackers in Pakistan | Geem",
     description: "Pakistan's specialist supplier of military-grade security equipment: spy cameras, RF detectors, GPS trackers, counter-surveillance devices, covert communications. Custom agency imports. Nationwide delivery.",
@@ -134,9 +121,9 @@ export default function ShopHome() {
       {/* ── Hero ── */}
       <section className="relative bg-gray-950 text-white overflow-hidden">
         {/* Company banner image — shown as hero background when uploaded in Settings */}
-        {companyBanner && (
+        {branding.banner && (
           <div className="absolute inset-0">
-            <img src={companyBanner} alt="" className="w-full h-full object-cover object-center" aria-hidden="true" />
+            <img src={branding.banner} alt="" className="w-full h-full object-cover object-center" aria-hidden="true" />
           </div>
         )}
         <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-gray-950 to-black opacity-90" />
