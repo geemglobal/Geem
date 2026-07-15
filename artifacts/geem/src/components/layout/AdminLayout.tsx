@@ -137,24 +137,24 @@ function SidebarContent({
 }) {
   return (
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
-      <div className="p-4 border-b border-sidebar-border flex-shrink-0">
+      <div className="px-4 py-3 border-b border-sidebar-border flex-shrink-0">
         {logo ? (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <img
               src={logo}
               alt="Logo"
-              className="h-8 w-8 rounded-lg object-contain flex-shrink-0"
+              className="h-11 w-11 rounded-xl object-contain flex-shrink-0"
             />
             <div>
-              <p className="font-bold text-sm leading-none">Geem CRM</p>
-              <p className="text-xs text-sidebar-foreground/60 mt-0.5">Management System</p>
+              <p className="font-bold text-base leading-none">Geem CRM</p>
+              <p className="text-xs text-sidebar-foreground/60 mt-1">Management System</p>
             </div>
           </div>
         ) : (
           <img
             src="/geem-logo-banner.svg"
             alt="Geem"
-            className="h-8 w-auto object-contain"
+            className="h-11 w-auto object-contain"
           />
         )}
       </div>
