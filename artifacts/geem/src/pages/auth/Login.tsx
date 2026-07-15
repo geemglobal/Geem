@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { useOtpTimer } from "@/hooks/useOtpTimer";
 import { getRecaptchaToken } from "@/lib/recaptcha";
 import { Loader2, Eye, EyeOff, KeyRound, ArrowLeft, CheckCircle2, Mail, Smartphone, MessageCircle, Clock } from "lucide-react";
+import { useShopBranding } from "@/lib/shopBranding";
 
 interface LoginResponse {
   token: string;
