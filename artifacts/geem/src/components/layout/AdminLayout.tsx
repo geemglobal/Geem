@@ -327,7 +327,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
       {!isOnline && !offlineDismissed && (
         <div className="bg-amber-500 text-white px-4 py-2 flex items-center justify-between gap-3 text-sm z-50 flex-shrink-0">
           <div className="flex items-center gap-2">

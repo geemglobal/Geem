@@ -219,10 +219,17 @@ function App() {
           if (!m.parentNode) document.head.appendChild(m);
         }
         if (favicon) {
-          const link: HTMLLinkElement = document.querySelector("link[rel~='icon']") ?? document.createElement("link");
-          link.rel = "icon";
-          link.href = favicon;
-          if (!link.parentNode) document.head.appendChild(link);
+          // Update every icon-related link element (favicon, apple-touch-icon, shortcut)
+          document.querySelectorAll<HTMLLinkElement>(
+            "link[rel*='icon'], link[rel='shortcut icon']"
+          ).forEach(el => { el.href = favicon; });
+          // If somehow none exist yet, create one
+          if (!document.querySelector("link[rel*='icon']")) {
+            const link = document.createElement('link');
+            link.rel = 'icon';
+            link.href = favicon;
+            document.head.appendChild(link);
+          }
         }
         if (companyName && document.title === "Geem") document.title = companyName;
       })

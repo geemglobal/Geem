@@ -13,21 +13,6 @@ interface LoginResponse {
   user: { id: number; name: string; username: string | null; email: string; role: string };
 }
 
-// Fetch company branding once and cache it for the logo on the login page.
-let _cachedLoginLogo: string | null = null;
-function useLoginBrandingLogo() {
-  const [logo, setLogo] = useState<string>(_cachedLoginLogo ?? "/geem-logo-banner.svg");
-  useEffect(() => {
-    if (_cachedLoginLogo) return;
-    fetch("/api/shop/seo-config")
-      .then(r => r.json())
-      .then((d: { logo?: string | null }) => {
-        if (d.logo) { _cachedLoginLogo = d.logo; setLogo(d.logo); }
-      })
-      .catch(() => {});
-  }, []);
-  return logo;
-}
 
 function parseUserAgent(ua: string) {
   const u = ua.toLowerCase();
@@ -68,7 +53,7 @@ function getGPS(timeoutMs = 12000): Promise<GeolocationCoordinates | null> {
 type Screen = "login" | "forgot" | "forgot-channel" | "forgot-otp" | "reset";
 
 export default function Login() {
-  const brandingLogo = useLoginBrandingLogo();
+  const branding = useShopBranding();
   const [, setLocation] = useLocation();
   const [screen, setScreen] = useState<Screen>("login");
 
@@ -214,7 +199,7 @@ export default function Login() {
       <div className="max-w-md w-full bg-card p-8 rounded-xl shadow-xl border border-border">
         <div className="text-center mb-7">
           <div className="flex justify-center mb-4">
-            <img src={brandingLogo} alt="Geem" className="h-14 w-auto object-contain" />
+            <img src={branding.logo ?? "/geem-logo-banner.svg"} alt="Geem" className="h-14 w-auto object-contain" />
           </div>
           <p className="text-muted-foreground text-sm">
             {screen === "login" ? "Sign in to your account" :
