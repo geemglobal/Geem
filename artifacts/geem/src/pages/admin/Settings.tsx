@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useOtpTimer } from "@/hooks/useOtpTimer";
-import { Building2, FileText, Users, Plus, Mail, MessageSquare, Send, Loader2, CheckCircle2, Zap, Globe, Upload, X, Palette, KeyRound, Eye, EyeOff, Pencil, Trash2, ShieldCheck, User, Phone, AtSign, UserCog, Smartphone, MessageCircle, Clock } from "lucide-react";
+import { Building2, FileText, Users, Plus, Mail, MessageSquare, Send, Loader2, CheckCircle2, Zap, Globe, Upload, X, Palette, KeyRound, Eye, EyeOff, Pencil, Trash2, ShieldCheck, User, Phone, AtSign, UserCog, Smartphone, MessageCircle, Clock, Sparkles } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useUpload } from "@workspace/object-storage-web";
 import { applyPrimaryColor, applyBorderRadius } from "@/lib/theme";
@@ -232,6 +232,12 @@ export default function Settings() {
   const [testWaTo, setTestWaTo] = useState("");
   const [testWaLoading, setTestWaLoading] = useState(false);
 
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiCfg, setAiCfg] = useState<Record<string, string | number | boolean>>({
+    provider: "gemini", apiKey: "", model: "gemini-2.0-flash-lite",
+  });
+  const [testAiLoading, setTestAiLoading] = useState(false);
+
   const [gaEnabled, setGaEnabled] = useState(false);
   const [gaMeasurementId, setGaMeasurementId] = useState("");
   const [scEnabled, setScEnabled] = useState(false);
@@ -254,6 +260,7 @@ export default function Settings() {
   const { data: emailInt } = useQuery<IntegrationData>({ queryKey: ["int-email"], queryFn: () => axiosInstance.get("/settings/integrations/email").then(r => r.data), enabled: tab === "integrations" });
   const { data: smsInt }   = useQuery<IntegrationData>({ queryKey: ["int-sms"],   queryFn: () => axiosInstance.get("/settings/integrations/sms").then(r => r.data),   enabled: tab === "integrations" });
   const { data: waInt }    = useQuery<IntegrationData>({ queryKey: ["int-whatsapp"], queryFn: () => axiosInstance.get("/settings/integrations/whatsapp").then(r => r.data), enabled: tab === "integrations" });
+  const { data: aiInt }    = useQuery<IntegrationData>({ queryKey: ["int-ai"],        queryFn: () => axiosInstance.get("/settings/integrations/ai").then(r => r.data),        enabled: tab === "integrations" });
   const { data: gaInt }    = useQuery<IntegrationData>({ queryKey: ["int-google-analytics"], queryFn: () => axiosInstance.get("/settings/integrations/google_analytics").then(r => r.data), enabled: tab === "seo" });
   const { data: scInt }    = useQuery<IntegrationData>({ queryKey: ["int-google-sc"],        queryFn: () => axiosInstance.get("/settings/integrations/google_search_console").then(r => r.data), enabled: tab === "seo" });
   const { data: rcInt }    = useQuery<IntegrationData>({ queryKey: ["int-recaptcha"],         queryFn: () => axiosInstance.get("/settings/integrations/recaptcha").then(r => r.data),              enabled: tab === "seo" });
@@ -272,6 +279,7 @@ export default function Settings() {
   useEffect(() => { if (emailInt) { setEmailEnabled(emailInt.enabled); setEmailCfg(v => ({ ...v, ...emailInt.config })); } }, [emailInt]);
   useEffect(() => { if (smsInt)   { setSmsEnabled(smsInt.enabled);     setSmsCfg(v => ({ ...v, ...smsInt.config }));     } }, [smsInt]);
   useEffect(() => { if (waInt)    { setWaEnabled(waInt.enabled);       setWaCfg(v => ({ ...v, ...waInt.config }));       } }, [waInt]);
+  useEffect(() => { if (aiInt)    { setAiEnabled(aiInt.enabled);       setAiCfg(v => ({ ...v, ...aiInt.config }));       } }, [aiInt]);
   useEffect(() => { if (gaInt) { setGaEnabled(gaInt.enabled); setGaMeasurementId(String((gaInt.config as Record<string, string>).measurementId ?? "")); } }, [gaInt]);
   useEffect(() => { if (scInt) { setScEnabled(scInt.enabled); setScVerificationTag(String((scInt.config as Record<string, string>).verificationTag ?? "")); } }, [scInt]);
   useEffect(() => { if (rcInt) { const cfg = rcInt.config as Record<string, string>; setRcEnabled(rcInt.enabled); setRcSiteKey(cfg.siteKey ?? ""); setRcSecretKey(cfg.secretKey ?? ""); } }, [rcInt]);
@@ -377,9 +385,22 @@ export default function Settings() {
     } finally { setTestWaLoading(false); }
   };
 
+  const handleTestAi = async () => {
+    setTestAiLoading(true);
+    try {
+      const resp = await axiosInstance.post<{ ok: boolean; model: string; reply: string }>("/settings/integrations/ai/test");
+      toast({ title: `AI test passed ✅ — model: ${resp.data.model}` });
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      const msg = err?.response?.data?.error ?? String(e);
+      toast({ title: `Test failed: ${msg}`, variant: "destructive" });
+    } finally { setTestAiLoading(false); }
+  };
+
   const ec = (k: string) => String(emailCfg[k] ?? "");
   const sc = (k: string) => String(smsCfg[k] ?? "");
   const wc = (k: string) => String(waCfg[k] ?? "");
+  const ac = (k: string) => String(aiCfg[k] ?? "");
 
   return (
     <div className="space-y-6">
@@ -926,6 +947,105 @@ export default function Settings() {
             {!waEnabled && (
               <CardContent>
                 <p className="text-sm text-muted-foreground">Toggle the switch above to configure WhatsApp settings.</p>
+              </CardContent>
+            )}
+          </Card>
+
+          {/* AI TEXT GENERATION ─────────────────────────────────────────── */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-purple-500" />AI Text Generation</CardTitle>
+                <div className="flex items-center gap-2">
+                  {aiEnabled && <Badge className="bg-green-100 text-green-700 border-green-200"><CheckCircle2 className="h-3 w-3 mr-1" />Enabled</Badge>}
+                  <Switch checked={aiEnabled} onCheckedChange={setAiEnabled} />
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground">Powers "✨ Auto-Generate All" on Products — writes SEO descriptions, tags, and downloads images automatically.</p>
+            </CardHeader>
+
+            {aiEnabled && aiInt && editingInt !== "ai" && (
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-100 rounded-lg text-xs text-green-800">
+                  <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+                  <span>AI active — settings are read-only. Click <strong>Edit</strong> to make changes.</span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                  <div><p className="text-xs text-muted-foreground mb-0.5">Provider</p><p className="font-medium">{ac("provider") === "gemini" ? "Google Gemini" : ac("provider") === "openrouter" ? "OpenRouter" : "OpenAI"}</p></div>
+                  <div><p className="text-xs text-muted-foreground mb-0.5">Model</p><p className="font-medium font-mono">{ac("model") || "—"}</p></div>
+                  <div><p className="text-xs text-muted-foreground mb-0.5">API Key</p><p className="font-medium tracking-widest text-muted-foreground">••••••••</p></div>
+                </div>
+                <div className="flex justify-end">
+                  <Button size="sm" variant="outline" onClick={() => setEditingInt("ai")}>
+                    <Pencil className="h-3.5 w-3.5 mr-1.5" />Edit Settings
+                  </Button>
+                </div>
+              </CardContent>
+            )}
+
+            {aiEnabled && (!aiInt || editingInt === "ai") && (
+              <CardContent className="space-y-4">
+                <Field label="AI Provider">
+                  <Select value={ac("provider")} onValueChange={v => setAiCfg(f => ({
+                    ...f, provider: v,
+                    model: v === "gemini" ? "gemini-2.0-flash-lite" : v === "openai" ? "gpt-4o-mini" : "google/gemini-2.0-flash-exp:free",
+                  }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="gemini">Google Gemini (free tier available)</SelectItem>
+                      <SelectItem value="openai">OpenAI (GPT-4o-mini)</SelectItem>
+                      <SelectItem value="openrouter">OpenRouter (many free models)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+
+                {ac("provider") === "gemini" && (
+                  <div className="bg-purple-50 border border-purple-100 rounded-lg p-3 text-xs text-purple-800 space-y-1">
+                    <p className="font-semibold">🔑 Get a free Gemini API key</p>
+                    <p>Go to <strong>aistudio.google.com</strong> → Get API Key → Create API key.</p>
+                    <p>Free tier: 15 requests/min · 1M tokens/day — plenty for product generation.</p>
+                  </div>
+                )}
+                {ac("provider") === "openrouter" && (
+                  <div className="bg-purple-50 border border-purple-100 rounded-lg p-3 text-xs text-purple-800 space-y-1">
+                    <p className="font-semibold">🔑 Get an OpenRouter API key</p>
+                    <p>Go to <strong>openrouter.ai</strong> → Sign In → Keys → Create Key.</p>
+                    <p>Free models available, e.g. <code className="bg-purple-100 px-1 rounded">google/gemini-2.0-flash-exp:free</code></p>
+                  </div>
+                )}
+                {ac("provider") === "openai" && (
+                  <div className="bg-purple-50 border border-purple-100 rounded-lg p-3 text-xs text-purple-800 space-y-1">
+                    <p className="font-semibold">🔑 OpenAI API key</p>
+                    <p>Go to <strong>platform.openai.com/api-keys</strong> → Create new secret key.</p>
+                    <p>Requires a paid account with billing credits.</p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="API Key">
+                    <Input type="password" value={ac("apiKey")} onChange={e => setAiCfg(f => ({ ...f, apiKey: e.target.value }))} placeholder="••••••••" />
+                  </Field>
+                  <Field label="Model">
+                    <Input value={ac("model")} onChange={e => setAiCfg(f => ({ ...f, model: e.target.value }))}
+                      placeholder={ac("provider") === "gemini" ? "gemini-2.0-flash-lite" : ac("provider") === "openai" ? "gpt-4o-mini" : "google/gemini-2.0-flash-exp:free"} />
+                  </Field>
+                </div>
+                <Separator />
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" onClick={handleTestAi} disabled={testAiLoading || !ac("apiKey")}>
+                    {testAiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                    <span className="ml-2">Test Connection</span>
+                  </Button>
+                  <Button onClick={() => { saveIntegration("ai", aiEnabled, aiCfg, "int-ai"); setEditingInt(null); }}>Save</Button>
+                </div>
+              </CardContent>
+            )}
+
+            {!aiEnabled && (
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Toggle the switch to configure AI text generation. Supports <strong>Google Gemini</strong> (free), OpenAI, and OpenRouter.
+                </p>
               </CardContent>
             )}
           </Card>

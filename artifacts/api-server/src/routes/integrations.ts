@@ -187,6 +187,33 @@ router.post("/settings/integrations/whatsapp/test", async (req: Request, res: Re
   }
 });
 
+// ── POST /settings/integrations/ai/test ───────────────────────────────────
+router.post("/settings/integrations/ai/test", async (req: Request, res: Response): Promise<void> => {
+  if (!await auth(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const row = await getConfig<{ provider?: string; apiKey?: string; model?: string }>("ai");
+  if (!row?.config?.apiKey || row.config.apiKey === "••••••••") {
+    res.status(400).json({ error: "AI not configured — save an API key first" }); return;
+  }
+  const c = row.config;
+  const baseURL =
+    c.provider === "gemini"     ? "https://generativelanguage.googleapis.com/v1beta/openai/" :
+    c.provider === "openrouter" ? "https://openrouter.ai/api/v1" :
+    undefined;
+  const model = c.model || (c.provider === "gemini" ? "gemini-2.0-flash-lite" : "gpt-4o-mini");
+  try {
+    const OpenAILib = (await import("openai")).default;
+    const client = new OpenAILib({ baseURL, apiKey: c.apiKey });
+    const resp = await client.chat.completions.create({
+      model,
+      messages: [{ role: "user", content: "Reply with exactly: OK" }],
+      max_tokens: 10,
+    });
+    res.json({ ok: true, model, reply: resp.choices[0]?.message?.content ?? "" });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 // ── helpers ────────────────────────────────────────────────────────────────
 const SECRET_KEYS = new Set(["password", "authToken", "token", "accessToken", "apiKey", "accountSid"]);
 const MASK = "••••••••";

@@ -1,17 +1,44 @@
 import { Router, type IRouter } from "express";
 import OpenAI from "openai";
-import { db, brandsTable, categoriesTable } from "@workspace/db";
+import { db, brandsTable, categoriesTable, integrationSettingsTable } from "@workspace/db";
 import { eq, ilike } from "drizzle-orm";
 import * as fs from "fs";
 import * as path from "path";
 
 const router: IRouter = Router();
 
-function getOpenAI() {
-  return new OpenAI({
-    baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-    apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY ?? "dummy",
-  });
+const AI_MASK = "••••••••";
+
+async function getOpenAI(): Promise<{ client: OpenAI; model: string }> {
+  // 1. DB-stored AI integration (admin Settings → Integrations → AI Text Generation)
+  try {
+    const [row] = await db.select().from(integrationSettingsTable).where(eq(integrationSettingsTable.type, "ai"));
+    if (row?.enabled) {
+      const cfg = JSON.parse(row.config) as { provider?: string; apiKey?: string; model?: string };
+      if (cfg.apiKey && cfg.apiKey !== AI_MASK) {
+        const baseURL =
+          cfg.provider === "gemini"     ? "https://generativelanguage.googleapis.com/v1beta/openai/" :
+          cfg.provider === "openrouter" ? "https://openrouter.ai/api/v1" :
+          undefined; // OpenAI default (api.openai.com)
+        const model = cfg.model || (cfg.provider === "gemini" ? "gemini-2.0-flash-lite" : "gpt-4o-mini");
+        return { client: new OpenAI({ baseURL, apiKey: cfg.apiKey }), model };
+      }
+    }
+  } catch { /* fall through */ }
+
+  // 2. OPENAI_API_KEY env var
+  if (process.env.OPENAI_API_KEY) {
+    return { client: new OpenAI({ apiKey: process.env.OPENAI_API_KEY }), model: "gpt-4o-mini" };
+  }
+
+  // 3. Replit AI integration proxy (dev only)
+  return {
+    client: new OpenAI({
+      baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY ?? "dummy",
+    }),
+    model: "gpt-4o-mini",
+  };
 }
 
 function getUploadsDir(): string {
@@ -298,7 +325,7 @@ router.post("/products/ai-autogenerate", async (req, res): Promise<void> => {
     return;
   }
 
-  const openai = getOpenAI();
+  const { client: openai, model: aiModel } = await getOpenAI();
 
   // 1. Auto-categorize based on brand/model rules
   const catMatch = detectCategory(title);
@@ -349,7 +376,7 @@ Return ONLY valid JSON — no markdown fences, no backticks, no extra text:
   let aiData: Record<string, string> = {};
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: aiModel,
       max_completion_tokens: 2500,
       messages: [{ role: "user", content: prompt }],
     });
@@ -422,7 +449,7 @@ router.post("/products/ai-fill", async (req, res): Promise<void> => {
     ? await db.select().from(categoriesTable).where(eq(categoriesTable.id, categoryId))
     : [null];
 
-  const openai = getOpenAI();
+  const { client: openai, model: aiModel } = await getOpenAI();
 
   const prompt = `You are a product data specialist for a Pakistani mobile phone shop called Geem.pk.
 Generate complete e-commerce product listing data for the following device in Pakistani market context.
@@ -445,7 +472,7 @@ Return ONLY a valid JSON object (no markdown, no backticks) with these exact fie
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: aiModel,
       max_completion_tokens: 1024,
       messages: [{ role: "user", content: prompt }],
     });
