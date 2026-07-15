@@ -45,6 +45,8 @@ export default function Products() {
   const [search, setSearch] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiProgress, setAiProgress] = useState("");
+  const [autoGenWarnings, setAutoGenWarnings] = useState<string[]>([]);
   const [galleryTab, setGalleryTab] = useState(false);
 
   const { data, isLoading } = useQuery({
@@ -103,19 +105,25 @@ export default function Products() {
     setShowForm(true);
   }
 
-  async function handleAiFill() {
-    if (!form.title) { toast({ title: "Enter a product title first", variant: "destructive" }); return; }
+  async function handleAutoGenerate() {
+    if (!form.title) { toast({ title: "Enter a product title or model first", variant: "destructive" }); return; }
     setAiLoading(true);
+    setAiProgress("Detecting category & brand…");
+    setAutoGenWarnings([]);
     try {
+      setAiProgress("Generating SEO content with AI…");
       const data = await axiosInstance.post<{
         title: string; slug: string; shortDescription: string; longDescription: string;
-        tags: string; metaTitle: string; metaDescription: string;
-      }>("/products/ai-fill", {
-        title: form.title,
-        brandId: form.brandId ? parseInt(form.brandId) : undefined,
-        categoryId: form.categoryId ? parseInt(form.categoryId) : undefined,
-        price: form.price || undefined,
-      }).then(r => r.data);
+        tags: string; metaTitle: string; metaDescription: string; metaKeywords: string;
+        categoryId: number | null; brandId: number | null; hidePrice: boolean;
+        featuredImage: string | null; galleryImages: string[];
+        imageCount: number; warnings: string[];
+      }>("/products/ai-autogenerate", { title: form.title }).then(r => r.data);
+
+      setAiProgress("Downloading product images…");
+      // Small delay so user sees the image step
+      await new Promise(r => setTimeout(r, 400));
+
       setForm(f => ({
         ...f,
         title: data.title || f.title,
@@ -123,12 +131,26 @@ export default function Products() {
         shortDescription: data.shortDescription || f.shortDescription,
         longDescription: data.longDescription || f.longDescription,
         tags: data.tags || f.tags,
+        metaTitle: data.metaTitle || f.metaTitle,
+        metaDescription: data.metaDescription || f.metaDescription,
+        metaKeywords: data.metaKeywords || f.metaKeywords,
+        categoryId: data.categoryId ? String(data.categoryId) : f.categoryId,
+        brandId: data.brandId ? String(data.brandId) : f.brandId,
+        hidePrice: data.hidePrice ?? f.hidePrice,
+        featuredImage: data.featuredImage || f.featuredImage,
+        galleryImages: data.galleryImages.length ? data.galleryImages : f.galleryImages,
       }));
-      toast({ title: "AI filled product details ✨" });
+
+      setAutoGenWarnings(data.warnings ?? []);
+      toast({
+        title: `Auto-generated ✨ — ${data.imageCount} image(s) downloaded`,
+        description: data.warnings.length ? data.warnings[0] : undefined,
+      });
     } catch {
-      toast({ title: "AI fill failed", variant: "destructive" });
+      toast({ title: "Auto-generation failed", variant: "destructive" });
     } finally {
       setAiLoading(false);
+      setAiProgress("");
     }
   }
 
@@ -263,12 +285,19 @@ export default function Products() {
           <DialogHeader>
             <div className="flex items-center justify-between">
               <DialogTitle>{editProduct ? "Edit Product" : "New Product"}</DialogTitle>
-              <Button variant="outline" size="sm" onClick={handleAiFill} disabled={aiLoading} className="gap-1.5">
+              <Button variant="outline" size="sm" onClick={handleAutoGenerate} disabled={aiLoading} className="gap-1.5 border-purple-300 hover:border-purple-500">
                 <Sparkles className="h-3.5 w-3.5 text-purple-500" />
-                {aiLoading ? "Generating..." : "AI Auto-Fill"}
+                {aiLoading ? (aiProgress || "Generating…") : "✨ Auto-Generate All"}
               </Button>
             </div>
           </DialogHeader>
+
+          {/* Auto-generate warnings */}
+          {autoGenWarnings.length > 0 && (
+            <div className="rounded-md border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm text-yellow-800 space-y-0.5">
+              {autoGenWarnings.map((w, i) => <p key={i}>⚠ {w}</p>)}
+            </div>
+          )}
 
           {/* Tab switcher: Main Image vs Gallery */}
           <div className="flex border rounded-lg overflow-hidden mb-1">
