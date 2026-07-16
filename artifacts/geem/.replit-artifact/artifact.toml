@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "Geem CRM & Shop"
+version = "1.0.0"
+id = "artifacts/geem"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18112
+
+[services.development]
+run = "pnpm --filter @workspace/geem run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/geem", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/geem/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18112"
+BASE_PATH = "/"

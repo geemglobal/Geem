@@ -1,0 +1,24 @@
+User-agent: *
+Allow: /shop/
+Allow: /shop/products/
+Allow: /shop/category/
+Allow: /shop/track
+Allow: /about
+Allow: /contact
+Allow: /faq
+Allow: /privacy
+Allow: /terms
+Allow: /returns
+Allow: /shipping
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /inventory
+Disallow: /invoices
+Disallow: /customers
+Disallow: /pos
+Disallow: /api/auth
+Disallow: /api/dashboard
+Disallow: /api/inventory
+Disallow: /api/invoices
+
+Sitemap: https://geem.pk/api/sitemap.xml
