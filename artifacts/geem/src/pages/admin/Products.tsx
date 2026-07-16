@@ -237,11 +237,11 @@ export default function Products() {
           <h1 className="text-2xl font-bold">E-Commerce Catalog</h1>
           <p className="text-muted-foreground">{data?.total ?? 0} products</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => { setSeedDialog(true); setSeedDone(false); setSeedCreated(0); setSeedSkipped(0); setSeedOffset(0); }}>
-            <Database className="h-4 w-4 mr-2" />Seed Catalog
+        <div className="flex gap-2 flex-shrink-0">
+          <Button variant="outline" size="sm" onClick={() => { setSeedDialog(true); setSeedDone(false); setSeedCreated(0); setSeedSkipped(0); setSeedOffset(0); }}>
+            <Database className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">Seed Catalog</span>
           </Button>
-          <Button onClick={openNew}><Plus className="h-4 w-4 mr-2" />Add Product</Button>
+          <Button size="sm" onClick={openNew}><Plus className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">Add Product</span><span className="sm:hidden">Add</span></Button>
         </div>
       </div>
 
