@@ -14,6 +14,7 @@
     "migrate-shop-sessions": "tsx ./src/migrate-shop-sessions.ts",
     "fill-gps-catalog": "tsx ./src/fill-gps-catalog.ts",
     "fill-missing-images": "tsx ./src/fill-missing-images.ts",
+    "update-product-images": "tsx ./src/update-product-images.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
