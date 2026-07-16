@@ -13,6 +13,7 @@
     "migrate-returns-refund": "tsx ./src/migrate-returns-refund.ts",
     "migrate-shop-sessions": "tsx ./src/migrate-shop-sessions.ts",
     "fill-gps-catalog": "tsx ./src/fill-gps-catalog.ts",
+    "fill-missing-images": "tsx ./src/fill-missing-images.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
