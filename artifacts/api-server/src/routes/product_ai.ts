@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import OpenAI from "openai";
-import { db, brandsTable, categoriesTable, integrationSettingsTable } from "@workspace/db";
+import { db, brandsTable, categoriesTable, integrationSettingsTable, productsTable } from "@workspace/db";
 import { eq, ilike } from "drizzle-orm";
 import * as fs from "fs";
 import * as path from "path";
@@ -423,6 +423,115 @@ Return ONLY valid JSON — no markdown fences, no backticks, no extra text:
     galleryImages,
     imageCount: galleryImages.length + (featuredImage ? 1 : 0),
     warnings,
+  });
+});
+
+// ── Full catalog product list ─────────────────────────────────────────────────
+const CATALOG_PRODUCTS: string[] = [
+  // ── LawMate Surveillance Products (38) ──────────────────────────────────────
+  "LawMate PV-RC400UW","LawMate PV-RC200HDW","LawMate PV-RC200HD2",
+  "LawMate PV-WT20W","LawMate PV-EG10CL","LawMate PV-900EVO3",
+  "LawMate PV-BT10i","LawMate PV-PB20i","LawMate PV-PB30W",
+  "LawMate PV-TC10i","LawMate PV-AP10i","LawMate PV-WB10i",
+  "LawMate PV-RC10FHD","LawMate PV-CC10W","LawMate PV-FM20HDWi",
+  "LawMate PV-CHG30i","LawMate PV-NB10W","LawMate PV-DY40UW",
+  "LawMate PV-DY40UWW","LawMate PV-DY20i","LawMate PV-DY10i",
+  "LawMate PV-1000EVO3","LawMate PV-1000AHD","LawMate PV-500Neo Pro",
+  "LawMate PV-500ECO2","LawMate PV-500 L4i","LawMate PV-500 Lite 3",
+  "LawMate BU-18Neo","LawMate BU-19+","LawMate CM-BU20",
+  "LawMate CMD-BU20LX","LawMate ER-18HD","LawMate NT-18HD",
+  "LawMate CM-TC10","LawMate AR-100","LawMate AR-300",
+  "LawMate RD-30","LawMate RD-10",
+  // ── Esonic / MemoQ Audio Recorders (12) ─────────────────────────────────────
+  "Esonic MemoQ MQ-U350","Esonic MemoQ MQ-L500N","Esonic MQ-U310",
+  "Esonic MR-150","Esonic MR-140","Esonic MR-130",
+  "Esonic KC-500","Esonic MQ-99","Esonic MQ-79",
+  "Esonic PCM-008","Esonic BR20","Esonic CAM-U7",
+  // ── Carbon Fiber Spools & Fabrics (11) ──────────────────────────────────────
+  "Toray T700 12K Carbon Fiber Spool","Toray T700 24K Carbon Fiber Spool",
+  "Toray T800 12K Carbon Fiber Spool","1K 600D Carbon Fiber Spool",
+  "3K 1800D Carbon Fiber Spool","6K 3600D Carbon Fiber Spool",
+  "12K 7200D Carbon Fiber Spool","24K 14400D Carbon Fiber Spool",
+  "Carbon Fiber Fabric 3K 200GSM Plain Weave",
+  "Carbon Fiber Fabric 3K 200GSM Twill Weave",
+  "Carbon Fiber Unidirectional UD Fabric",
+  // ── Huntsman Araldite Epoxy Systems (7) ─────────────────────────────────────
+  "Araldite LY 5052 ARADUR 5052","Araldite LY 5052 ARADUR 5052 CH",
+  "Araldite LY 1564 ARADUR 3474","Araldite LY 3585 ARADUR 3475",
+  "Araldite LY 8615 ARADUR 8615","Araldite LY 3031 ARADUR 3032",
+  "Araldite LY 3508 ARADUR 3478",
+  // ── Custom Battery Design & Manufacturing (6) ────────────────────────────────
+  "Geem Custom Lithium-Ion NCM Battery Pack Engineering",
+  "Geem Subsea Marine Grade Watertight Battery Systems",
+  "Geem Smart BMS Integration Services",
+  "Geem High-Voltage Industrial Battery Pack Assembly",
+  "Geem Custom Cylindrical Cell Array Configuration",
+  "Geem Turnkey Industrial Battery Charger Matching Systems",
+];
+
+/**
+ * POST /products/bulk-seed
+ * Seed the full product catalog in batches. Idempotent (skips existing slugs).
+ * Body: { offset?: number; limit?: number }
+ */
+router.post("/products/bulk-seed", async (req, res): Promise<void> => {
+  const { offset = 0, limit = 10 } = req.body as { offset?: number; limit?: number };
+  const slice = CATALOG_PRODUCTS.slice(offset, offset + limit);
+  const total = CATALOG_PRODUCTS.length;
+
+  const results: { title: string; status: "created" | "skipped"; slug: string }[] = [];
+
+  for (const title of slice) {
+    const slug = sanitizeFilePrefix(title);
+
+    // Skip if already exists
+    const [existing] = await db
+      .select({ id: productsTable.id })
+      .from(productsTable)
+      .where(eq(productsTable.slug, slug));
+    if (existing) { results.push({ title, status: "skipped", slug }); continue; }
+
+    const catMatch = detectCategory(title);
+    let categoryId: number | null = null;
+    let brandId: number | null = null;
+    const hidePrice = catMatch?.hidePrice ?? true; // default inquiry-only
+
+    if (catMatch) {
+      try {
+        const cats = await findOrCreateCategory(catMatch.parentName, catMatch.childName);
+        categoryId = cats.childId;
+        if (catMatch.brandName) brandId = await findOrCreateBrand(catMatch.brandName);
+      } catch { /* ignore */ }
+    }
+
+    const metaBase = `${title} - Geem Pakistan`;
+    await db.insert(productsTable).values({
+      title,
+      slug,
+      categoryId,
+      brandId,
+      price: "1",
+      hidePrice,
+      published: true,
+      featured: false,
+      stockQty: 0,
+      shortDescription: `${title} — available on inquiry. Contact Geem for pricing and availability in Pakistan.`,
+      metaTitle: metaBase.slice(0, 60),
+      metaDescription: `Buy ${title} in Pakistan. Professional grade equipment. Contact Geem.pk for pricing.`.slice(0, 160),
+      metaKeywords: `${title}, Pakistan, Geem, buy online`,
+    });
+
+    results.push({ title, status: "created", slug });
+  }
+
+  res.json({
+    total,
+    offset,
+    count: slice.length,
+    done: offset + slice.length >= total,
+    created: results.filter(r => r.status === "created").length,
+    skipped: results.filter(r => r.status === "skipped").length,
+    results,
   });
 });
 

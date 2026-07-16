@@ -15,7 +15,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useToast } from "@/hooks/use-toast";
 import { ImageUpload } from "@/components/ImageUpload";
 import { MultiImageUpload } from "@/components/MultiImageUpload";
-import { Plus, Package, Trash2, Pencil, Sparkles, X, GripVertical, Images } from "lucide-react";
+import { Plus, Package, Trash2, Pencil, Sparkles, X, GripVertical, Images, Database, CheckCircle2, Loader2 } from "lucide-react";
 
 interface Product {
   id: number; title: string; slug: string; brandId: number | null; categoryId: number | null;
@@ -48,6 +48,13 @@ export default function Products() {
   const [aiProgress, setAiProgress] = useState("");
   const [autoGenWarnings, setAutoGenWarnings] = useState<string[]>([]);
   const [galleryTab, setGalleryTab] = useState(false);
+  const [seedDialog, setSeedDialog] = useState(false);
+  const [seedRunning, setSeedRunning] = useState(false);
+  const [seedOffset, setSeedOffset] = useState(0);
+  const [seedTotal] = useState(74);
+  const [seedCreated, setSeedCreated] = useState(0);
+  const [seedSkipped, setSeedSkipped] = useState(0);
+  const [seedDone, setSeedDone] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["products", search],
@@ -84,6 +91,41 @@ export default function Products() {
     mutationFn: (id: number) => axiosInstance.delete(`/products/${id}`),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["products"] }); toast({ title: "Product deleted" }); setDeleteConfirm(null); },
   });
+
+  async function runCatalogSeed() {
+    setSeedRunning(true);
+    setSeedOffset(0);
+    setSeedCreated(0);
+    setSeedSkipped(0);
+    setSeedDone(false);
+    let offset = 0;
+    let totalCreated = 0;
+    let totalSkipped = 0;
+    const BATCH = 10;
+    try {
+      while (true) {
+        const result = await axiosInstance.post<{
+          total: number; offset: number; count: number; done: boolean;
+          created: number; skipped: number;
+        }>("/products/bulk-seed", { offset, limit: BATCH }).then(r => r.data);
+        totalCreated += result.created;
+        totalSkipped += result.skipped;
+        setSeedCreated(totalCreated);
+        setSeedSkipped(totalSkipped);
+        setSeedOffset(offset + result.count);
+        if (result.done) break;
+        offset += result.count;
+        // Small delay to avoid hammering the server
+        await new Promise(r => setTimeout(r, 300));
+      }
+      setSeedDone(true);
+      qc.invalidateQueries({ queryKey: ["products"] });
+    } catch {
+      toast({ title: "Catalog seed failed", variant: "destructive" });
+    } finally {
+      setSeedRunning(false);
+    }
+  }
 
   function openNew() { setEditProduct(null); setForm(emptyForm); setGalleryTab(false); setShowForm(true); }
 
@@ -195,8 +237,63 @@ export default function Products() {
           <h1 className="text-2xl font-bold">E-Commerce Catalog</h1>
           <p className="text-muted-foreground">{data?.total ?? 0} products</p>
         </div>
-        <Button onClick={openNew}><Plus className="h-4 w-4 mr-2" />Add Product</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => { setSeedDialog(true); setSeedDone(false); setSeedCreated(0); setSeedSkipped(0); setSeedOffset(0); }}>
+            <Database className="h-4 w-4 mr-2" />Seed Catalog
+          </Button>
+          <Button onClick={openNew}><Plus className="h-4 w-4 mr-2" />Add Product</Button>
+        </div>
       </div>
+
+      {/* ── Seed Catalog Dialog ── */}
+      <Dialog open={seedDialog} onOpenChange={v => { if (!seedRunning) setSeedDialog(v); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Database className="h-5 w-5 text-primary" />Seed Full Catalog
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              This will automatically create <strong>74 products</strong> across all categories — LawMate surveillance devices, Esonic audio recorders, Toray carbon fiber, Huntsman Araldite epoxy systems, and custom battery services.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Products are created as <strong>published, inquiry-only</strong> (Get Price button). Already-existing products are skipped. You can then run "✨ Auto-Generate All" on any product to add AI descriptions + images.
+            </p>
+            {seedRunning && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Processing {Math.min(seedOffset, seedTotal)} / {seedTotal} products…
+                </div>
+                <div className="w-full bg-muted rounded-full h-2">
+                  <div
+                    className="bg-primary h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${Math.round((seedOffset / seedTotal) * 100)}%` }}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">{seedCreated} created · {seedSkipped} skipped</p>
+              </div>
+            )}
+            {seedDone && (
+              <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">
+                <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
+                Done! <strong>{seedCreated}</strong> products created, <strong>{seedSkipped}</strong> already existed.
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSeedDialog(false)} disabled={seedRunning}>Cancel</Button>
+            {!seedDone ? (
+              <Button onClick={runCatalogSeed} disabled={seedRunning}>
+                {seedRunning ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Seeding…</> : <><Database className="h-4 w-4 mr-2" />Start Seeding</>}
+              </Button>
+            ) : (
+              <Button onClick={() => setSeedDialog(false)}>Close</Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardContent className="pt-6">
