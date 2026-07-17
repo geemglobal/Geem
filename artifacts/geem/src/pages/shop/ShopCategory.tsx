@@ -84,7 +84,7 @@ export default function ShopCategory() {
                 <Link href={`/shop/products/${p.slug}`}>
                   <div className="aspect-square bg-gray-50">
                     {p.featuredImage ? (
-                      <img src={p.featuredImage} alt={p.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                      <img src={p.featuredImage} alt={p.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center"><Package className="h-12 w-12 text-muted-foreground opacity-30" /></div>
                     )}

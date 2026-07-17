@@ -45,7 +45,7 @@ function ProductCard({ product }: { product: Product }) {
       <Link href={`/shop/products/${product.slug}`}>
         <div className="aspect-square bg-gray-50 overflow-hidden relative">
           {product.featuredImage ? (
-            <img src={product.featuredImage} alt={product.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+            <img src={product.featuredImage} alt={product.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-muted-foreground bg-gray-100"><Package className="h-12 w-12 opacity-20" /></div>
           )}

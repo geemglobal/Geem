@@ -44,15 +44,17 @@ function waClick(title: string) {
 }
 
 function ProductCard({ p }: { p: Product }) {
+  const [imgFailed, setImgFailed] = useState(false);
   return (
     <Link href={`/shop/products/${p.slug}`}>
       <div className="group border rounded-xl overflow-hidden hover:shadow-lg transition-all duration-200 cursor-pointer bg-white h-full flex flex-col">
         <div className="aspect-[4/3] bg-gray-50 overflow-hidden relative">
-          {p.featuredImage ? (
+          {p.featuredImage && !imgFailed ? (
             <img
               src={p.featuredImage}
               alt={p.title}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              onError={() => setImgFailed(true)}
             />
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-gray-100 to-gray-50">
