@@ -130,7 +130,7 @@ export async function requirePermission(req: Request, res: Response, next: NextF
   }
 
   // Store userId for downstream use
-  (req as Record<string, unknown>).__userId = userId;
+  (req as unknown as Record<string, unknown>).__userId = userId;
 
   // Get user permissions
   const { role, permissions } = await getUserPermissions(userId);
