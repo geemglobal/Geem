@@ -36,6 +36,7 @@ const CAT_CONFIG: Record<string, { icon: React.ElementType; color: string; bg: s
 function ProductCard({ product }: { product: Product }) {
   const { addToCart } = useCart();
   const { toast } = useToast();
+  const [imgFailed, setImgFailed] = useState(false);
   const effectivePrice = product.salePrice ?? product.price;
   const hasDiscount = product.salePrice && product.salePrice < product.price;
   const discountPct = hasDiscount ? Math.round(((product.price - product.salePrice!) / product.price) * 100) : 0;
@@ -44,8 +45,8 @@ function ProductCard({ product }: { product: Product }) {
     <div className="group border rounded-xl overflow-hidden hover:shadow-lg transition-all duration-200 bg-white flex flex-col">
       <Link href={`/shop/products/${product.slug}`}>
         <div className="aspect-square bg-gray-50 overflow-hidden relative">
-          {product.featuredImage ? (
-            <img src={product.featuredImage} alt={product.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+          {product.featuredImage && !imgFailed ? (
+            <img src={product.featuredImage} alt={product.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onError={() => setImgFailed(true)} />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-muted-foreground bg-gray-100"><Package className="h-12 w-12 opacity-20" /></div>
           )}

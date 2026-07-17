@@ -14,6 +14,34 @@ import { useToast } from "@/hooks/use-toast";
 interface Product { id: number; title: string; slug: string; price: number; shortDescription: string | null; featuredImage: string | null; brandName: string | null; categoryName: string | null; stockCount: number; }
 interface Category { id: number; name: string; }
 
+
+function CategoryProductCard({ p }: { p: Product }) {
+  const [imgFailed, setImgFailed] = useState(false);
+  return (
+    <div className="group border rounded-xl overflow-hidden hover:shadow-lg transition-all duration-200 bg-white">
+      <Link href={`/shop/products/${p.slug}`}>
+        <div className="aspect-square bg-gray-50">
+          {p.featuredImage && !imgFailed ? (
+            <img src={p.featuredImage} alt={p.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onError={() => setImgFailed(true)} />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center"><Package className="h-12 w-12 text-muted-foreground opacity-30" /></div>
+          )}
+        </div>
+      </Link>
+      <div className="p-4">
+        {p.brandName && <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">{p.brandName}</p>}
+        <Link href={`/shop/products/${p.slug}`}>
+          <h3 className="font-semibold text-sm leading-snug group-hover:text-primary line-clamp-2">{p.title}</h3>
+        </Link>
+        <div className="mt-3 flex items-center justify-between">
+          <p className="text-lg font-bold text-primary">Rs {p.price.toLocaleString()}</p>
+          {p.stockCount === 0 && <Badge className="text-xs bg-primary/10 text-primary border border-primary/30">On Demand</Badge>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ShopCategory() {
   const [, params] = useRoute("/shop/category/:id");
   const [sort, setSort] = useState("newest");
@@ -80,37 +108,7 @@ export default function ShopCategory() {
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {products.map(p => (
-              <div key={p.id} className="group border rounded-xl overflow-hidden hover:shadow-lg transition-all duration-200 bg-white">
-                <Link href={`/shop/products/${p.slug}`}>
-                  <div className="aspect-square bg-gray-50">
-                    {p.featuredImage ? (
-                      <img src={p.featuredImage} alt={p.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center"><Package className="h-12 w-12 text-muted-foreground opacity-30" /></div>
-                    )}
-                  </div>
-                </Link>
-                <div className="p-4">
-                  {p.brandName && <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">{p.brandName}</p>}
-                  <Link href={`/shop/products/${p.slug}`}>
-                    <h3 className="font-semibold text-sm leading-snug group-hover:text-primary line-clamp-2">{p.title}</h3>
-                  </Link>
-                  <div className="mt-3 flex items-center justify-between">
-                    <p className="text-lg font-bold text-primary">Rs {p.price.toLocaleString()}</p>
-                    {p.stockCount === 0 && <Badge className="text-xs bg-primary/10 text-primary border border-primary/30">On Demand</Badge>}
-                  </div>
-                  {p.stockCount > 0 ? (
-                    <Button className="w-full mt-3 h-8 text-xs" onClick={() => {
-                      addToCart({ productId: p.id, title: p.title, price: p.price, qty: 1, image: p.featuredImage, slug: p.slug });
-                      toast({ title: "Added to cart" });
-                    }}>Add to Cart</Button>
-                  ) : (
-                    <Button className="w-full mt-3 h-8 text-xs bg-primary/10 text-primary hover:bg-primary/20 border border-primary/30" variant="ghost" asChild>
-                      <span onClick={() => openWhatsApp(GEEM_WA, `I'd like to inquire about: ${p.title}`)}>Get Price</span>
-                    </Button>
-                  )}
-                </div>
-              </div>
+              <CategoryProductCard key={p.id} p={p} />
             ))}
             {!products.length && !isLoading && (
               <div className="col-span-4 text-center py-20 text-muted-foreground">

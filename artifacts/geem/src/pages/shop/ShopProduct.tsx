@@ -44,6 +44,7 @@ export default function ShopProduct() {
   const { addToCart } = useCart();
   const [qty, setQty] = useState(1);
   const [activeImg, setActiveImg] = useState(0);
+  const [imgFailed, setImgFailed] = useState(false);
 
   const { data: product, isLoading } = useQuery({
     queryKey: ["shop-product", params?.slug],
@@ -107,12 +108,12 @@ export default function ShopProduct() {
           {/* Image Gallery */}
           <div className="space-y-3">
             <div className="aspect-square bg-gray-50 rounded-2xl overflow-hidden border">
-              {allImages.length > 0 ? (
+              {allImages.length > 0 && !imgFailed ? (
                 <img
                   src={allImages[activeImg]}
                   alt={product.title}
                   className="w-full h-full object-cover"
-                  onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                  onError={() => setImgFailed(true)}
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
