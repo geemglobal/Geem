@@ -534,6 +534,7 @@ body{font-family:Arial,Helvetica,sans-serif;color:#333;font-size:13px;line-heigh
       ${co?.email ? `<div class="co-line">Email: ${co.email}</div>` : ""}
       ${co?.phone ? `<div class="co-line">Mobile: ${co.phone}</div>` : ""}
       ${co?.website ? `<div class="co-line">${co.website}</div>` : ""}
+      ${co?.taxNumber ? `<div class="co-line" style="font-weight:700">NTN: ${co.taxNumber}</div>` : ""}
     </div>
   </div>
 
@@ -765,7 +766,7 @@ hr{border:none;border-top:1px dashed #000;margin:4px 0}
     }${co?.phone ? `<br/>${co.phone}` : ""
     }${co?.email ? `<br/>${co.email}` : ""
     }${co?.website ? `<br/>${co.website}` : ""
-    }${co?.taxNumber ? `<br/><span style="font-weight:700">NTN: ${co.taxNumber}</span>` : ""}</div>
+    }<br/><span style="font-weight:700">NTN: ${co?.taxNumber ?? "6943433"}</span></div>
   <hr/>
   <div class="title">PAYMENT RECEIPT</div>
   <hr/>

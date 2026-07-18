@@ -59,6 +59,7 @@ async function buildQuotationPrintHtml(quotationId: number): Promise<string | nu
       ${co?.email ? `<div class="co-line">Email: ${co.email}</div>` : ""}
       ${co?.phone ? `<div class="co-line">Mobile: ${co.phone}</div>` : ""}
       ${co?.website ? `<div class="co-line">${co.website}</div>` : ""}
+      ${co?.taxNumber ? `<div class="co-line" style="font-weight:700">NTN: ${co.taxNumber}</div>` : ""}
     </div>
   </div>
   <div class="meta-row">
