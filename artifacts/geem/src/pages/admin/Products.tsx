@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ImageUpload } from "@/components/ImageUpload";
 import { MultiImageUpload } from "@/components/MultiImageUpload";
 import { Plus, Package, Trash2, Pencil, Sparkles, X, GripVertical, Images, Database, CheckCircle2, Loader2 } from "lucide-react";
+import { resolveImgUrl } from "@/lib/resolveImgUrl";
 
 interface Product {
   id: number; title: string; slug: string; brandId: number | null; categoryId: number | null;
@@ -316,7 +317,7 @@ export default function Products() {
                     <TableCell>
                       <div className="flex items-center gap-3">
                         {p.featuredImage
-                          ? <img src={p.featuredImage} alt="" className="h-10 w-10 object-cover rounded border" />
+                          ? <img src={resolveImgUrl(p.featuredImage) ?? ""} alt="" className="h-10 w-10 object-cover rounded border" />
                           : <div className="h-10 w-10 bg-muted rounded flex items-center justify-center"><Package className="h-5 w-5 text-muted-foreground" /></div>}
                         <div>
                           <p className="font-medium">{p.title}</p>
@@ -433,7 +434,7 @@ export default function Products() {
                 <div className="grid grid-cols-3 gap-2 mb-3">
                   {galleryImages.map((url, idx) => (
                     <div key={idx} className="relative group rounded-lg overflow-hidden border bg-muted aspect-square">
-                      <img src={url} alt="" className="w-full h-full object-cover" />
+                      <img src={resolveImgUrl(url) ?? url} alt="" className="w-full h-full object-cover" />
                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                         <Button size="sm" variant="destructive" onClick={() => removeGalleryImage(idx)}>
                           <X className="h-4 w-4" />

@@ -2,6 +2,7 @@ import { useRef } from "react";
 import { useImageUpload } from "@/hooks/useImageUpload";
 import { Button } from "@/components/ui/button";
 import { Upload, X, Image } from "lucide-react";
+import { resolveImgUrl } from "@/lib/resolveImgUrl";
 
 interface ImageUploadProps {
   value?: string | null;
@@ -30,7 +31,7 @@ export function ImageUpload({ value, onChange, onClear, label = "Upload Image", 
 
       {value ? (
         <div className="relative group rounded-lg overflow-hidden border bg-muted">
-          <img src={value} alt="Product" className="w-full h-48 object-cover" />
+          <img src={resolveImgUrl(value) ?? value ?? ""} alt="Product" className="w-full h-48 object-cover" />
           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
             <Button size="sm" variant="secondary" onClick={() => fileRef.current?.click()} disabled={isUploading}>
               <Upload className="h-4 w-4 mr-1" />Change
