@@ -20,7 +20,6 @@ interface QuotationItem {
 interface CompanySettings {
   companyName: string; logo?: string | null; address?: string | null;
   phone?: string | null; fax?: string | null; email?: string | null; website?: string | null;
-  taxNumber?: string | null;
 }
 
 interface Quotation {
@@ -136,7 +135,6 @@ function buildQuotationHtml(q: Quotation, company: CompanySettings): string {
         ${company.email ? `<div class="co-line">Email: ${company.email}</div>` : ""}
         ${company.phone ? `<div class="co-line">Mobile: ${company.phone}</div>` : ""}
         ${company.website ? `<div class="co-line">${company.website}</div>` : ""}
-        ${company.taxNumber ? `<div class="co-line" style="font-weight:700">NTN: ${company.taxNumber}</div>` : ""}
       </div>
     </div>
 

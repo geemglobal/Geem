@@ -28,7 +28,6 @@ interface Payment { id: number; date: string; method: string; amount: number; tr
 interface CompanySettings {
   companyName: string; logo?: string | null; address?: string | null;
   phone?: string | null; fax?: string | null; email?: string | null; website?: string | null;
-  taxNumber?: string | null;
 }
 
 interface Invoice {
@@ -156,7 +155,6 @@ function buildInvoiceHtml(invoice: Invoice, company: CompanySettings): string {
         ${company.email ? `<div class="co-line">Email: ${company.email}</div>` : ""}
         ${company.phone ? `<div class="co-line">Mobile: ${company.phone}</div>` : ""}
         ${company.website ? `<div class="co-line">${company.website}</div>` : ""}
-        ${company.taxNumber ? `<div class="co-line" style="font-weight:700">NTN: ${company.taxNumber}</div>` : ""}
       </div>
     </div>
 
@@ -249,7 +247,6 @@ function buildPaymentReceiptHtml(invoice: Invoice, company: CompanySettings, pay
       ${company.email ? `<div>Email: ${company.email}</div>` : ""}
       ${company.phone ? `<div>Mobile: ${company.phone}</div>` : ""}
       ${company.website ? `<div>${company.website}</div>` : ""}
-      ${company.taxNumber ? `<div style="font-weight:700">NTN: ${company.taxNumber}</div>` : ""}
     </div>
 
     <hr class="rcpt-hr"/>
