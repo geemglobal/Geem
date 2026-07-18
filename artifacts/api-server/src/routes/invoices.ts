@@ -410,7 +410,7 @@ router.post("/invoices", async (req, res): Promise<void> => {
           paid: paidAmount,
           balanceDue: Math.max(0, total - paidAmount),
           notes,
-          invoiceUrl: `https://geem.pk/api/invoices/${inv.id}/print`,
+          invoiceUrl: `${(process.env.PUBLIC_URL ?? "https://geem.pk").replace(/\/$/, "")}/api/invoices/${inv.id}/print`,
         });
       }).catch(() => {});
   }
@@ -966,7 +966,7 @@ router.post("/invoices/:id/email", async (req, res): Promise<void> => {
   if (!inv) { res.status(404).json({ error: "Not found" }); return; }
   const [cust] = await db.select({ email: customersTable.email, mobile: customersTable.mobile })
     .from(customersTable).where(eq(customersTable.id, inv.customerId));
-  const invoiceUrl = `https://geem.pk/api/invoices/${id}/print`;
+  const invoiceUrl = `${(process.env.PUBLIC_URL ?? "https://geem.pk").replace(/\/$/, "")}/api/invoices/${id}/print`;
   const sym = inv.currencySymbol ?? "Rs";
   const itemLines = inv.items.map(i => `  • ${i.description}${i.imei ? ` (IMEI: ${i.imei})` : ""} — ${sym} ${i.amount.toLocaleString()}`).join("\n");
   const msgText = `*Invoice ${inv.invoiceNumber}* — ${inv.customerName}\nDate: ${inv.date}\n\n*Items:*\n${itemLines}\n\n*Total: ${sym} ${inv.total.toLocaleString()}*\n${inv.balanceDue > 0 ? `Balance Due: ${sym} ${inv.balanceDue.toLocaleString()}` : "✅ Fully Paid"}\n\nView/Download Invoice:\n${invoiceUrl}\n\n_Geem Global Services — geem.pk_`;

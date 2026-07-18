@@ -194,10 +194,15 @@ function openViewWindow(html: string) {
   if (w) { w.document.write(html); w.document.close(); w.focus(); }
 }
 
+function getQuotationUrl(q: Quotation): string {
+  return `https://geem.pk/api/quotations/${q.id}/print`;
+}
+
 function handleWhatsApp(q: Quotation) {
   const sym = q.currencySymbol;
   const items = q.items.map(i => `• ${i.description}${i.imei ? ` (${imeiLabel(i.imei)}: ${i.imei})` : ""} — ${sym} ${i.amount.toLocaleString()}`).join("\n");
-  const msg = `*Quotation ${q.quotationNumber}*\nDate: ${q.date}${q.expiryDate ? `\nValid Until: ${q.expiryDate}` : ""}\n\n*Items:*\n${items}\n\n*Total: ${sym} ${q.total.toLocaleString()}*\n\n_Geem.pk_`;
+  const quotationUrl = getQuotationUrl(q);
+  const msg = `*Quotation ${q.quotationNumber}*\nDate: ${q.date}${q.expiryDate ? `\nValid Until: ${q.expiryDate}` : ""}\n\n*Items:*\n${items}\n\n*Total: ${sym} ${q.total.toLocaleString()}*\n\nView/Download Quotation:\n${quotationUrl}\n\n_Geem.pk_`;
   const url = `https://wa.me/${toWaPhone(q.customerPhone)}?text=${encodeURIComponent(msg)}`;
   window.open(url, "_blank");
 }
@@ -276,12 +281,19 @@ export default function QuotationDetail() {
           <Button variant="outline" size="sm" onClick={() => {
             const sym2 = quotation.currencySymbol;
             const items = quotation.items.map(i => `• ${i.description}${i.imei ? ` (${imeiLabel(i.imei)}: ${i.imei})` : ""} — ${sym2} ${i.amount.toLocaleString()}`).join("\n");
-            const text = `*Quotation ${quotation.quotationNumber}*\nCustomer: ${quotation.customerName}\nDate: ${quotation.date}\n\n${items}\n\n*Total: ${sym2} ${quotation.total.toLocaleString()}*`;
+            const quotationUrl = getQuotationUrl(quotation);
+            const text = `*Quotation ${quotation.quotationNumber}*\nCustomer: ${quotation.customerName}\nDate: ${quotation.date}\n\n${items}\n\n*Total: ${sym2} ${quotation.total.toLocaleString()}*\n\nView/Download Quotation:\n${quotationUrl}`;
             navigator.clipboard.writeText(text);
             toast({ title: "Quotation message copied to clipboard" });
           }}><Link2 className="h-4 w-4 mr-1" />Copy Msg</Button>
-          <Button variant="outline" size="sm" onClick={() => { navigator.clipboard.writeText(window.location.href); toast({ title: "Link copied" }); }}>
+          <Button variant="outline" size="sm" onClick={() => {
+            navigator.clipboard.writeText(getQuotationUrl(quotation));
+            toast({ title: "Quotation link copied to clipboard" });
+          }}>
             <Share2 className="h-4 w-4 mr-1" />Copy Link
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => window.open(getQuotationUrl(quotation), "_blank")}>
+            <Eye className="h-4 w-4 mr-1" />Open Quotation
           </Button>
         </div>
       </div>

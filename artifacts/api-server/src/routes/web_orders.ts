@@ -534,7 +534,7 @@ router.patch("/web-orders/:id", async (req, res): Promise<void> => {
 
     const crmInvoice = existingInv;
     const invoiceUrl = crmInvoice?.id
-      ? `https://geem.pk/api/invoices/${crmInvoice.id}/print`
+      ? `${(process.env.PUBLIC_URL ?? "https://geem.pk").replace(/\/$/, "")}/api/invoices/${crmInvoice.id}/print`
       : null;
     const invoiceHtml = crmInvoice?.id
       ? await buildInvoicePrintHtml(crmInvoice.id).catch(() => null)
@@ -596,7 +596,7 @@ router.patch("/web-orders/:id", async (req, res): Promise<void> => {
   if (["processing", "delivered", "cancelled", "rejected"].includes(req.body.status)) {
     const [inv] = await db.select({ id: invoicesTable.id }).from(invoicesTable)
       .where(or(eq(invoicesTable.webOrderId, wo.id), eq(invoicesTable.invoiceNumber, wo.orderNumber)));
-    const statusInvoiceUrl = inv?.id ? `https://geem.pk/api/invoices/${inv.id}/print` : undefined;
+    const statusInvoiceUrl = inv?.id ? `${(process.env.PUBLIC_URL ?? "https://geem.pk").replace(/\/$/, "")}/api/invoices/${inv.id}/print` : undefined;
 
     if (wo.customerEmail) {
       sendOrderStatusUpdate({

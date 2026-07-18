@@ -854,7 +854,7 @@ router.get("/shop/auth/orders", async (req, res): Promise<void> => {
     // Look up CRM invoice: by webOrderId first (reliable), then by matching invoice number
     const [crmInv] = await db.select({ id: invoicesTable.id })
       .from(invoicesTable).where(or(eq(invoicesTable.webOrderId, wo.id), eq(invoicesTable.invoiceNumber, wo.orderNumber)));
-    const invoiceUrl = crmInv?.id ? `https://geem.pk/api/invoices/${crmInv.id}/print` : null;
+    const invoiceUrl = crmInv?.id ? `${(process.env.PUBLIC_URL ?? "https://geem.pk").replace(/\/$/, "")}/api/invoices/${crmInv.id}/print` : null;
     return {
       id: wo.id, orderNumber: wo.orderNumber, status: wo.status, paymentStatus: wo.paymentStatus,
       customerName: wo.customerName, customerEmail: wo.customerEmail ?? null, customerMobile: wo.customerMobile,
