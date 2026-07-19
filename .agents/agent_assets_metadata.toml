@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "T-dw3MGxu5knkKholID5h"
+uri = "file://test-icon-preview.png"
+type = "image"
+title = "Current icon-192.png (rendered from favicon.svg)"
