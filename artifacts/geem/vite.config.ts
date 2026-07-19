@@ -38,7 +38,7 @@ const pwaManifest =
       }
     : {
         name: "Geem.pk — GPS Trackers Pakistan",
-        short_name: "Geem Shop",
+        short_name: "Geem ERP",
         description: "Pakistan's most trusted GPS tracker store — vehicle trackers, OBD2, personal trackers & SIM cards",
         theme_color: "#dc2626",
         background_color: "#0a0a0a",

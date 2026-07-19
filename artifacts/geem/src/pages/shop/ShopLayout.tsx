@@ -420,7 +420,7 @@ export function ShopLayout({ children }: { children: React.ReactNode }) {
         </div>
       </footer>
 
-      <AppSetupPrompt appName="Geem Shop" appIcon="/icon-192.png" />
+      <AppSetupPrompt appName="Geem ERP" appIcon="/icon-192.png" />
       <WhatsAppChooser />
     </div>
   );
