@@ -1,5 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, sql, sum, count, and, ilike } from "drizzle-orm";
+import fs from "fs";
+import path from "path";
 import {
   db, shipmentsTable, serviceTicketsTable, vaultEntriesTable,
   usersTable, companySettingsTable, invoiceSettingsTable,
@@ -315,6 +317,26 @@ router.patch("/settings/company", async (req, res): Promise<void> => {
   } else {
     [settings] = await db.update(companySettingsTable).set(updates).where(eq(companySettingsTable.id, settings.id)).returning();
   }
+  // When gLogo changes, copy the uploaded file to all static icon positions so the
+  // PWA manifest icons and loading splash both reflect the new image immediately.
+  if (updates.gLogo && typeof updates.gLogo === "string") {
+    const match = (updates.gLogo as string).match(/\/objects\/uploads\/([^/]+)$/);
+    if (match) {
+      const uuid = match[1];
+      const uploadsDir = process.env.UPLOADS_DIR || path.join(process.cwd(), "uploads");
+      const srcFile = path.join(uploadsDir, "uploads", uuid);
+      const shopDir = process.env.SHOP_PUBLIC_DIR;
+      const erpDir  = process.env.ERP_PUBLIC_DIR;
+      const iconNames = ["icon-192.png", "icon-512.png", "icon-512-maskable.png", "apple-touch-icon.png"];
+      for (const dir of [shopDir, erpDir]) {
+        if (!dir) continue;
+        for (const icon of iconNames) {
+          try { fs.copyFileSync(srcFile, path.join(dir, icon)); } catch { /* non-fatal */ }
+        }
+      }
+    }
+  }
+
   res.json({ ...settings, logo: settings.logo ?? null, gLogo: settings.gLogo ?? null, favicon: settings.favicon ?? null, banner: settings.banner ?? null, address: settings.address ?? null, phone: settings.phone ?? null, fax: settings.fax ?? null, email: settings.email ?? null, website: settings.website ?? null, taxNumber: settings.taxNumber ?? null, whatsappNumber: settings.whatsappNumber ?? null });
 });
 

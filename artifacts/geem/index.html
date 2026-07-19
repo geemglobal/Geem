@@ -50,7 +50,7 @@
       "@type": "Organization",
       "name": "Geem.pk",
       "url": "https://geem.pk",
-      "logo": "https://geem.pk/geem-logo.png",
+      "logo": "https://geem.pk/icon-192.png",
       "description": "Pakistan's most trusted GPS tracker supplier — vehicle trackers, OBD2 trackers, personal trackers, kids GPS watches, IoT modules and SIM cards.",
       "contactPoint": {
         "@type": "ContactPoint",
@@ -113,8 +113,13 @@
   <body>
     <div id="root"><div id="app-splash" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#ffffff;z-index:9999;"><img id="app-splash-icon" src="/icon-192.png" alt="Geem" style="width:96px;height:96px;border-radius:22px;box-shadow:0 8px 32px rgba(0,0,0,0.12);" /><div style="margin-top:20px;width:56px;height:3px;background:#EC2029;border-radius:3px;animation:geem-load 1.2s ease-in-out infinite;"></div><style>@keyframes geem-load{0%,100%{opacity:.25;transform:scaleX(.5)}50%{opacity:1;transform:scaleX(1)}}</style></div></div>
     <script>
+      /* Preload G Logo from company settings and swap the splash icon before React mounts */
       (function(){try{fetch('/api/shop/seo-config').then(function(r){return r.json();}).then(function(d){
-        if(d.gLogo){var el=document.getElementById('app-splash-icon');if(el)el.src=d.gLogo;}
+        if(!d.gLogo)return;
+        /* Preload the image first so the swap is instant with no blank frame */
+        var img=new Image();
+        img.onload=function(){var el=document.getElementById('app-splash-icon');if(el)el.src=d.gLogo;};
+        img.src=d.gLogo;
       });}catch(e){}})();
     </script>
     <script type="module" src="/src/main.tsx"></script>
