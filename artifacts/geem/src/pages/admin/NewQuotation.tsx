@@ -193,11 +193,12 @@ function LineRow({ line, results, isActive, onActivate, onUpdate, onRemove, onSe
 
   return (
     <div ref={wrapRef} className="relative">
-      <div className="grid grid-cols-[16px_150px_1fr_76px_88px_88px_24px] gap-x-3 py-3 items-start">
-        <div className="pt-2"><GripVertical className="h-4 w-4 text-muted-foreground/30 cursor-grab" /></div>
-        <div>
+
+      {/* ══ MOBILE card (shown below sm breakpoint) ══ */}
+      <div className="sm:hidden border-b py-3 space-y-2.5">
+        <div className="flex items-start gap-2">
           <input
-            className="w-full px-3 py-1.5 text-sm border rounded focus:ring-1 focus:ring-blue-500 outline-none"
+            className="flex-1 px-3 py-1.5 text-sm border rounded focus:ring-1 focus:ring-blue-500 outline-none"
             placeholder="Type an item name"
             readOnly={!line.searchOpen}
             value={line.searchOpen ? line.searchQuery : line.description}
@@ -205,42 +206,118 @@ function LineRow({ line, results, isActive, onActivate, onUpdate, onRemove, onSe
             onChange={e => onUpdate({ searchQuery: e.target.value })}
             onKeyDown={onKeyDown}
           />
-          {!line.searchOpen && (line.deviceId || line.imei) && (
-            <div className="mt-0.5 pl-1 font-mono space-y-0.5">
-              {line.deviceId
-                ? <><p className="text-xs font-semibold text-foreground/80">Device ID: {line.deviceId}</p>{line.imei && <p className="text-xs text-muted-foreground">{imeiLabel(line.imei)}: {line.imei}</p>}</>
-                : line.imei && <p className="text-xs font-semibold text-foreground/80">{imeiLabel(line.imei)}: {line.imei}</p>}
-              {line.ptaStatus === "approved" && <p className="font-sans text-[10px] font-medium text-green-600">✓ PTA Approved</p>}
-            </div>
+          {canDelete && (
+            <button onClick={onRemove} className="mt-2 text-muted-foreground/50 hover:text-destructive transition-colors">
+              <Trash2 className="h-4 w-4" />
+            </button>
           )}
         </div>
-        <textarea className="w-full px-3 py-1.5 text-sm border rounded focus:ring-1 focus:ring-blue-500 outline-none resize-none" rows={3} placeholder="Description or details…" value={line.details} onChange={e => onUpdate({ details: e.target.value })} />
-        <input type="number" min={1} className="w-full px-2 py-1.5 text-sm border rounded text-right outline-none focus:ring-1 focus:ring-blue-500" value={line.qty} onChange={e => onUpdate({ qty: Math.max(1, parseInt(e.target.value) || 1) })} />
-        <input className="w-full px-2 py-1.5 text-sm border rounded text-right outline-none focus:ring-1 focus:ring-blue-500" placeholder="0.00" value={line.price} onChange={e => onUpdate({ price: e.target.value.replace(/[^\d.]/g, "") })} />
-        <div className="pt-2 text-right text-sm font-medium text-muted-foreground">
-          {amount > 0 ? `${symbol}${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+        {!line.searchOpen && (line.deviceId || line.imei) && (
+          <div className="pl-1 font-mono space-y-0.5">
+            {line.deviceId
+              ? <><p className="text-xs font-semibold text-foreground/80">Device ID: {line.deviceId}</p>{line.imei && <p className="text-xs text-muted-foreground">{imeiLabel(line.imei)}: {line.imei}</p>}</>
+              : line.imei && <p className="text-xs font-semibold text-foreground/80">{imeiLabel(line.imei)}: {line.imei}</p>}
+            {line.ptaStatus === "approved" && <p className="font-sans text-[10px] font-medium text-green-600">✓ PTA Approved</p>}
+          </div>
+        )}
+        <textarea
+          className="w-full px-3 py-1.5 text-sm border rounded focus:ring-1 focus:ring-blue-500 outline-none resize-none"
+          rows={2} placeholder="Description or details…"
+          value={line.details} onChange={e => onUpdate({ details: e.target.value })}
+        />
+        <div className="flex items-end gap-2">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[11px] text-muted-foreground">Qty</span>
+            <input type="number" min={1}
+              className="w-16 px-2 py-1.5 text-sm border rounded text-right outline-none focus:ring-1 focus:ring-blue-500"
+              value={line.qty} onChange={e => onUpdate({ qty: Math.max(1, parseInt(e.target.value) || 1) })}
+            />
+          </div>
+          <div className="flex flex-col gap-0.5 flex-1">
+            <span className="text-[11px] text-muted-foreground">Price ({symbol})</span>
+            <input
+              className="w-full px-2 py-1.5 text-sm border rounded text-right outline-none focus:ring-1 focus:ring-blue-500"
+              placeholder="0.00" value={line.price}
+              onChange={e => onUpdate({ price: e.target.value.replace(/[^\d.]/g, "") })}
+            />
+          </div>
+          <div className="flex flex-col gap-0.5 items-end min-w-[72px]">
+            <span className="text-[11px] text-muted-foreground">Amount</span>
+            <span className="py-1.5 text-sm font-semibold">
+              {amount > 0 ? `${symbol}${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+            </span>
+          </div>
         </div>
-        <div className="pt-2">{canDelete && <button onClick={onRemove} className="text-muted-foreground/50 hover:text-destructive transition-colors"><Trash2 className="h-4 w-4" /></button>}</div>
+        {line.description && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground flex-shrink-0">Tax</span>
+            <div className="flex-1">
+              <TaxDropdown taxRate={line.taxRate} taxLabel={line.taxLabel} onSelect={(r, l) => onUpdate({ taxRate: r, taxLabel: l })} />
+            </div>
+            <span className="text-sm text-muted-foreground font-medium whitespace-nowrap">
+              {line.taxRate > 0 && amount > 0
+                ? `${symbol}${(amount * line.taxRate / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                : "—"}
+            </span>
+            {line.taxRate > 0 && (
+              <button type="button" onClick={() => onUpdate({ taxRate: 0, taxLabel: "" })} className="text-muted-foreground/50 hover:text-destructive transition-colors">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Tax sub-row — only when an item has been added */}
-      {line.description && (
-        <div className="flex items-center justify-end gap-3 pb-1.5">
-          <span className="text-sm text-muted-foreground">Tax</span>
-          <div className="w-[150px]">
-            <TaxDropdown taxRate={line.taxRate} taxLabel={line.taxLabel} onSelect={(r, l) => onUpdate({ taxRate: r, taxLabel: l })} />
+      {/* ══ DESKTOP grid (hidden on mobile) ══ */}
+      <div className="hidden sm:block">
+        <div className="grid grid-cols-[16px_150px_1fr_76px_88px_88px_24px] gap-x-3 py-3 items-start">
+          <div className="pt-2"><GripVertical className="h-4 w-4 text-muted-foreground/30 cursor-grab" /></div>
+          <div>
+            <input
+              className="w-full px-3 py-1.5 text-sm border rounded focus:ring-1 focus:ring-blue-500 outline-none"
+              placeholder="Type an item name"
+              readOnly={!line.searchOpen}
+              value={line.searchOpen ? line.searchQuery : line.description}
+              onFocus={() => { onActivate(); onUpdate({ searchOpen: true, searchQuery: line.description }); }}
+              onChange={e => onUpdate({ searchQuery: e.target.value })}
+              onKeyDown={onKeyDown}
+            />
+            {!line.searchOpen && (line.deviceId || line.imei) && (
+              <div className="mt-0.5 pl-1 font-mono space-y-0.5">
+                {line.deviceId
+                  ? <><p className="text-xs font-semibold text-foreground/80">Device ID: {line.deviceId}</p>{line.imei && <p className="text-xs text-muted-foreground">{imeiLabel(line.imei)}: {line.imei}</p>}</>
+                  : line.imei && <p className="text-xs font-semibold text-foreground/80">{imeiLabel(line.imei)}: {line.imei}</p>}
+                {line.ptaStatus === "approved" && <p className="font-sans text-[10px] font-medium text-green-600">✓ PTA Approved</p>}
+              </div>
+            )}
           </div>
-          <div className="w-[88px] text-right text-sm text-muted-foreground font-medium">
-            {line.taxRate > 0 && amount > 0 ? `${symbol}${(amount * line.taxRate / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+          <textarea className="w-full px-3 py-1.5 text-sm border rounded focus:ring-1 focus:ring-blue-500 outline-none resize-none" rows={3} placeholder="Description or details…" value={line.details} onChange={e => onUpdate({ details: e.target.value })} />
+          <input type="number" min={1} className="w-full px-2 py-1.5 text-sm border rounded text-right outline-none focus:ring-1 focus:ring-blue-500" value={line.qty} onChange={e => onUpdate({ qty: Math.max(1, parseInt(e.target.value) || 1) })} />
+          <input className="w-full px-2 py-1.5 text-sm border rounded text-right outline-none focus:ring-1 focus:ring-blue-500" placeholder="0.00" value={line.price} onChange={e => onUpdate({ price: e.target.value.replace(/[^\d.]/g, "") })} />
+          <div className="pt-2 text-right text-sm font-medium text-muted-foreground">
+            {amount > 0 ? `${symbol}${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
           </div>
-          <div className="w-[24px] flex items-center justify-center">
-            {line.taxRate > 0 && <button type="button" onClick={() => onUpdate({ taxRate: 0, taxLabel: "" })} className="text-muted-foreground/50 hover:text-destructive transition-colors"><Trash2 className="h-4 w-4" /></button>}
-          </div>
+          <div className="pt-2">{canDelete && <button onClick={onRemove} className="text-muted-foreground/50 hover:text-destructive transition-colors"><Trash2 className="h-4 w-4" /></button>}</div>
         </div>
-      )}
+        {line.description && (
+          <div className="flex items-center justify-end gap-3 pb-1.5">
+            <span className="text-sm text-muted-foreground">Tax</span>
+            <div className="w-[150px]">
+              <TaxDropdown taxRate={line.taxRate} taxLabel={line.taxLabel} onSelect={(r, l) => onUpdate({ taxRate: r, taxLabel: l })} />
+            </div>
+            <div className="w-[88px] text-right text-sm text-muted-foreground font-medium">
+              {line.taxRate > 0 && amount > 0 ? `${symbol}${(amount * line.taxRate / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+            </div>
+            <div className="w-[24px] flex items-center justify-center">
+              {line.taxRate > 0 && <button type="button" onClick={() => onUpdate({ taxRate: 0, taxLabel: "" })} className="text-muted-foreground/50 hover:text-destructive transition-colors"><Trash2 className="h-4 w-4" /></button>}
+            </div>
+          </div>
+        )}
+      </div>
 
+      {/* ── Search dropdown (shared across both layouts) ── */}
       {line.searchOpen && isActive && (
-        <div className="absolute left-5 right-6 z-50 bg-white border rounded-lg shadow-xl overflow-hidden" style={{ top: "calc(100% - 4px)" }}>
+        <div className="absolute left-0 right-0 sm:left-5 sm:right-6 z-50 bg-white border rounded-lg shadow-xl overflow-hidden" style={{ top: "calc(100% - 4px)" }}>
           {!line.isCreatingItem ? (
             <>
               <div className="p-2 border-b bg-gray-50/70">
@@ -468,7 +545,7 @@ export default function NewQuotation() {
   if (editMode && editLoading) return <div className="flex items-center justify-center py-24 text-muted-foreground">Loading quotation…</div>;
 
   return (
-    <div className="max-w-3xl mx-auto pb-12">
+    <div className="max-w-3xl mx-auto pb-12 px-2 sm:px-0">
       <div className="flex items-center gap-2 mb-5">
         <Button variant="ghost" size="sm" className="gap-1" onClick={() => navigate(editMode ? `/quotations/${editId}` : "/quotations")}>
           <ChevronLeft className="h-4 w-4" />{editMode ? "Quotation" : "Quotations"}
@@ -479,9 +556,9 @@ export default function NewQuotation() {
 
       <div className="border rounded-xl bg-white shadow-sm overflow-visible">
         {/* ── Top: Customer + Quotation meta ── */}
-        <div className="grid grid-cols-5 gap-6 p-6 border-b">
+        <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-5 sm:gap-6 sm:p-6 border-b">
           {/* Customer */}
-          <div className="col-span-2" ref={custPanelRef}>
+          <div className="sm:col-span-2" ref={custPanelRef}>
             {customer ? (
               <div className="border rounded-lg p-4 min-h-[140px]">
                 <p className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wide mb-1.5">Bill to</p>
@@ -564,7 +641,7 @@ export default function NewQuotation() {
           </div>
 
           {/* Quotation fields */}
-          <div className="col-span-3 space-y-3">
+          <div className="sm:col-span-3 space-y-3">
             {[
               { label: "Quotation number", el: <input className="w-full px-3 py-1.5 text-sm border rounded outline-none focus:ring-1 focus:ring-blue-500" placeholder="Auto" value={quotationNum} onChange={e => setQuotationNum(e.target.value)} /> },
               { label: "Quotation date", el: <input type="date" className="w-full px-3 py-1.5 text-sm border rounded outline-none focus:ring-1 focus:ring-blue-500" value={qtDate} onChange={e => setQtDate(e.target.value)} /> },
@@ -577,7 +654,7 @@ export default function NewQuotation() {
                 )
               },
             ].map(({ label, el }) => (
-              <div key={label} className="grid grid-cols-[120px_1fr] items-start gap-3">
+              <div key={label} className="grid grid-cols-[100px_1fr] sm:grid-cols-[120px_1fr] items-start gap-2 sm:gap-3">
                 <label className="text-sm text-right text-muted-foreground pt-1.5">{label}</label>
                 {el}
               </div>
@@ -586,13 +663,13 @@ export default function NewQuotation() {
         </div>
 
         {/* ── Items section ── */}
-        <div className="px-6 pt-5 pb-2 border-b">
+        <div className="px-3 sm:px-6 pt-4 sm:pt-5 pb-2 border-b">
           <div className="mb-4">
             <button className="flex items-center gap-1.5 text-sm text-blue-600 border border-blue-200 rounded-md px-3 py-1 hover:bg-blue-50 transition-colors">
               <Pencil className="h-3.5 w-3.5" />Edit columns
             </button>
           </div>
-          <div className="grid grid-cols-[16px_150px_1fr_76px_88px_88px_24px] gap-x-3 pb-2 border-b">
+          <div className="hidden sm:grid sm:grid-cols-[16px_150px_1fr_76px_88px_88px_24px] gap-x-3 pb-2 border-b">
             <div /><div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Items</div>
             <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Description</div>
             <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide text-right">Quantity</div>
@@ -615,14 +692,14 @@ export default function NewQuotation() {
         </div>
 
         {/* ── Totals ── */}
-        <div className="px-6 py-5 border-b">
+        <div className="px-3 sm:px-6 py-4 sm:py-5 border-b">
           <div className="flex items-start">
-            <div className="flex-1 flex items-center justify-center pt-6">
+            <div className="hidden sm:flex flex-1 items-center justify-center pt-6">
               <div className="w-7 h-7 rounded-full border-4 border-green-400 flex items-center justify-center">
                 <div className="w-3 h-3 rounded-full bg-green-400" />
               </div>
             </div>
-            <div className="w-72 space-y-2 text-sm">
+            <div className="w-full sm:w-72 space-y-2 text-sm">
               <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{selectedCurrency.symbol}{fmt(subtotal)}</span></div>
               {!discountOpen ? (
                 <button className="flex items-center gap-1.5 text-blue-600 text-xs hover:text-blue-700 transition-colors" onClick={() => setDiscountOpen(true)}>
@@ -666,7 +743,7 @@ export default function NewQuotation() {
         </div>
 
         {/* ── Notes ── */}
-        <div className="px-6 py-5">
+        <div className="px-3 sm:px-6 py-4 sm:py-5">
           <p className="text-xs font-semibold text-muted-foreground mb-1.5">Notes / Terms</p>
           <textarea className="w-full text-sm text-blue-600/70 placeholder:text-blue-400/50 border-0 outline-none resize-none bg-transparent" rows={3}
             placeholder="Enter notes or terms that are visible to your customer"
@@ -676,9 +753,9 @@ export default function NewQuotation() {
       </div>
 
       {/* ── Action buttons ── */}
-      <div className="flex justify-end gap-3 pt-4">
-        <Button variant="outline" onClick={() => navigate(editMode ? `/quotations/${editId}` : "/quotations")}>Cancel</Button>
-        <Button onClick={handleSave} disabled={isBusy}>
+      <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-4">
+        <Button variant="outline" className="w-full sm:w-auto" onClick={() => navigate(editMode ? `/quotations/${editId}` : "/quotations")}>Cancel</Button>
+        <Button className="w-full sm:w-auto" onClick={handleSave} disabled={isBusy}>
           {isBusy ? (editMode ? "Updating…" : "Saving…") : (editMode ? "Update Quotation" : "Save Quotation")}
         </Button>
       </div>

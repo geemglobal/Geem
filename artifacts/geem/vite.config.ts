@@ -80,7 +80,7 @@ const pwaWorkbox =
               url.pathname.startsWith("/api/search"),
             handler: "StaleWhileRevalidate" as const,
             options: {
-              cacheName: "geem-admin-api-v2",
+              cacheName: "geem-admin-api-v3",
               expiration: { maxEntries: 2000, maxAgeSeconds: 60 * 60 * 24 * 14 },
               cacheableResponse: { statuses: [0, 200] },
             },
@@ -89,7 +89,7 @@ const pwaWorkbox =
             urlPattern: ({ url }: { url: URL }) => url.pathname.startsWith("/api/dashboard"),
             handler: "StaleWhileRevalidate" as const,
             options: {
-              cacheName: "geem-dashboard-v2",
+              cacheName: "geem-dashboard-v3",
               expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 },
               cacheableResponse: { statuses: [0, 200] },
             },
@@ -98,7 +98,7 @@ const pwaWorkbox =
             urlPattern: ({ url }: { url: URL }) => url.pathname.startsWith("/api/storage/objects"),
             handler: "CacheFirst" as const,
             options: {
-              cacheName: "geem-images-v2",
+              cacheName: "geem-images-v3",
               expiration: { maxEntries: 500, maxAgeSeconds: 60 * 60 * 24 * 60 },
               cacheableResponse: { statuses: [0, 200] },
             },
@@ -118,7 +118,7 @@ const pwaWorkbox =
               url.pathname.startsWith("/api/categories"),
             handler: "StaleWhileRevalidate" as const,
             options: {
-              cacheName: "geem-shop-api-v1",
+              cacheName: "geem-shop-api-v2",
               expiration: { maxEntries: 500, maxAgeSeconds: 60 * 60 * 24 * 7 },
               cacheableResponse: { statuses: [0, 200] },
             },
@@ -127,7 +127,7 @@ const pwaWorkbox =
             urlPattern: ({ url }: { url: URL }) => url.pathname.startsWith("/api/storage/objects"),
             handler: "CacheFirst" as const,
             options: {
-              cacheName: "geem-shop-images-v1",
+              cacheName: "geem-shop-images-v2",
               expiration: { maxEntries: 500, maxAgeSeconds: 60 * 60 * 24 * 60 },
               cacheableResponse: { statuses: [0, 200] },
             },
