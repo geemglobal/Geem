@@ -146,16 +146,18 @@ function SidebarContent({
               className="h-11 w-11 rounded-xl object-contain flex-shrink-0"
             />
             <div>
-              <p className="font-bold text-base leading-none">Geem CRM</p>
+              <p className="font-bold text-base leading-none">Geem ERP</p>
               <p className="text-xs text-sidebar-foreground/60 mt-1">Management System</p>
             </div>
           </div>
         ) : (
-          <img
-            src="/geem-logo-banner.svg"
-            alt="Geem"
-            className="h-11 w-auto object-contain"
-          />
+          <div className="flex items-center gap-3">
+            <img src="/icon-192.png" alt="Geem ERP" className="h-10 w-10 rounded-xl object-contain flex-shrink-0" />
+            <div>
+              <p className="font-bold text-base leading-none">Geem ERP</p>
+              <p className="text-xs text-sidebar-foreground/60 mt-1">Management System</p>
+            </div>
+          </div>
         )}
       </div>
 

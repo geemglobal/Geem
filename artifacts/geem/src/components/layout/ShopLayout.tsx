@@ -4,7 +4,10 @@ export function ShopLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       <header className="h-16 border-b border-border bg-card flex items-center px-8 justify-between sticky top-0 z-50">
-        <Link href="/shop" className="text-2xl font-bold tracking-tight text-primary">Geem ERP</Link>
+        <Link href="/shop" className="flex items-center gap-2">
+          <img src="/geem-logo-g.svg" alt="Geem" className="h-8 w-auto" />
+          <span className="text-xl font-bold tracking-tight text-primary">Geem Shop</span>
+        </Link>
         <nav className="flex gap-6 items-center">
           <Link href="/shop" className="text-sm font-medium hover:text-primary">Home</Link>
           <Link href="/shop/track" className="text-sm font-medium hover:text-primary">Track Order</Link>

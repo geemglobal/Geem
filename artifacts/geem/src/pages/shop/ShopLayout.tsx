@@ -115,7 +115,7 @@ export function ShopLayout({ children }: { children: React.ReactNode }) {
         <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center justify-between gap-4">
           {/* Logo (small, sticky only) */}
           <Link href="/shop">
-            <img src={branding.logo ?? "/geem-logo-banner.svg"} alt={branding.companyName} className="h-8 w-auto cursor-pointer" />
+            <img src={branding.logo ?? "/geem-logo-g.svg"} alt={branding.companyName} className="h-8 w-auto cursor-pointer" />
           </Link>
 
           {/* Desktop Nav */}
@@ -420,7 +420,7 @@ export function ShopLayout({ children }: { children: React.ReactNode }) {
         </div>
       </footer>
 
-      <AppSetupPrompt appName="Geem ERP" appIcon="/icon-192.png" />
+      <AppSetupPrompt appName="Geem Shop" appIcon="/icon-192.png" />
       <WhatsAppChooser />
     </div>
   );
