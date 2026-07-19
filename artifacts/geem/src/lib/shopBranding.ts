@@ -1,5 +1,5 @@
 /**
- * Shared shop branding hook — fetches company branding (logo, banner, favicon)
+ * Shared shop branding hook — fetches company branding (logo, gLogo, banner, favicon)
  * from the public seo-config endpoint with module-level caching so all pages
  * share a single network request.
  */
@@ -7,15 +7,19 @@ import { useState, useEffect } from "react";
 
 export interface ShopBranding {
   companyName: string;
+  /** Full company logo (wordmark / banner logo) — used in headers, footer, auth pages */
   logo: string | null;
+  /** G icon — used for app icons, loading splash, PWA install prompts */
+  gLogo: string | null;
+  /** Browser-tab favicon */
   favicon: string | null;
+  /** Hero / cover banner image */
   banner: string | null;
 }
 
-const DEFAULT: ShopBranding = { companyName: "Geem", logo: null, favicon: null, banner: null };
+const DEFAULT: ShopBranding = { companyName: "Geem", logo: null, gLogo: null, favicon: null, banner: null };
 
 let _cache: ShopBranding | null = null;
-// Listeners waiting for the first load
 const _listeners: Array<(b: ShopBranding) => void> = [];
 let _loading = false;
 
@@ -28,6 +32,7 @@ function ensureLoaded(): void {
       _cache = {
         companyName: (d.companyName as string) ?? "Geem",
         logo: (d.logo as string | null) ?? null,
+        gLogo: (d.gLogo as string | null) ?? null,
         favicon: (d.favicon as string | null) ?? null,
         banner: (d.banner as string | null) ?? null,
       };

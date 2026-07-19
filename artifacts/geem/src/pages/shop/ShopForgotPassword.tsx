@@ -90,7 +90,7 @@ export default function ShopForgotPassword() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Link href="/shop">
-            <img src={branding.logo ?? "/geem-logo-banner.svg"} alt={branding.companyName} className="h-10 w-auto mx-auto cursor-pointer" />
+            <img src={branding.logo ?? "/icon-192.png"} alt={branding.companyName} className="h-10 w-auto mx-auto cursor-pointer" />
           </Link>
           <h1 className="mt-4 text-2xl font-bold text-slate-900">
             {step === "done" ? "Password Updated!" : "Reset Your Password"}

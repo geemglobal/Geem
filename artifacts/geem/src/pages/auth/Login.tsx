@@ -200,7 +200,7 @@ export default function Login() {
       <div className="max-w-md w-full bg-card p-8 rounded-xl shadow-xl border border-border">
         <div className="text-center mb-7">
           <div className="flex justify-center mb-4">
-            <img src={branding.logo ?? "/geem-logo-banner.svg"} alt="Geem" className="h-14 w-auto object-contain" />
+            <img src={branding.logo ?? "/icon-192.png"} alt="Geem" className="h-14 w-auto object-contain" />
           </div>
           <p className="text-muted-foreground text-sm">
             {screen === "login" ? "Sign in to your account" :

@@ -18,7 +18,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useUpload } from "@workspace/object-storage-web";
 import { applyPrimaryColor, applyBorderRadius } from "@/lib/theme";
 
-interface CompanySettings { companyName: string; logo: string | null; favicon: string | null; banner: string | null; address: string | null; phone: string | null; email: string | null; currency: string; taxNumber: string | null; whatsappNumber: string | null; primaryColor: string; borderRadius: string; }
+interface CompanySettings { companyName: string; logo: string | null; gLogo: string | null; favicon: string | null; banner: string | null; address: string | null; phone: string | null; email: string | null; currency: string; taxNumber: string | null; whatsappNumber: string | null; primaryColor: string; borderRadius: string; }
 
 const PRESET_COLORS = [
   { name: "Ocean Blue",    hex: "#2563eb" },
@@ -268,8 +268,8 @@ export default function Settings() {
   useEffect(() => {
     if (company) {
       setCompanyForm(company);
-      // Auto-lock to read-only when real data is saved (logo, favicon, or phone present)
-      if (company.logo || company.favicon || company.phone || company.email) {
+      // Auto-lock to read-only when real data is saved
+      if (company.logo || company.gLogo || company.favicon || company.phone || company.email) {
         setEditingCompany(false);
       }
     }
@@ -418,7 +418,7 @@ export default function Settings() {
       {tab === "company" && (
         <>
           {/* ── Read-only summary — shown when company is saved and not editing ── */}
-          {!editingCompany && company && (company.logo || company.favicon || company.phone || company.email) && (
+          {!editingCompany && company && (company.logo || company.gLogo || company.favicon || company.phone || company.email) && (
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -434,11 +434,29 @@ export default function Settings() {
                   <span>Company settings saved — click <strong>Edit Settings</strong> to make changes.</span>
                 </div>
 
-                {/* Logo + Favicon previews */}
+                {/* Banner preview */}
+                {company.banner && (
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Banner / Cover Image</p>
+                    <div className="w-full aspect-[3/1] border rounded-lg bg-muted overflow-hidden">
+                      <img src={company.banner} alt="Banner" className="object-cover w-full h-full" />
+                    </div>
+                  </div>
+                )}
+
+                {/* Logo + G Logo + Favicon previews */}
                 <div className="flex gap-4 items-start flex-wrap">
+                  {company.gLogo && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">G Logo (App Icon)</p>
+                      <div className="w-16 h-16 border rounded-lg bg-muted flex items-center justify-center overflow-hidden">
+                        <img src={company.gLogo} alt="G Logo" className="object-contain w-full h-full p-1" />
+                      </div>
+                    </div>
+                  )}
                   {company.logo && (
                     <div className="space-y-1">
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Logo</p>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Company Logo</p>
                       <div className="w-36 h-16 border rounded-lg bg-muted flex items-center justify-center overflow-hidden">
                         <img src={company.logo} alt="Logo" className="object-contain w-full h-full p-2" />
                       </div>
@@ -453,16 +471,6 @@ export default function Settings() {
                     </div>
                   )}
                 </div>
-
-                {/* Banner preview */}
-                {company.banner && (
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Banner / Cover Image</p>
-                    <div className="w-full aspect-[3/1] border rounded-lg bg-muted overflow-hidden">
-                      <img src={company.banner} alt="Banner" className="object-cover w-full h-full" />
-                    </div>
-                  </div>
-                )}
 
                 {/* Company detail rows */}
                 <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
@@ -486,7 +494,7 @@ export default function Settings() {
           )}
 
           {/* ── Edit form — shown when editing or no saved data yet ── */}
-          {(editingCompany || !company || (!company.logo && !company.favicon && !company.phone && !company.email)) && (
+          {(editingCompany || !company || (!company.logo && !company.gLogo && !company.favicon && !company.phone && !company.email)) && (
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -500,27 +508,35 @@ export default function Settings() {
                 <Field label="Company Name"><Input value={companyForm.companyName ?? ""} onChange={e => setCompanyForm(f => ({ ...f, companyName: e.target.value }))} /></Field>
 
                 <ImageUploadField
+                  label="Banner / Cover Image"
+                  hint="Wide banner shown on the shop homepage hero section. Recommended: 1200×400 px. JPG, PNG or SVG."
+                  value={companyForm.banner ?? null}
+                  onChange={url => setCompanyForm(f => ({ ...f, banner: url || null }))}
+                  previewClass="!object-cover"
+                  aspectClass="aspect-[3/1]"
+                />
+
+                <ImageUploadField
+                  label="G Logo (App Icon)"
+                  hint="Square G icon — used for loading screen, PWA home-screen shortcut, and install prompts. SVG or square PNG recommended."
+                  value={companyForm.gLogo ?? null}
+                  onChange={url => setCompanyForm(f => ({ ...f, gLogo: url || null }))}
+                  previewClass="!object-contain p-2"
+                />
+
+                <ImageUploadField
                   label="Company Logo"
-                  hint="Used in the shop header, footer, and all auth pages. PNG or SVG recommended."
+                  hint="Full Geem wordmark — shown in shop header, footer, admin sidebar, and all auth pages. SVG or PNG recommended."
                   value={companyForm.logo ?? null}
                   onChange={url => setCompanyForm(f => ({ ...f, logo: url || null }))}
                 />
 
                 <ImageUploadField
                   label="Favicon"
-                  hint="Browser tab icon. Use a square image (32×32 or 64×64 px) in PNG or ICO format."
+                  hint="Browser tab icon. Square image (32×32 or 64×64 px). SVG, PNG or ICO format."
                   value={companyForm.favicon ?? null}
                   onChange={url => setCompanyForm(f => ({ ...f, favicon: url || null }))}
                   previewClass="!object-contain p-1"
-                />
-
-                <ImageUploadField
-                  label="Banner / Cover Image"
-                  hint="Wide banner shown on the shop homepage hero section. Recommended: 1200×400 px JPG or PNG."
-                  value={companyForm.banner ?? null}
-                  onChange={url => setCompanyForm(f => ({ ...f, banner: url || null }))}
-                  previewClass="!object-cover"
-                  aspectClass="aspect-[3/1]"
                 />
 
                 <Field label="Phone"><Input value={companyForm.phone ?? ""} onChange={e => setCompanyForm(f => ({ ...f, phone: e.target.value }))} placeholder="+92 21 1234567" /></Field>

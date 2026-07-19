@@ -6,6 +6,7 @@ export const companySettingsTable = pgTable("company_settings", {
   id: serial("id").primaryKey(),
   companyName: text("company_name").notNull().default("Geem"),
   logo: text("logo"),
+  gLogo: text("g_logo"),
   favicon: text("favicon"),
   banner: text("banner"),
   address: text("address"),

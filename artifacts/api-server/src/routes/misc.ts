@@ -301,13 +301,13 @@ router.get("/settings/company", async (req, res): Promise<void> => {
   if (!settings) {
     [settings] = await db.insert(companySettingsTable).values({ companyName: "Geem", currency: "PKR", timezone: "Asia/Karachi", address: "Office #1, Yellow Building, Behind TCS Office\nKutchery Rd, Ahmadpur East\nDistt Bahawalpur, Pakistan 63350", phone: "0307-8680005", email: "info@geem.pk", whatsappNumber: "0307-8680005", taxNumber: "6943433" }).returning();
   }
-  res.json({ ...settings, logo: settings.logo ?? null, favicon: settings.favicon ?? null, banner: settings.banner ?? null, address: settings.address ?? null, phone: settings.phone ?? null, email: settings.email ?? null, taxNumber: settings.taxNumber ?? null, whatsappNumber: settings.whatsappNumber ?? null });
+  res.json({ ...settings, logo: settings.logo ?? null, gLogo: settings.gLogo ?? null, favicon: settings.favicon ?? null, banner: settings.banner ?? null, address: settings.address ?? null, phone: settings.phone ?? null, email: settings.email ?? null, taxNumber: settings.taxNumber ?? null, whatsappNumber: settings.whatsappNumber ?? null });
 });
 
 router.patch("/settings/company", async (req, res): Promise<void> => {
   let [settings] = await db.select().from(companySettingsTable);
   const updates: Record<string, unknown> = {};
-  const fields = ["companyName", "logo", "favicon", "banner", "address", "phone", "fax", "email", "website", "currency", "taxNumber", "whatsappNumber", "primaryColor", "borderRadius"];
+  const fields = ["companyName", "logo", "gLogo", "favicon", "banner", "address", "phone", "fax", "email", "website", "currency", "taxNumber", "whatsappNumber", "primaryColor", "borderRadius"];
   for (const f of fields) if (req.body[f] !== undefined) updates[f] = req.body[f];
   updates.updatedAt = new Date();
   if (!settings) {
@@ -315,7 +315,7 @@ router.patch("/settings/company", async (req, res): Promise<void> => {
   } else {
     [settings] = await db.update(companySettingsTable).set(updates).where(eq(companySettingsTable.id, settings.id)).returning();
   }
-  res.json({ ...settings, logo: settings.logo ?? null, favicon: settings.favicon ?? null, banner: settings.banner ?? null, address: settings.address ?? null, phone: settings.phone ?? null, fax: settings.fax ?? null, email: settings.email ?? null, website: settings.website ?? null, taxNumber: settings.taxNumber ?? null, whatsappNumber: settings.whatsappNumber ?? null });
+  res.json({ ...settings, logo: settings.logo ?? null, gLogo: settings.gLogo ?? null, favicon: settings.favicon ?? null, banner: settings.banner ?? null, address: settings.address ?? null, phone: settings.phone ?? null, fax: settings.fax ?? null, email: settings.email ?? null, website: settings.website ?? null, taxNumber: settings.taxNumber ?? null, whatsappNumber: settings.whatsappNumber ?? null });
 });
 
 router.get("/settings/invoice", async (req, res): Promise<void> => {

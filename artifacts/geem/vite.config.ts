@@ -179,7 +179,7 @@ export default defineConfig({
     htmlPatchPlugin,
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.svg", "geem-logo.png", "geem-logo.svg", "icon-192.png", "icon-512.png", "icon-512-maskable.png", "apple-touch-icon.png"],
+      includeAssets: ["favicon.svg", "icon-192.png", "icon-512.png", "icon-512-maskable.png", "apple-touch-icon.png"],
       manifest: pwaManifest,
       workbox: {
         ...pwaWorkbox,

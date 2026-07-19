@@ -335,7 +335,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     toggleGroup,
     user,
     handleLogout,
-    logo: branding.favicon ?? company?.logo ?? null,
+    logo: company?.logo ?? null,
   };
 
   return (
@@ -488,7 +488,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
         </main>
       </div>
 
-      <AppSetupPrompt appName="Geem ERP" appIcon={branding.favicon ?? "/icon-192.png"} />
+      <AppSetupPrompt appName="Geem ERP" appIcon={branding.gLogo ?? "/icon-192.png"} />
     </div>
   );
 }
