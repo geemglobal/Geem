@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { axiosInstance } from "@/lib/axios";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useShopBranding } from "@/lib/shopBranding";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
@@ -244,6 +245,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     queryFn: () => axiosInstance.get("/settings/company").then(r => r.data),
     staleTime: 5 * 60 * 1000,
   });
+  const branding = useShopBranding();
   const qc = useQueryClient();
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -333,7 +335,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     toggleGroup,
     user,
     handleLogout,
-    logo: company?.logo ?? null,
+    logo: branding.favicon ?? company?.logo ?? null,
   };
 
   return (
@@ -486,7 +488,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
         </main>
       </div>
 
-      <AppSetupPrompt appName="Geem ERP" appIcon="/icon-192.png" />
+      <AppSetupPrompt appName="Geem ERP" appIcon={branding.favicon ?? "/icon-192.png"} />
     </div>
   );
 }
