@@ -15,25 +15,66 @@ import { db, brandsTable, categoriesTable, productsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
 // ─── Image paths (stored as static assets in artifacts/geem/public/) ────────
+// NOTE: prefer per-model subfolders (img_1…img_5) over flat single images.
+// The flat files below are only for models that have no subfolder yet.
 const IMG = {
+  // Geem branded
   orange_sim:  "/products/gps/orange_sim.jpg",
   orange_sim2: "/products/gps/orange_sim2.jpg",
-  cj780:       "/products/gps/cj780.jpg",
-  cj780_2:     "/products/gps/cj780_2.jpg",
-  cj750:       "/products/gps/cj750.jpg",
-  cj750_2:     "/products/gps/cj750_2.jpg",
-  cj790d:      "/products/gps/cj790d.jpg",
+  // Yuntrack — use subfolder images (5 images each)
+  cj220_1:     "/products/gps/cj220/img_1.jpg",
+  cj220_2:     "/products/gps/cj220/img_2.jpg",
+  cj750_1:     "/products/gps/cj750/img_1.jpg",
+  cj750_2:     "/products/gps/cj750/img_2.jpg",
+  cj750_3:     "/products/gps/cj750/img_3.jpg",
+  cj750_4:     "/products/gps/cj750/img_4.jpg",
+  cj750_5:     "/products/gps/cj750/img_5.jpg",
+  cj780_1:     "/products/gps/cj780/img_1.jpg",
+  cj780_2:     "/products/gps/cj780/img_2.jpg",
+  cj780_3:     "/products/gps/cj780/img_3.jpg",
+  cj780_4:     "/products/gps/cj780/img_4.png",
+  cj780_5:     "/products/gps/cj780/img_5.png",
+  cj790d_1:    "/products/gps/cj790d/img_1.jpg",
+  cj790d_2:    "/products/gps/cj790d/img_2.jpg",
+  cj790d_3:    "/products/gps/cj790d/img_3.jpg",
+  cj790d_4:    "/products/gps/cj790d/img_4.jpg",
+  cj790d_5:    "/products/gps/cj790d/img_5.jpeg",
+  lk208_1:     "/products/gps/lk208/img_1.jpg",
+  lk208_2:     "/products/gps/lk208/img_2.jpg",
+  lk208_3:     "/products/gps/lk208/img_3.jpg",
+  lk208_4:     "/products/gps/lk208/img_4.jpg",
+  lk208_5:     "/products/gps/lk208/img_5.jpg",
+  // Micodus — use subfolder images
+  g20_1:       "/products/gps/g20/img_1.jpg",
+  g20_2:       "/products/gps/g20/img_2.jpg",
+  g20_3:       "/products/gps/g20/img_3.jpg",
+  g20m_1:      "/products/gps/g20m/img_1.jpg",
+  g20m_2:      "/products/gps/g20m/img_2.jpg",
+  g20m_3:      "/products/gps/g20m/img_3.jpg",
+  g20m_4:      "/products/gps/g20m/img_4.png",
+  gt06_1:      "/products/gps/gt06/img_1.jpg",
+  gt06_2:      "/products/gps/gt06/img_2.jpg",
+  gt06_3:      "/products/gps/gt06/img_3.jpg",
+  gt06_4:      "/products/gps/gt06/img_4.jpg",
+  gt06_5:      "/products/gps/gt06/img_5.jpg",
+  // GF21 — use subfolder images
+  gf21_1:      "/products/gps/gf21/img_1.jpg",
+  gf21_2:      "/products/gps/gf21/img_2.jpg",
+  gf21_3:      "/products/gps/gf21/img_3.jpg",
+  gf21_4:      "/products/gps/gf21/img_4.jpg",
+  gf21_5:      "/products/gps/gf21/img_5.jpg",
+  // Flat files for models without subfolders
   td02s:       "/products/gps/td02s.jpg",
   s20:         "/products/gps/s20.jpg",
+  s20_2:       "/products/gps/s20_2.jpg",
+  s20_3:       "/products/gps/s20_3.jpg",
+  s20_4:       "/products/gps/s20_4.jpg",
   gm06nw:      "/products/gps/gm06nw.jpg",
   gm06nw_2:    "/products/gps/gm06nw_2.jpg",
-  g20:         "/products/gps/g20.jpg",
-  g20_mini:    "/products/gps/g20_mini.jpg",
-  gt06:        "/products/gps/gt06.jpg",
   gs900:       "/products/gps/gs900.png",
-  lk208:       "/products/gps/lk208.jpg",
   st900:       "/products/gps/st900.jpg",
-  gf21:        "/products/gps/gf21.jpg",
+  st900_2:     "/products/gps/st900_2.jpg",
+  st915_1:     "/products/gps/st915/img_1.jpg",
 };
 
 async function upsertBrand(name: string, description: string) {
@@ -234,8 +275,8 @@ Ideal For:
 Fleet owners, private car tracking, company vehicles, delivery vans, school transport, courier services.
 
 In the Box: CJ780 GPS tracker, Power harness, Engine cut-off relay, SIM slot cover, Mounting screws, Manual`,
-      featuredImage: IMG.cj780,
-      galleryImages: JSON.stringify([IMG.cj780, IMG.cj780_2]),
+      featuredImage: IMG.cj780_1,
+      galleryImages: JSON.stringify([IMG.cj780_1, IMG.cj780_2, IMG.cj780_3, IMG.cj780_4, IMG.cj780_5]),
       published: true,
       featured: true,
       metaTitle: "Yuntrack CJ780 4G GPS Tracker Pakistan — Geem.pk",
@@ -344,7 +385,7 @@ Best For: Motorcycles, rickshaws, 3-wheelers, small delivery vehicles, e-bikes.
 
 In the Box: S20 tracker, Wiring harness, Relay (engine cut-off), User manual`,
       featuredImage: IMG.s20,
-      galleryImages: JSON.stringify([IMG.s20]),
+      galleryImages: JSON.stringify([IMG.s20, IMG.s20_2, IMG.s20_3, IMG.s20_4]),
       published: true,
       featured: false,
       metaTitle: "Wanway S20 4G Motorcycle GPS Tracker Pakistan — Geem.pk",
@@ -402,8 +443,8 @@ OBD Port Location in Common Pakistan Vehicles:
 Usually found under the steering column, near the driver's knees — Toyota Corolla, Honda Civic, Suzuki Swift, Fortuner, Prado all have it in this location.
 
 In the Box: CJ750 OBD tracker, SIM tray pin, User manual`,
-      featuredImage: IMG.cj750,
-      galleryImages: JSON.stringify([IMG.cj750, IMG.cj750_2]),
+      featuredImage: IMG.cj750_1,
+      galleryImages: JSON.stringify([IMG.cj750_1, IMG.cj750_2, IMG.cj750_3, IMG.cj750_4, IMG.cj750_5]),
       published: true,
       featured: true,
       metaTitle: "Yuntrack CJ750 OBD GPS Tracker Pakistan — No Wiring | Geem.pk",
@@ -458,8 +499,8 @@ Best For:
 Delivery fleets, school van operators, taxi companies, logistics companies, rental car tracking, heavy equipment monitoring.
 
 In the Box: CJ790D tracker, Wiring harness, Relay cable, I/O extension cable, User manual, RFID test card`,
-      featuredImage: IMG.cj790d,
-      galleryImages: JSON.stringify([IMG.cj790d]),
+      featuredImage: IMG.cj790d_1,
+      galleryImages: JSON.stringify([IMG.cj790d_1, IMG.cj790d_2, IMG.cj790d_3, IMG.cj790d_4, IMG.cj790d_5]),
       published: true,
       featured: false,
       metaTitle: "Yuntrack CJ790D 4G Fleet GPS Tracker Pakistan — Geem.pk",
@@ -572,8 +613,8 @@ Use Cases:
 Platform: Compatible with SeekTeck, MiCODUS app, GPSTracker365.
 
 In the Box: G20 tracker, Magnetic base, Micro-USB charging cable, Nano-SIM tray tool, User guide`,
-      featuredImage: IMG.g20,
-      galleryImages: JSON.stringify([IMG.g20, IMG.g20_mini]),
+      featuredImage: IMG.g20_1,
+      galleryImages: JSON.stringify([IMG.g20_1, IMG.g20_2, IMG.g20_3]),
       published: true,
       featured: false,
       metaTitle: "Micodus G20 Magnetic 4G GPS Tracker Pakistan — Geem.pk",
@@ -627,8 +668,8 @@ Best For:
 Shipping containers, trailers, heavy machinery, generators, boats, long-term asset tracking, vehicle surveillance.
 
 In the Box: G20M tracker, Heavy-duty magnetic base, USB-C charging cable, Tool, Manual`,
-      featuredImage: IMG.g20,
-      galleryImages: JSON.stringify([IMG.g20, IMG.g20_mini]),
+      featuredImage: IMG.g20m_1,
+      galleryImages: JSON.stringify([IMG.g20m_1, IMG.g20m_2, IMG.g20m_3, IMG.g20m_4]),
       published: true,
       featured: false,
       metaTitle: "Micodus G20M 20000mAh Magnetic GPS Tracker Pakistan — Geem.pk",
@@ -678,8 +719,8 @@ Technical Specifications:
 Platform: Universal GT06 protocol — works with any standard GPRS tracking platform or app (SeekTeck, GPSTracker365, TrackSolid).
 
 In the Box: GT06 tracker, Wiring harness, Relay cable, User manual`,
-      featuredImage: IMG.gt06,
-      galleryImages: JSON.stringify([IMG.gt06]),
+      featuredImage: IMG.gt06_1,
+      galleryImages: JSON.stringify([IMG.gt06_1, IMG.gt06_2, IMG.gt06_3, IMG.gt06_4, IMG.gt06_5]),
       published: true,
       featured: false,
       metaTitle: "Micodus GT06 Mini 4G GPS Tracker Pakistan — Geem.pk",
@@ -714,8 +755,8 @@ Key Features:
 • Compact body — easy hidden wired install
 
 Specs: DC 9–40V input, <5mA standby, GPS+LBS positioning, Standard SIM.`,
-      featuredImage: IMG.gt06,
-      galleryImages: JSON.stringify([IMG.gt06]),
+      featuredImage: IMG.gt06_1,
+      galleryImages: JSON.stringify([IMG.gt06_1, IMG.gt06_2, IMG.gt06_3, IMG.gt06_4, IMG.gt06_5]),
       published: true,
       featured: false,
       metaTitle: "Micodus GT06/TK200 4G GPS Tracker Pakistan — Geem.pk",
@@ -743,8 +784,8 @@ The GT02D is a compact wired GPS tracking device for cars, motorcycles and light
 Features: Real-time tracking, engine cut-off, geo-fence, overspeed alert, vibration alert, ignition detection. Works on standard GT06 protocol.
 
 Specs: 4G LTE + 2G, DC 9–40V, GPS + LBS positioning, Standard SIM.`,
-      featuredImage: IMG.gt06,
-      galleryImages: JSON.stringify([IMG.gt06]),
+      featuredImage: IMG.gt06_1,
+      galleryImages: JSON.stringify([IMG.gt06_1, IMG.gt06_2, IMG.gt06_3, IMG.gt06_4, IMG.gt06_5]),
       published: true,
       featured: false,
       metaTitle: "Micodus GT02D GPS Tracker Pakistan — Geem.pk",
@@ -770,8 +811,8 @@ Specs: 4G LTE + 2G, DC 9–40V, GPS + LBS positioning, Standard SIM.`,
 Reliable 4G wired GPS tracker for vehicles. Supports engine cut-off, geo-fence, ignition monitoring and overspeed alerts. GT06 protocol compatible — works on all major tracking platforms.
 
 Specs: 4G LTE + 2G, DC 9–40V, GPS + LBS, Standard SIM.`,
-      featuredImage: IMG.gt06,
-      galleryImages: JSON.stringify([IMG.gt06]),
+      featuredImage: IMG.gt06_1,
+      galleryImages: JSON.stringify([IMG.gt06_1, IMG.gt06_2, IMG.gt06_3, IMG.gt06_4, IMG.gt06_5]),
       published: true,
       featured: false,
       metaTitle: "Micodus GT02/T3 GPS Tracker Pakistan — Geem.pk",
@@ -806,8 +847,8 @@ Features:
 • 360-day route history
 
 Specs: 4G LTE + 2G, GPS + GLONASS, DC 9–90V, IP64.`,
-      featuredImage: IMG.g20,
-      galleryImages: JSON.stringify([IMG.g20]),
+      featuredImage: IMG.g20_1,
+      galleryImages: JSON.stringify([IMG.g20_1, IMG.g20_2, IMG.g20_3]),
       published: true,
       featured: false,
       metaTitle: "Micodus MV710G 4G Fuel Monitoring GPS Tracker Pakistan — Geem.pk",
@@ -889,8 +930,8 @@ Features:
 Specs: 4G LTE + 2G, 800mAh battery (3–7 days), Standard SIM, <50g.
 
 Best For: Elderly monitoring, children, lone workers, delivery staff, hiking.`,
-      featuredImage: IMG.lk208,
-      galleryImages: JSON.stringify([IMG.lk208]),
+      featuredImage: IMG.lk208_1,
+      galleryImages: JSON.stringify([IMG.lk208_1, IMG.lk208_2, IMG.lk208_3, IMG.lk208_4, IMG.lk208_5]),
       published: true,
       featured: false,
       metaTitle: "Yuntrack LK208 Personal GPS Tracker Pakistan — Geem.pk",
@@ -932,7 +973,7 @@ Specs: 4G LTE + 2G, GPS + LBS, DC 9–40V, Standard SIM.
 
 Platform: Free SinoTrack web and app (Android/iOS) — no monthly fee for basic tracking.`,
       featuredImage: IMG.st900,
-      galleryImages: JSON.stringify([IMG.st900]),
+      galleryImages: JSON.stringify([IMG.st900, IMG.st900_2]),
       published: true,
       featured: false,
       metaTitle: "SinoTrack ST-900 4G GPS Tracker Pakistan — Geem.pk",
@@ -968,8 +1009,8 @@ Features:
 • IP65 water-resistant
 
 Specs: 4G LTE + 2G, GPS + LBS, Standard SIM.`,
-      featuredImage: IMG.st900,
-      galleryImages: JSON.stringify([IMG.st900]),
+      featuredImage: IMG.st915_1,
+      galleryImages: JSON.stringify([IMG.st915_1]),
       published: true,
       featured: false,
       metaTitle: "SinoTrack ST815 4G GPS Tracker Pakistan — Geem.pk",
@@ -1014,8 +1055,8 @@ Best For:
 • Vehicle covert placement
 
 Specs: 4G LTE + 2G, GPS + LBS + WiFi, Nano SIM.`,
-      featuredImage: IMG.gf21,
-      galleryImages: JSON.stringify([IMG.gf21]),
+      featuredImage: IMG.gf21_1,
+      galleryImages: JSON.stringify([IMG.gf21_1, IMG.gf21_2, IMG.gf21_3, IMG.gf21_4, IMG.gf21_5]),
       published: true,
       featured: false,
       metaTitle: "365GPS GF21 Mini GPS Tracker Pakistan — Geem.pk",
@@ -1043,8 +1084,8 @@ The 360GPS GF21 is a compact personal GPS tracker supporting 4G LTE positioning.
 Features: 4G real-time tracking, GPS + LBS, geo-fence, motion alerts, low battery notification, compact body, Nano SIM.
 
 Best For: Bags, personal items, kids tracking, pet collar, covert asset placement.`,
-      featuredImage: IMG.gf21,
-      galleryImages: JSON.stringify([IMG.gf21]),
+      featuredImage: IMG.gf21_1,
+      galleryImages: JSON.stringify([IMG.gf21_1, IMG.gf21_2, IMG.gf21_3, IMG.gf21_4, IMG.gf21_5]),
       published: true,
       featured: false,
       metaTitle: "360GPS GF21 Mini GPS Tracker Pakistan — Geem.pk",
@@ -1072,8 +1113,8 @@ The CJ220 is Yuntrack's entry-level 4G GPS tracker for personal vehicle use. Com
 Features: 4G LTE + 2G, engine cut-off relay, geo-fence, overspeed alert, ignition detection, vibration alert. GT06 protocol compatible.
 
 Specs: DC 9–40V, GPS + LBS, Standard SIM.`,
-      featuredImage: IMG.cj780,
-      galleryImages: JSON.stringify([IMG.cj780]),
+      featuredImage: IMG.cj220_1,
+      galleryImages: JSON.stringify([IMG.cj220_1, IMG.cj220_2]),
       published: true,
       featured: false,
       metaTitle: "Yuntrack CJ220 GPS Tracker Pakistan — Geem.pk",
@@ -1099,8 +1140,8 @@ Specs: DC 9–40V, GPS + LBS, Standard SIM.`,
 A versatile IoT-grade GPS tracking device for vehicles and assets. Supports standard GPRS/4G protocol and connects to any tracking platform (SeekTeck, GPSTracker365, etc.).
 
 Features: 4G LTE + 2G, real-time tracking, geo-fence, motion alert, engine cut-off support, Standard SIM.`,
-      featuredImage: IMG.gt06,
-      galleryImages: JSON.stringify([IMG.gt06]),
+      featuredImage: IMG.gt06_1,
+      galleryImages: JSON.stringify([IMG.gt06_1, IMG.gt06_2, IMG.gt06_3, IMG.gt06_4, IMG.gt06_5]),
       published: true,
       featured: false,
       metaTitle: "IoT 4G GPS Tracker Pakistan — Geem.pk",
@@ -1126,8 +1167,8 @@ Features: 4G LTE + 2G, real-time tracking, geo-fence, motion alert, engine cut-o
 The P31 is a compact portable GPS tracker for individuals who need a safety device. Simple SOS button, real-time location sharing, and long battery make it ideal for elderly, delivery workers, or children.
 
 Features: 4G LTE + 2G, SOS emergency button, GPS + LBS positioning, Geo-fence, Low battery alert, Standard SIM, ~800mAh battery.`,
-      featuredImage: IMG.lk208,
-      galleryImages: JSON.stringify([IMG.lk208]),
+      featuredImage: IMG.lk208_1,
+      galleryImages: JSON.stringify([IMG.lk208_1, IMG.lk208_2, IMG.lk208_3, IMG.lk208_4, IMG.lk208_5]),
       published: true,
       featured: false,
       metaTitle: "P31 Portable Personal GPS Tracker Pakistan — Geem.pk",
@@ -1153,8 +1194,8 @@ Features: 4G LTE + 2G, SOS emergency button, GPS + LBS positioning, Geo-fence, L
 The N9 is a flexible 4G GPS tracker that supports both vehicle wiring and portable battery use. A versatile option for mixed fleet and personal tracking needs.
 
 Features: 4G LTE + 2G, real-time tracking, geo-fence, SOS, overspeed alert, Standard SIM.`,
-      featuredImage: IMG.gt06,
-      galleryImages: JSON.stringify([IMG.gt06]),
+      featuredImage: IMG.gt06_1,
+      galleryImages: JSON.stringify([IMG.gt06_1, IMG.gt06_2, IMG.gt06_3, IMG.gt06_4, IMG.gt06_5]),
       published: true,
       featured: false,
       metaTitle: "N9 GSM 4G GPS Tracker Pakistan — Geem.pk",

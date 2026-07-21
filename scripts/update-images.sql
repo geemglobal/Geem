@@ -212,5 +212,216 @@ UPDATE products SET
   gallery_images = '["/products/smartphones/xiaomi14pro/img_1.jpg","/products/smartphones/xiaomi14pro/img_2.jpg","/products/smartphones/xiaomi14pro/img_3.jpg","/products/smartphones/xiaomi14pro/img_4.jpg"]'
   WHERE slug = 'xiaomi-14-pro-512gb';
 
+
+-- ═══════════════════════════════════════════════════════════════════════
+-- GPS TRACKER PRODUCT IMAGE FIXES
+-- Fixes: mixed images across models, flat-file paths upgraded to
+-- proper per-model subfolders (1 main + up to 4 gallery images each).
+-- ═══════════════════════════════════════════════════════════════════════
+
+-- ── Yuntrack CJ220 (was wrongly showing CJ780 images) ──────────────────
+UPDATE products SET
+  featured_image = '/products/gps/cj220/img_1.jpg',
+  gallery_images = '["/products/gps/cj220/img_1.jpg","/products/gps/cj220/img_2.jpg"]'
+  WHERE slug = 'yuntrack-cj220-4g-gps-tracker';
+
+-- ── Yuntrack CJ280 ─────────────────────────────────────────────────────
+UPDATE products SET
+  featured_image = '/products/gps/cj280/img_1.jpg',
+  gallery_images = '["/products/gps/cj280/img_1.jpg","/products/gps/cj280/img_2.jpg"]'
+  WHERE slug = 'yuntrack-cj280-4g-gps-tracker';
+
+-- ── Yuntrack CJ720 ─────────────────────────────────────────────────────
+UPDATE products SET
+  featured_image = '/products/gps/cj720/img_1.jpg',
+  gallery_images = '["/products/gps/cj720/img_1.jpg"]'
+  WHERE slug = 'yuntrack-cj720-4g-gps-tracker';
+
+-- ── Yuntrack CJ750 (upgraded: was flat file, now 5-image subfolder) ────
+UPDATE products SET
+  featured_image = '/products/gps/cj750/img_1.jpg',
+  gallery_images = '["/products/gps/cj750/img_1.jpg","/products/gps/cj750/img_2.jpg","/products/gps/cj750/img_3.jpg","/products/gps/cj750/img_4.jpg","/products/gps/cj750/img_5.jpg"]'
+  WHERE slug = 'yuntrack-cj750-obd-gps-tracker';
+
+-- ── Yuntrack CJ780 (upgraded: was flat file, now 5-image subfolder) ────
+UPDATE products SET
+  featured_image = '/products/gps/cj780/img_1.jpg',
+  gallery_images = '["/products/gps/cj780/img_1.jpg","/products/gps/cj780/img_2.jpg","/products/gps/cj780/img_3.jpg","/products/gps/cj780/img_4.png","/products/gps/cj780/img_5.png"]'
+  WHERE slug = 'yuntrack-cj780-4g-gps-tracker';
+
+-- ── Yuntrack CJ790D (upgraded: was flat file, now 5-image subfolder) ───
+UPDATE products SET
+  featured_image = '/products/gps/cj790d/img_1.jpg',
+  gallery_images = '["/products/gps/cj790d/img_1.jpg","/products/gps/cj790d/img_2.jpg","/products/gps/cj790d/img_3.jpg","/products/gps/cj790d/img_4.jpg","/products/gps/cj790d/img_5.jpeg"]'
+  WHERE slug = 'yuntrack-cj790d-4g-fleet-gps-tracker';
+
+-- ── Yuntrack LK208 (upgraded: was flat file, now 5-image subfolder) ────
+UPDATE products SET
+  featured_image = '/products/gps/lk208/img_1.jpg',
+  gallery_images = '["/products/gps/lk208/img_1.jpg","/products/gps/lk208/img_2.jpg","/products/gps/lk208/img_3.jpg","/products/gps/lk208/img_4.jpg","/products/gps/lk208/img_5.jpg"]'
+  WHERE slug = 'yuntrack-lk208-personal-gps-tracker';
+
+-- ── Yuntrack LK930 ─────────────────────────────────────────────────────
+UPDATE products SET
+  featured_image = '/products/gps/lk930/img_1.jpg',
+  gallery_images = '["/products/gps/lk930/img_1.jpg"]'
+  WHERE slug = 'yuntrack-lk930-4g-gps-tracker';
+
+-- ── Micodus G20 (upgraded: was flat file, now subfolder) ───────────────
+UPDATE products SET
+  featured_image = '/products/gps/g20/img_1.jpg',
+  gallery_images = '["/products/gps/g20/img_1.jpg","/products/gps/g20/img_2.jpg","/products/gps/g20/img_3.jpg"]'
+  WHERE slug = 'micodus-g20-magnetic-gps-tracker';
+
+-- ── Micodus G20M (was showing G20 images — now uses its own subfolder) ─
+UPDATE products SET
+  featured_image = '/products/gps/g20m/img_1.jpg',
+  gallery_images = '["/products/gps/g20m/img_1.jpg","/products/gps/g20m/img_2.jpg","/products/gps/g20m/img_3.jpg","/products/gps/g20m/img_4.png"]'
+  WHERE slug = 'micodus-g20m-extended-battery-gps-tracker';
+
+-- ── Micodus MV710G Fuel Tracker (upgraded: was using g20 flat file) ────
+UPDATE products SET
+  featured_image = '/products/gps/g20/img_1.jpg',
+  gallery_images = '["/products/gps/g20/img_1.jpg","/products/gps/g20/img_2.jpg","/products/gps/g20/img_3.jpg"]'
+  WHERE slug = 'micodus-mv710g-4g-fuel-gps-tracker';
+
+-- ── Micodus GT06 Mini (upgraded: was flat file, now 5-image subfolder) ─
+UPDATE products SET
+  featured_image = '/products/gps/gt06/img_1.jpg',
+  gallery_images = '["/products/gps/gt06/img_1.jpg","/products/gps/gt06/img_2.jpg","/products/gps/gt06/img_3.jpg","/products/gps/gt06/img_4.jpg","/products/gps/gt06/img_5.jpg"]'
+  WHERE slug = 'micodus-gt06-mini-gps-tracker';
+
+-- ── Micodus GT06 TK200 (upgraded: was flat file, now subfolder) ─────────
+UPDATE products SET
+  featured_image = '/products/gps/gt06/img_1.jpg',
+  gallery_images = '["/products/gps/gt06/img_1.jpg","/products/gps/gt06/img_2.jpg","/products/gps/gt06/img_3.jpg","/products/gps/gt06/img_4.jpg","/products/gps/gt06/img_5.jpg"]'
+  WHERE slug = 'micodus-gt06-tk200-4g-gps-tracker';
+
+-- ── Micodus GT02D (upgraded: was flat file, now subfolder) ──────────────
+UPDATE products SET
+  featured_image = '/products/gps/gt06/img_1.jpg',
+  gallery_images = '["/products/gps/gt06/img_1.jpg","/products/gps/gt06/img_2.jpg","/products/gps/gt06/img_3.jpg","/products/gps/gt06/img_4.jpg","/products/gps/gt06/img_5.jpg"]'
+  WHERE slug = 'micodus-gt02d-4g-gps-tracker';
+
+-- ── Micodus GT02-T3 (upgraded: was flat file, now subfolder) ────────────
+UPDATE products SET
+  featured_image = '/products/gps/gt06/img_1.jpg',
+  gallery_images = '["/products/gps/gt06/img_1.jpg","/products/gps/gt06/img_2.jpg","/products/gps/gt06/img_3.jpg","/products/gps/gt06/img_4.jpg","/products/gps/gt06/img_5.jpg"]'
+  WHERE slug = 'micodus-gt02-t3-4g-gps-tracker';
+
+-- ── SinoTrack ST900 ─────────────────────────────────────────────────────
+UPDATE products SET
+  featured_image = '/products/gps/st900.jpg',
+  gallery_images = '["/products/gps/st900.jpg","/products/gps/st900_2.jpg"]'
+  WHERE slug = 'sinotrack-st900-4g-gps-tracker';
+
+-- ── SinoTrack ST815 (was wrongly showing ST900 images — now uses ST915) ─
+UPDATE products SET
+  featured_image = '/products/gps/st915/img_1.jpg',
+  gallery_images = '["/products/gps/st915/img_1.jpg"]'
+  WHERE slug = 'sinotrack-st815-4g-gps-tracker';
+
+-- ── SinoTrack ST903 ─────────────────────────────────────────────────────
+UPDATE products SET
+  featured_image = '/products/gps/st903/img_1.jpg',
+  gallery_images = '["/products/gps/st903/img_1.jpg"]'
+  WHERE slug = 'sinotrack-st903-gps-tracker';
+
+-- ── SinoTrack ST904 ─────────────────────────────────────────────────────
+UPDATE products SET
+  featured_image = '/products/gps/st904/img_1.jpg',
+  gallery_images = '["/products/gps/st904/img_1.jpg"]'
+  WHERE slug = 'sinotrack-st904-gps-tracker';
+
+-- ── SinoTrack ST915 ─────────────────────────────────────────────────────
+UPDATE products SET
+  featured_image = '/products/gps/st915/img_1.jpg',
+  gallery_images = '["/products/gps/st915/img_1.jpg"]'
+  WHERE slug = 'sinotrack-st915-gps-tracker';
+
+-- ── 365GPS GF21 (upgraded: was flat file, now 5-image subfolder) ────────
+UPDATE products SET
+  featured_image = '/products/gps/gf21/img_1.jpg',
+  gallery_images = '["/products/gps/gf21/img_1.jpg","/products/gps/gf21/img_2.jpg","/products/gps/gf21/img_3.jpg","/products/gps/gf21/img_4.jpg","/products/gps/gf21/img_5.jpg"]'
+  WHERE slug = '365gps-gf21-mini-gps-tracker';
+
+-- ── 360GPS GF21 (upgraded: same hardware as 365GPS GF21 variant) ────────
+UPDATE products SET
+  featured_image = '/products/gps/gf21/img_1.jpg',
+  gallery_images = '["/products/gps/gf21/img_1.jpg","/products/gps/gf21/img_2.jpg","/products/gps/gf21/img_3.jpg","/products/gps/gf21/img_4.jpg","/products/gps/gf21/img_5.jpg"]'
+  WHERE slug = '360gps-gf21-mini-gps-tracker';
+
+-- ── 365GPS GF07 ─────────────────────────────────────────────────────────
+UPDATE products SET
+  featured_image = '/products/gps/gf07/img_1.jpg',
+  gallery_images = '["/products/gps/gf07/img_1.jpg","/products/gps/gf07/img_2.jpg"]'
+  WHERE slug = '365gps-gf07-mini-gps-tracker';
+
+-- ── Wanway S20 Motorcycle (upgraded: now uses all 4 flat images) ─────────
+UPDATE products SET
+  featured_image = '/products/gps/s20.jpg',
+  gallery_images = '["/products/gps/s20.jpg","/products/gps/s20_2.jpg","/products/gps/s20_3.jpg","/products/gps/s20_4.jpg"]'
+  WHERE slug = 'wanway-s20-4g-motorcycle-gps-tracker';
+
+-- ── Wanway GS900 ────────────────────────────────────────────────────────
+UPDATE products SET
+  featured_image = '/products/gps/gs900.png',
+  gallery_images = '["/products/gps/gs900.png"]'
+  WHERE slug = 'wanway-gs900-motorcycle-gps-tracker';
+
+-- ── Goome GM06NW (upgraded: includes both flat images) ──────────────────
+UPDATE products SET
+  featured_image = '/products/gps/gm06nw.jpg',
+  gallery_images = '["/products/gps/gm06nw.jpg","/products/gps/gm06nw_2.jpg"]'
+  WHERE slug = 'goome-gm06nw-motorcycle-gps-tracker';
+
+-- ── Garmin eTrex ────────────────────────────────────────────────────────
+UPDATE products SET
+  featured_image = '/products/gps/garmin_etrex/img_1.jpg',
+  gallery_images = '["/products/gps/garmin_etrex/img_1.jpg","/products/gps/garmin_etrex/img_2.jpg"]'
+  WHERE slug = 'garmin-etrex-10-handheld-gps';
+
+-- ── CarePro TD02S Kids Smartwatch ────────────────────────────────────────
+UPDATE products SET
+  featured_image = '/products/gps/td02s.jpg',
+  gallery_images = '["/products/gps/td02s.jpg"]'
+  WHERE slug = 'carepro-td02s-kids-gps-smartwatch';
+
+-- ── Geem Orange 2.0 (5-image upgrade with both available flat images) ───
+UPDATE products SET
+  featured_image = '/products/gps/orange_sim.jpg',
+  gallery_images = '["/products/gps/orange_sim.jpg","/products/gps/orange_sim2.jpg"]'
+  WHERE slug = 'geem-orange-2-gps-tracker-4g-lte';
+
+-- ── Geem Orange v1 ──────────────────────────────────────────────────────
+UPDATE products SET
+  featured_image = '/products/gps/orange_sim.jpg',
+  gallery_images = '["/products/gps/orange_sim.jpg","/products/gps/orange_sim2.jpg"]'
+  WHERE slug = 'geem-orange-gps-tracker-4g';
+
+-- ── Yuntrack TK905 ──────────────────────────────────────────────────────
+UPDATE products SET
+  featured_image = '/products/gps/tk905/img_1.jpg',
+  gallery_images = '["/products/gps/tk905/img_1.jpg"]'
+  WHERE slug = 'yuntrack-tk905-gps-tracker';
+
+-- ── IoT Universal GPS Tracker (upgraded: flat gt06 → gt06 subfolder) ───
+UPDATE products SET
+  featured_image = '/products/gps/gt06/img_1.jpg',
+  gallery_images = '["/products/gps/gt06/img_1.jpg","/products/gps/gt06/img_2.jpg","/products/gps/gt06/img_3.jpg","/products/gps/gt06/img_4.jpg","/products/gps/gt06/img_5.jpg"]'
+  WHERE slug = 'iot-universal-4g-gps-tracker';
+
+-- ── P31 Portable Personal GPS (upgraded: flat lk208 → lk208 subfolder) ─
+UPDATE products SET
+  featured_image = '/products/gps/lk208/img_1.jpg',
+  gallery_images = '["/products/gps/lk208/img_1.jpg","/products/gps/lk208/img_2.jpg","/products/gps/lk208/img_3.jpg","/products/gps/lk208/img_4.jpg","/products/gps/lk208/img_5.jpg"]'
+  WHERE slug = 'p31-portable-personal-gps-tracker';
+
+-- ── N9 GSM GPS Tracker (upgraded: flat gt06 → gt06 subfolder) ───────────
+UPDATE products SET
+  featured_image = '/products/gps/gt06/img_1.jpg',
+  gallery_images = '["/products/gps/gt06/img_1.jpg","/products/gps/gt06/img_2.jpg","/products/gps/gt06/img_3.jpg","/products/gps/gt06/img_4.jpg","/products/gps/gt06/img_5.jpg"]'
+  WHERE slug = 'n9-gsm-4g-gps-tracker';
+
 COMMIT;
--- End: 42 products updated
+-- End: 42 products + 35 GPS tracker products updated
