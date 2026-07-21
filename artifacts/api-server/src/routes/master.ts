@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { eq, ilike, and } from "drizzle-orm";
 import {
   db,
   brandsTable,
@@ -31,6 +31,8 @@ router.get("/brands", async (req, res): Promise<void> => {
 router.post("/brands", async (req, res): Promise<void> => {
   const { name, description, deviceIdMandatory, active } = req.body;
   if (!name) { res.status(400).json({ error: "Name required" }); return; }
+  const [existing] = await db.select({ id: brandsTable.id }).from(brandsTable).where(ilike(brandsTable.name, name.trim()));
+  if (existing) { res.status(409).json({ error: `Brand "${name}" already exists` }); return; }
   const [brand] = await db.insert(brandsTable).values({ name, description, deviceIdMandatory: !!deviceIdMandatory, active: active !== false }).returning();
   res.status(201).json({ ...brand, modelsCount: 0, createdAt: brand.createdAt.toISOString() });
 });
@@ -86,6 +88,8 @@ router.get("/models", async (req, res): Promise<void> => {
 router.post("/models", async (req, res): Promise<void> => {
   const { brandId, name, description, hasImei, hasDeviceId, hasIccid, hasMsisdn, deviceIdMandatory, warrantyDays, active } = req.body;
   if (!brandId || !name) { res.status(400).json({ error: "brandId and name required" }); return; }
+  const [existingModel] = await db.select({ id: deviceModelsTable.id }).from(deviceModelsTable).where(and(eq(deviceModelsTable.brandId, brandId), ilike(deviceModelsTable.name, name.trim())));
+  if (existingModel) { res.status(409).json({ error: `Model "${name}" already exists for this brand` }); return; }
   const [model] = await db.insert(deviceModelsTable).values({ brandId, name, description, hasImei: hasImei !== false, hasDeviceId: !!hasDeviceId, hasIccid: !!hasIccid, hasMsisdn: !!hasMsisdn, deviceIdMandatory: !!deviceIdMandatory, warrantyDays: warrantyDays ?? 365, active: active !== false }).returning();
   const [brand] = await db.select().from(brandsTable).where(eq(brandsTable.id, brandId));
   res.status(201).json({ ...model, brandName: brand?.name ?? "", description: model.description ?? null, createdAt: model.createdAt.toISOString() });
@@ -117,6 +121,8 @@ router.get("/categories", async (req, res): Promise<void> => {
 router.post("/categories", async (req, res): Promise<void> => {
   const { name, parentId, active } = req.body;
   if (!name) { res.status(400).json({ error: "Name required" }); return; }
+  const [existingCat] = await db.select({ id: categoriesTable.id }).from(categoriesTable).where(ilike(categoriesTable.name, name.trim()));
+  if (existingCat) { res.status(409).json({ error: `Category "${name}" already exists` }); return; }
   const [cat] = await db.insert(categoriesTable).values({ name, parentId: parentId ?? null, active: active !== false }).returning();
   res.status(201).json({ ...cat, parentName: null, productsCount: 0 });
 });

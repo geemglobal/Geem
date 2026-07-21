@@ -12,7 +12,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Smartphone, Tag, Folder, Truck, Store, CreditCard } from "lucide-react";
+import { Plus, Pencil, Trash2, Smartphone, Tag, Folder, Truck, Store, CreditCard, Eraser } from "lucide-react";
 
 interface Brand { id: number; name: string; deviceIdMandatory: boolean; active: boolean; modelsCount: number; }
 interface DeviceModel { id: number; brandId: number; brandName: string; name: string; hasImei: boolean; warrantyDays: number; active: boolean; }
@@ -76,12 +76,25 @@ export default function MasterData() {
       setForm({});
       toast({ title: "Saved successfully" });
     },
-    onError: () => toast({ title: "Error saving", variant: "destructive" }),
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      toast({ title: msg ?? "Error saving", variant: "destructive" });
+    },
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => axiosInstance.delete(`${endpoints[tab]}/${id}`),
     onSuccess: () => { qc.invalidateQueries({ queryKey: [tab === "payment-methods" ? "payment-methods" : tab] }); toast({ title: "Deleted" }); },
+  });
+
+  const dedupMutation = useMutation({
+    mutationFn: () => axiosInstance.post<{ ok: boolean; report: Record<string, { found: number; removed: number }> }>("/system/deduplicate").then(r => r.data),
+    onSuccess: (data) => {
+      ["brands", "models", "categories"].forEach(k => qc.invalidateQueries({ queryKey: [k] }));
+      const total = Object.values(data.report).reduce((acc, v) => acc + v.removed, 0);
+      toast({ title: total > 0 ? `Removed ${total} duplicate(s) successfully` : "No duplicates found" });
+    },
+    onError: () => toast({ title: "Deduplication failed", variant: "destructive" }),
   });
 
   function openNew() { setEditItem(null); setForm({ active: true }); setShowForm(true); }
@@ -245,7 +258,12 @@ export default function MasterData() {
 
   return (
     <div className="space-y-6">
-      <div><h1 className="text-2xl font-bold">Master Data</h1><p className="text-muted-foreground">Manage core reference data</p></div>
+      <div className="flex items-start justify-between gap-4">
+        <div><h1 className="text-2xl font-bold">Master Data</h1><p className="text-muted-foreground">Manage core reference data</p></div>
+        <Button variant="outline" size="sm" onClick={() => dedupMutation.mutate()} disabled={dedupMutation.isPending}>
+          <Eraser className="h-4 w-4 mr-2" />{dedupMutation.isPending ? "Scanning..." : "Remove Duplicates"}
+        </Button>
+      </div>
 
       <div className="flex gap-2 flex-wrap">
         {TABS.map(t => (

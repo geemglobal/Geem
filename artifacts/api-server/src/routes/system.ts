@@ -326,6 +326,88 @@ router.post("/system/update", upload.single("update"), async (req: Request, res:
   }
 });
 
+// POST /system/deduplicate — find and remove duplicate brands, categories, models, and products
+router.post("/system/deduplicate", async (req: Request, res: Response): Promise<void> => {
+  const userId = await getAuthUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const report: Record<string, { found: number; removed: number }> = {};
+
+  // 1. Duplicate brands (same name, case-insensitive) — keep lowest id, re-point references
+  const dupBrands = await pool.query<{ ids: number[] }>(`
+    SELECT array_agg(id ORDER BY id) AS ids
+    FROM brands
+    GROUP BY LOWER(TRIM(name))
+    HAVING COUNT(*) > 1
+  `);
+  let brandsRemoved = 0;
+  for (const row of dupBrands.rows) {
+    const [keep, ...remove] = row.ids;
+    for (const removeId of remove) {
+      await pool.query(`UPDATE products SET brand_id = $1 WHERE brand_id = $2`, [keep, removeId]);
+      await pool.query(`UPDATE device_models SET brand_id = $1 WHERE brand_id = $2`, [keep, removeId]);
+      await pool.query(`DELETE FROM brands WHERE id = $1`, [removeId]);
+      brandsRemoved++;
+    }
+  }
+  report.brands = { found: dupBrands.rows.length, removed: brandsRemoved };
+
+  // 2. Duplicate categories (same name, case-insensitive) — keep lowest id, re-point references
+  const dupCats = await pool.query<{ ids: number[] }>(`
+    SELECT array_agg(id ORDER BY id) AS ids
+    FROM categories
+    GROUP BY LOWER(TRIM(name))
+    HAVING COUNT(*) > 1
+  `);
+  let catsRemoved = 0;
+  for (const row of dupCats.rows) {
+    const [keep, ...remove] = row.ids;
+    for (const removeId of remove) {
+      await pool.query(`UPDATE products SET category_id = $1 WHERE category_id = $2`, [keep, removeId]);
+      await pool.query(`UPDATE categories SET parent_id = $1 WHERE parent_id = $2`, [keep, removeId]);
+      await pool.query(`DELETE FROM categories WHERE id = $1`, [removeId]);
+      catsRemoved++;
+    }
+  }
+  report.categories = { found: dupCats.rows.length, removed: catsRemoved };
+
+  // 3. Duplicate device models (same brand_id + name, case-insensitive) — keep lowest id
+  const dupModels = await pool.query<{ ids: number[] }>(`
+    SELECT array_agg(id ORDER BY id) AS ids
+    FROM device_models
+    GROUP BY brand_id, LOWER(TRIM(name))
+    HAVING COUNT(*) > 1
+  `);
+  let modelsRemoved = 0;
+  for (const row of dupModels.rows) {
+    const [, ...remove] = row.ids;
+    for (const removeId of remove) {
+      await pool.query(`DELETE FROM device_models WHERE id = $1`, [removeId]);
+      modelsRemoved++;
+    }
+  }
+  report.models = { found: dupModels.rows.length, removed: modelsRemoved };
+
+  // 4. Duplicate products (same title, case-insensitive) — keep lowest id
+  const dupProducts = await pool.query<{ ids: number[] }>(`
+    SELECT array_agg(id ORDER BY id) AS ids
+    FROM products
+    GROUP BY LOWER(TRIM(title))
+    HAVING COUNT(*) > 1
+  `);
+  let productsRemoved = 0;
+  for (const row of dupProducts.rows) {
+    const [, ...remove] = row.ids;
+    for (const removeId of remove) {
+      await pool.query(`DELETE FROM products WHERE id = $1`, [removeId]);
+      productsRemoved++;
+    }
+  }
+  report.products = { found: dupProducts.rows.length, removed: productsRemoved };
+
+  res.json({ ok: true, report });
+});
+
 // POST /system/restart — gracefully restart the API server
 router.post("/system/restart", async (req: Request, res: Response): Promise<void> => {
   const userId = await getAuthUserId(req);

@@ -75,7 +75,10 @@ export default function Products() {
       setShowForm(false); setEditProduct(null); setForm(emptyForm);
       toast({ title: editProduct ? "Product updated" : "Product created" });
     },
-    onError: () => toast({ title: "Save failed", variant: "destructive" }),
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      toast({ title: msg ?? "Save failed", variant: "destructive" });
+    },
   });
 
   const togglePublish = useMutation({

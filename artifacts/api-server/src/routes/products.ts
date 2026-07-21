@@ -61,6 +61,8 @@ router.get("/products", async (req, res): Promise<void> => {
 router.post("/products", async (req, res): Promise<void> => {
   const { title, slug, brandId, categoryId, price, salePrice, shortDescription, longDescription, featuredImage, galleryImages, tags, stockQty, published, featured, hidePrice, metaTitle, metaDescription, metaKeywords, sku, barcode } = req.body;
   if (!title || !price) { res.status(400).json({ error: "title and price required" }); return; }
+  const [existingProduct] = await db.select({ id: productsTable.id }).from(productsTable).where(ilike(productsTable.title, title.trim()));
+  if (existingProduct) { res.status(409).json({ error: `Product "${title}" already exists` }); return; }
   const finalSlug = slug || title.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
   const [product] = await db.insert(productsTable).values({
     title, slug: finalSlug, brandId, categoryId,
