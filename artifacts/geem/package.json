@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --config vite.config.ts --host 0.0.0.0",
-    "build": "vite build --config vite.config.ts",
+    "build": "vite build --config vite.config.ts && node -e \"import('node:fs').then(fs=>{const sw='dist/public/sw.js',p='public/push-sw.js';if(fs.existsSync(sw)&&fs.existsSync(p)){let s=fs.readFileSync(sw,'utf-8'),h=fs.readFileSync(p,'utf-8');if(!s.includes('Geem Push')){fs.writeFileSync(sw,s+'\\n\\n'+h);console.log('push handlers merged into sw.js');}}})\"",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
