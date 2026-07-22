@@ -121,7 +121,8 @@ export default function ShopHome() {
 
       {/* ── Hero ── */}
       <section className="relative bg-gray-950 text-white overflow-hidden">
-        {/* If admin uploaded a banner photo: show it with a dark overlay */}
+        {/* Hero background — uploaded banner photo OR pure-CSS dark gradient (no SVG file,
+            so no SW-cached branding bleeds through) */}
         {branding.banner ? (
           <>
             <div className="absolute inset-0">
@@ -130,10 +131,12 @@ export default function ShopHome() {
             <div className="absolute inset-0 bg-black/70" />
           </>
         ) : (
-          /* Static SVG hero — has its own dark gradient, no overlay needed */
-          <div className="absolute inset-0">
-            <img src="/hero-banner.svg" alt="" className="w-full h-full object-cover object-center" aria-hidden="true" />
-          </div>
+          <div
+            className="absolute inset-0"
+            style={{
+              background: "linear-gradient(135deg, #0f172a 0%, #111827 60%, #1a0a0a 100%)",
+            }}
+          />
         )}
         <div className="absolute inset-0" style={{ backgroundImage: "radial-gradient(circle at 20% 50%, rgba(220,38,38,0.08) 0%, transparent 60%), radial-gradient(circle at 80% 20%, rgba(59,130,246,0.08) 0%, transparent 50%)" }} />
         <div className="relative max-w-7xl mx-auto px-4 py-16 md:py-28">
