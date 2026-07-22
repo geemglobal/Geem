@@ -16,6 +16,7 @@
     "fill-missing-images": "tsx ./src/fill-missing-images.ts",
     "update-product-images": "tsx ./src/update-product-images.ts",
     "sync-inventory-catalog": "tsx ./src/sync-inventory-to-catalog.ts",
+    "full-catalog": "tsx ./src/full-catalog-generator.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
