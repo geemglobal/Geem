@@ -64,7 +64,9 @@ async function callApi<T>(endpoint: string, params: Record<string, unknown> = {}
 // ─── Session TTLs ─────────────────────────────────────────────────────────
 const ADMIN_SESSION_TTL_MS    = 24 * 60 * 60 * 1000;       // 24 hours
 const CUSTOMER_SESSION_TTL_MS = 7  * 24 * 60 * 60 * 1000;  // 7 days
-const DEFAULT_PASSWORD = "123456";
+// Default PIN assigned to new SIM accounts (IoT convention: ICCID + this PIN).
+// Override via SIM_DEFAULT_PASSWORD env var if a stricter default is needed.
+const DEFAULT_PASSWORD = process.env.SIM_DEFAULT_PASSWORD ?? "123456";
 
 /**
  * Currency-aware balance check + deduction.
