@@ -121,13 +121,16 @@ export default function ShopHome() {
 
       {/* ── Hero ── */}
       <section className="relative bg-gray-950 text-white overflow-hidden">
-        {/* Company banner image — shown as hero background when uploaded in Settings */}
-        {branding.banner && (
-          <div className="absolute inset-0">
-            <img src={branding.banner} alt="" className="w-full h-full object-cover object-center" aria-hidden="true" />
-          </div>
-        )}
-        <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-gray-950 to-black opacity-90" />
+        {/* Company banner image — DB upload takes priority; static SVG is the fallback */}
+        <div className="absolute inset-0">
+          <img
+            src={branding.banner ?? "/hero-banner.svg"}
+            alt=""
+            className="w-full h-full object-cover object-center"
+            aria-hidden="true"
+          />
+        </div>
+        <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-gray-950 to-black opacity-85" />
         <div className="absolute inset-0" style={{ backgroundImage: "radial-gradient(circle at 20% 50%, rgba(220,38,38,0.08) 0%, transparent 60%), radial-gradient(circle at 80% 20%, rgba(59,130,246,0.08) 0%, transparent 50%)" }} />
         <div className="relative max-w-7xl mx-auto px-4 py-16 md:py-28">
           <div className="max-w-3xl">

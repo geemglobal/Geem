@@ -124,17 +124,36 @@ export default function ShopProducts() {
   const [search, setSearch] = useState(() => getParam("search"));
   const [brandId, setBrandId] = useState(() => getParam("brandId"));
   const [categoryId, setCategoryId] = useState(() => getParam("categoryId"));
+  // Holds a ?category=NAME value that hasn't been resolved to an ID yet
+  const [pendingCategoryName, setPendingCategoryName] = useState(() => getParam("category"));
   const [sort, setSort] = useState("newest");
   const [page, setPage] = useState(1);
 
+  // Sync local state whenever the URL query string changes
   useEffect(() => {
     const params = new URLSearchParams(searchStr);
     setBrandId(params.get("brandId") ?? "");
     setCategoryId(params.get("categoryId") ?? "");
+    setPendingCategoryName(params.get("category") ?? "");
     const s = params.get("search") ?? "";
     setSearch(s); setInputValue(s);
     setPage(1);
   }, [searchStr]);
+
+  // Resolve ?category=NAME → categoryId once the category list has loaded
+  useEffect(() => {
+    if (!pendingCategoryName || !allCategories) return;
+    const lc = pendingCategoryName.toLowerCase();
+    const match = allCategories.find(c =>
+      c.name.toLowerCase() === lc ||
+      c.name.toLowerCase().includes(lc) ||
+      lc.includes(c.name.toLowerCase().split(" ")[0])
+    );
+    if (match) {
+      setCategoryId(String(match.id));
+      setPendingCategoryName("");
+    }
+  }, [pendingCategoryName, allCategories]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["shop-catalog", search, brandId, categoryId, sort, page],
@@ -158,7 +177,8 @@ export default function ShopProducts() {
   const activeCategory = (allCategories ?? []).find(c => String(c.id) === categoryId);
   const activeBrand = (brands ?? []).find(b => String(b.id) === brandId);
 
-  const heading = activeCategory?.name ?? activeBrand?.name ?? "All Products";
+  // Show pending category name as heading while resolving
+  const heading = activeCategory?.name ?? pendingCategoryName ?? activeBrand?.name ?? "All Products";
 
   function setFilter(params: { categoryId?: string; brandId?: string; search?: string }) {
     const p = new URLSearchParams(searchStr);

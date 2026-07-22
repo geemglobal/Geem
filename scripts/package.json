@@ -18,6 +18,12 @@
     "sync-inventory-catalog": "tsx ./src/sync-inventory-to-catalog.ts",
     "full-catalog": "tsx ./src/full-catalog-generator.ts",
     "batch-complete": "tsx ./src/batch-complete-catalog.ts",
+    "sync-and-complete": "tsx ./src/sync-inventory-to-catalog.ts && tsx ./src/batch-complete-catalog.ts",
+    "standardize-titles": "tsx ./src/standardize-titles.ts",
+    "remove-4g": "tsx ./src/remove-4g-labels.ts",
+    "refresh-yuntrack-images": "tsx ./src/refresh-yuntrack-images.ts",
+    "generate-icons": "tsx ./src/generate-brand-icons.ts",
+    "full-refresh": "tsx ./src/standardize-titles.ts && tsx ./src/remove-4g-labels.ts && tsx ./src/refresh-yuntrack-images.ts && tsx ./src/batch-complete-catalog.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

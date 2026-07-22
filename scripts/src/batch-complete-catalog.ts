@@ -40,23 +40,47 @@ const GALLERY_DIR  = path.join(PRODUCTS_DIR, "gallery");
 /** Generic mobile-centric tags that should NOT appear on non-smartphone products */
 const GENERIC_MOBILE_TAGS = ["5g", "flagship", "pta", "pta approved", "android", "ios", "snapdragon"];
 
-// ─── OpenAI client ────────────────────────────────────────────────────────────
+// ─── AI client (Gemini first, then OpenAI, then templates) ──────────────────
+//
+// Priority order:
+//   1. GEMINI_API_KEY  → Gemini 1.5 Flash (free tier, no quota issues)
+//   2. OPENAI_API_KEY  → GPT-4o-mini (paid, may be over quota)
+//   3. null            → rich type-specific fallback templates (100% local)
+//
+// The script NEVER throws on missing keys — it falls back gracefully.
 
-function buildOpenAI(): { client: OpenAI; model: string } | null {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (apiKey) {
-    return { client: new OpenAI({ apiKey }), model: "gpt-4o-mini" };
-  }
-  const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
-  const proxyKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
-  if (baseURL && proxyKey) {
+function buildAI(): { client: OpenAI; model: string; provider: string } | null {
+  // 1. Gemini 1.5 Flash via OpenAI-compatible endpoint (free tier)
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (geminiKey) {
     return {
-      client: new OpenAI({ baseURL, apiKey: proxyKey }),
-      model: "gpt-4o-mini",
+      client: new OpenAI({
+        baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+        apiKey:  geminiKey,
+      }),
+      model:    "gemini-1.5-flash",
+      provider: "Gemini 1.5 Flash",
     };
   }
-  return null;
+
+  // 2. OpenAI (legacy — may be over quota on the VPS)
+  const openaiKey = process.env.OPENAI_API_KEY;
+  if (openaiKey) {
+    return { client: new OpenAI({ apiKey: openaiKey }), model: "gpt-4o-mini", provider: "OpenAI gpt-4o-mini" };
+  }
+
+  // 3. Replit AI proxy (dev environment only)
+  const baseURL   = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+  const proxyKey  = process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+  if (baseURL && proxyKey) {
+    return { client: new OpenAI({ baseURL, apiKey: proxyKey }), model: "gpt-4o-mini", provider: "Replit AI proxy" };
+  }
+
+  return null; // → rich fallback templates will be used
 }
+
+// Keep backward-compatible alias used below
+function buildOpenAI() { return buildAI(); }
 
 // ─── Product-type detection ───────────────────────────────────────────────────
 

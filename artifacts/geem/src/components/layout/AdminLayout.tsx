@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { useGetMe } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
@@ -153,7 +153,7 @@ function SidebarContent({
           </div>
         ) : (
           <div className="flex items-center gap-3">
-            <img src="/icon-192.png" alt="Geem ERP" className="h-10 w-10 rounded-xl object-contain flex-shrink-0" />
+            <img src="/icon-192.png" alt="Geem ERP" className="h-9 w-9 rounded-lg object-contain flex-shrink-0" />
             <div>
               <p className="font-bold text-base leading-none">Geem ERP</p>
               <p className="text-xs text-sidebar-foreground/60 mt-1">Management System</p>
@@ -250,6 +250,9 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const isOnline = useOnlineStatus();
+  // Guard: once we redirect to /login we must not re-redirect on subsequent renders
+  // (avoids infinite loops where auth briefly oscillates between error states)
+  const hasRedirected = useRef(false);
 
   const { data: bellCount = 0 } = useQuery<number>({
     queryKey: ["notif-bell-count"],
@@ -286,13 +289,16 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (isLoading) return;
-    if (!user) {
-      const status = (meError as { response?: { status?: number } } | null)?.response?.status;
-      // Only redirect if explicitly unauthorised (401/403), or if there was no error at all
-      // (no token present). Never redirect on network errors or server restarts (5xx).
-      if (!meError || status === 401 || status === 403) {
-        setLocation("/login");
-      }
+    // Reset the redirect guard whenever the user successfully loads
+    if (user) { hasRedirected.current = false; return; }
+    // Prevent re-redirecting on every render after the first redirect
+    if (hasRedirected.current) return;
+    const status = (meError as { response?: { status?: number } } | null)?.response?.status;
+    // Only redirect if explicitly unauthorised (401/403), or if there was no error at all
+    // (no token present). Never redirect on network errors or server restarts (5xx).
+    if (!meError || status === 401 || status === 403) {
+      hasRedirected.current = true;
+      setLocation("/login");
     }
   }, [isLoading, user, meError, setLocation]);
 
