@@ -36,8 +36,12 @@ export function usePushNotifications(opts: PushSubscribeOptions) {
         const permission = await Notification.requestPermission();
         if (permission !== "granted") return;
 
-        const reg = await navigator.serviceWorker.register("/push-sw.js", { scope: "/" });
-        await navigator.serviceWorker.ready;
+        // Use the EXISTING Vite PWA service worker — do NOT register /push-sw.js
+        // as a separate SW at scope "/".  Two SWs at the same scope race:
+        // each activation fires controllerchange → window.location.reload(),
+        // creating an infinite refresh loop.  Push handlers are now merged
+        // into the Vite SW at build time (see vite.config.ts htmlPatchPlugin).
+        const reg = await navigator.serviceWorker.ready;
 
         const vapidKey = await getVapidPublicKey();
         const sub = await reg.pushManager.subscribe({
