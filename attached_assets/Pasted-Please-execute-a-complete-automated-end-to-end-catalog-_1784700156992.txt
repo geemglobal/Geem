@@ -1,0 +1,37 @@
+Please execute a complete, automated end-to-end catalog generation and direct image download process using the following strict requirements:
+
+1. AUTO-DISCOVER ALL PRODUCTS & BRANDS:
+   - Query the backend database and project inventory tables to fetch every active product item across all official brands (including Geem, Wanway, Yuntrack, Micodus, SinoTrack, Garmin, LawMate, Esonic, Huntsman, and Toray).
+   - Use ONLY authentic product names, official model numbers, and live stock quantities found in the system. Do NOT use fake or placeholder data.
+
+2. APPLY BUSINESS RULES & EXCLUSIONS:
+   - MOBILE EXCLUSIONS: Completely omit and exclude all Mobile Phones and Mobile Phone Accessories.
+   - BRAND EXCLUSIONS: Exclude all "ZRK" and "Al-Noor" brands/products.
+   - GPS SPEC REVISION: Strictly remove "4G" or "4G LTE" branding, tags, and text from ALL GPS trackers EXCEPT Wanway brand trackers. Wanway is the ONLY brand allowed to have 4G designation.
+
+3. HARD FILE IMAGE DOWNLOADS (4 DIRECT LOCAL IMAGES PER PRODUCT):
+   - For every single product, fetch and download clean, official, un-watermarked high-resolution product photos directly from original manufacturer sources.
+   - DO NOT store external web URLs in the database. Download physical image files directly to the server:
+     * Main Image -> `/var/www/geem/uploads/public/products/main/`
+     * Gallery Images -> `/var/www/geem/uploads/public/products/gallery/`
+   - Store local relative paths in the database (e.g., `public/products/main/model-name.jpg`).
+   - EXACT COUNT REQUIREMENT: Each product MUST have exactly 4 local image files attached (1 main featured image + 3 additional gallery images showing different angles or packaging).
+
+4. FULL FIELD AUTO-FILL & LIVE INVENTORY SYNC:
+   - Populate 100% of required fields for every catalog item:
+     * Title: Full Official Brand & Model Name
+     * URL Slug: Clean, auto-generated SEO slug
+     * Price & Sale Price: Synced directly in PKR from inventory
+     * Stock Quantity: Live synced with inventory stock levels
+     * Brand & Category: Assigned to exact matching database IDs
+     * Tags: Relevant comma-separated product tags
+     * Short Description: High-converting 1-liner summary
+     * Long Description: Comprehensive technical specification, dimensions, battery capacity, and key features
+
+5. MAXIMUM SEO RANKING OPTIMIZATION:
+   - Meta Title (Max 60 chars): `[Official Brand & Model] Price in Pakistan — Geem.pk`
+   - Meta Description (Max 160 chars): `Buy official [Product Title] in Pakistan at best price. Real-time stock, fast nationwide delivery & genuine warranty on Geem.pk.`
+   - Meta Keywords: Comma-separated search terms targeting exact model, brand, product category, Pakistan delivery, and global buy intent.
+   - Visibility Flags: Set `is_published = true`, `is_featured = true` (for primary models), and `hide_price = false`.
+
+Execute the full inventory scan, direct image download script, and catalog population now, and notify me with a summary list when all products are fully loaded and published.
