@@ -107,7 +107,11 @@ export function AppSetupPrompt({
   /* ── listen for native install events ── */
   useEffect(() => {
     function onPrompt(e: Event) {
-      e.preventDefault();
+      // Do NOT call e.preventDefault() here.
+      // Samsung Internet Browser suppresses its native address-bar install icon
+      // when preventDefault() is called — unlike Chrome which keeps it visible.
+      // Without preventDefault the browser shows its own install UI (address-bar
+      // ⊕ icon + mini-infobar) AND we can still trigger .prompt() from our card.
       nativePrompt.current = e as BeforeInstallPromptEvent;
       setCanNative(true);
       // If the decision timer already ran and set visible=true (waiting on this event),

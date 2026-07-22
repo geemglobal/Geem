@@ -171,7 +171,7 @@ const htmlPatchPlugin = {
     const idxPath = path.join(outDir, "index.html");
     const swPath  = path.join(outDir, "sw.js");
 
-    // 1. Patch index.html meta tags
+    // 1. Patch index.html meta tags + manifest cache-bust
     if (fs.existsSync(idxPath)) {
       let html = fs.readFileSync(idxPath, "utf-8");
       if (appMode === "admin") {
@@ -182,6 +182,17 @@ const htmlPatchPlugin = {
           .replace(/(<meta name="theme-color" content=")[^"]*"/, '$1#1e40af"')
           .replace(/(<meta name="msapplication-TileColor" content=")[^"]*"/, '$1#1e40af"');
       }
+      // Add ?v=3 query to the manifest link so Samsung Browser re-fetches it
+      // even if it cached the old version with max-age=31536000.
+      // The query string is ignored by nginx but forces a new network request.
+      html = html.replace(
+        /(<link\s[^>]*rel="manifest"\s[^>]*href=")([^"?]+)(")/,
+        '$1$2?v=3$3'
+      );
+      html = html.replace(
+        /(<link\s[^>]*href=")([^"?]+manifest\.webmanifest)(")/,
+        '$1$2?v=3$3'
+      );
       fs.writeFileSync(idxPath, html, "utf-8");
     }
 

@@ -14,7 +14,10 @@ export function usePwaInstall() {
       setIsInstalled(true);
     }
     function onPrompt(e: Event) {
-      e.preventDefault();
+      // Do NOT call e.preventDefault() — it suppresses Samsung Browser's
+      // native address-bar install icon. Storing the event without preventing
+      // it lets the browser show its own install UI while still allowing our
+      // custom card to call .prompt() if needed.
       setPrompt(e as BeforeInstallPromptEvent);
     }
     function onAppInstalled() {
