@@ -1,1 +1,2 @@
 - [Geem bug fixes](geem-bug-fixes.md) — key constraints from the bug-fix session: SQL injection rule, double-sell guard, Clerk v6 type workaround.
+- [VPS Deployment](vps-deployment.md) — Contabo VPS setup: systemd services, env file path, nginx dirs, frontend build commands, deploy script.
