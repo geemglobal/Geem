@@ -30,14 +30,9 @@ const pwaManifest =
         scope: "/",
         start_url: "/dashboard",
         categories: ["business", "productivity"],
-        // Dynamic icon via API — always reflects the logo uploaded in Settings.
-        // /api/shop/app-icon redirects (302) to the object-storage URL for the
-        // current gLogo; browsers follow the redirect automatically.
-        // The maskable variant keeps a static file because safe-zone padding
-        // must be baked in at generate time.
         icons: [
-          { src: "/api/shop/app-icon", sizes: "192x192", type: "image/png", purpose: "any" },
-          { src: "/api/shop/app-icon", sizes: "512x512", type: "image/png", purpose: "any" },
+          { src: "/icon-192.png",          sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: "/icon-512.png",          sizes: "512x512", type: "image/png", purpose: "any" },
           { src: "/icon-512-maskable.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       }
@@ -53,8 +48,8 @@ const pwaManifest =
         start_url: "/",
         categories: ["shopping", "lifestyle"],
         icons: [
-          { src: "/api/shop/app-icon", sizes: "192x192", type: "image/png", purpose: "any" },
-          { src: "/api/shop/app-icon", sizes: "512x512", type: "image/png", purpose: "any" },
+          { src: "/icon-192.png",          sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: "/icon-512.png",          sizes: "512x512", type: "image/png", purpose: "any" },
           { src: "/icon-512-maskable.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       };
