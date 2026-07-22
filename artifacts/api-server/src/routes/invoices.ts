@@ -207,7 +207,8 @@ router.get("/invoices", async (req, res): Promise<void> => {
   const where = conditions.length ? and(...conditions) : undefined;
 
   const [{ total }] = await db.select({ total: count() }).from(invoicesTable).where(where);
-  const invoices = await db.select().from(invoicesTable).where(where).limit(limit).offset(offset).orderBy(sql`${invoicesTable.createdAt} desc`);
+  const invoices = await db.select().from(invoicesTable).where(where).limit(limit).offset(offset)
+    .orderBy(sql`${invoicesTable.date} desc`, invoicesTable.invoiceNumber);
 
   const [overdueSum]   = await db.select({ v: sum(invoicesTable.total) }).from(invoicesTable).where(eq(invoicesTable.status, "overdue"));
   const [overdueCount] = await db.select({ c: count() }).from(invoicesTable).where(eq(invoicesTable.status, "overdue"));
