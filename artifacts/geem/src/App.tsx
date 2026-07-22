@@ -1,69 +1,75 @@
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { applyPrimaryColor, applyBorderRadius } from "@/lib/theme";
-import NotFound from "@/pages/not-found";
 import { ShopAuthProvider } from "@/lib/shopAuth";
 import { ClerkProvider } from "@clerk/react";
 import { publishableKeyFromHost } from "@clerk/react/internal";
-import ShopGoogleCallback from "@/pages/shop/ShopGoogleCallback";
 
+// ─── Eager — critical first-paint components ─────────────────────────────────
+import NotFound from "@/pages/not-found";
 import Login from "./pages/auth/Login";
+import ShopHome from "./pages/shop/ShopHome";
+import ShopGoogleCallback from "./pages/shop/ShopGoogleCallback";
 import { AdminLayout } from "./components/layout/AdminLayout";
 
-import Dashboard from "./pages/admin/Dashboard";
-import Inventory from "./pages/admin/Inventory";
-import Customers from "./pages/admin/Customers";
-import Invoices from "./pages/admin/Invoices";
-import InvoiceDetail from "./pages/admin/InvoiceDetail";
-import NewInvoice from "./pages/admin/NewInvoice";
-import POS from "./pages/admin/POS";
-import Products from "./pages/admin/Products";
-import WebOrders from "./pages/admin/WebOrders";
-import Quotations from "./pages/admin/Quotations";
-import QuotationDetail from "./pages/admin/QuotationDetail";
-import NewQuotation from "./pages/admin/NewQuotation";
-import Procurement from "./pages/admin/Procurement";
-import Shipments from "./pages/admin/Shipments";
-import ServiceTickets from "./pages/admin/ServiceTickets";
-import Chat from "./pages/admin/Chat";
-import Vault from "./pages/admin/Vault";
-import Reports from "./pages/admin/Reports";
-import Settings from "./pages/admin/Settings";
-import MasterData from "./pages/admin/MasterData";
-import SystemMaintenance from "./pages/admin/SystemMaintenance";
-import Visitors from "./pages/admin/Visitors";
-import ImeiManagement from "./pages/admin/ImeiManagement";
-import ActivityLog from "./pages/admin/ActivityLog";
-import Expenses from "./pages/admin/Expenses";
-import CustomerLedger from "./pages/admin/CustomerLedger";
-import CustomerDetail from "./pages/admin/CustomerDetail";
-import WalletManagement from "./pages/admin/WalletManagement";
-import Notifications from "./pages/admin/Notifications";
+// ─── Lazy-loaded admin pages ─────────────────────────────────────────────────
+// Each import creates a separate code-split chunk loaded on demand.
+const Dashboard         = lazy(() => import("./pages/admin/Dashboard"));
+const Inventory         = lazy(() => import("./pages/admin/Inventory"));
+const Customers         = lazy(() => import("./pages/admin/Customers"));
+const Invoices          = lazy(() => import("./pages/admin/Invoices"));
+const InvoiceDetail     = lazy(() => import("./pages/admin/InvoiceDetail"));
+const NewInvoice        = lazy(() => import("./pages/admin/NewInvoice"));
+const POS               = lazy(() => import("./pages/admin/POS"));
+const Products          = lazy(() => import("./pages/admin/Products"));
+const WebOrders         = lazy(() => import("./pages/admin/WebOrders"));
+const Quotations        = lazy(() => import("./pages/admin/Quotations"));
+const QuotationDetail   = lazy(() => import("./pages/admin/QuotationDetail"));
+const NewQuotation      = lazy(() => import("./pages/admin/NewQuotation"));
+const Procurement       = lazy(() => import("./pages/admin/Procurement"));
+const Shipments         = lazy(() => import("./pages/admin/Shipments"));
+const ServiceTickets    = lazy(() => import("./pages/admin/ServiceTickets"));
+const Chat              = lazy(() => import("./pages/admin/Chat"));
+const Vault             = lazy(() => import("./pages/admin/Vault"));
+const Reports           = lazy(() => import("./pages/admin/Reports"));
+const Settings          = lazy(() => import("./pages/admin/Settings"));
+const MasterData        = lazy(() => import("./pages/admin/MasterData"));
+const SystemMaintenance = lazy(() => import("./pages/admin/SystemMaintenance"));
+const Visitors          = lazy(() => import("./pages/admin/Visitors"));
+const ImeiManagement    = lazy(() => import("./pages/admin/ImeiManagement"));
+const ActivityLog       = lazy(() => import("./pages/admin/ActivityLog"));
+const Expenses          = lazy(() => import("./pages/admin/Expenses"));
+const CustomerLedger    = lazy(() => import("./pages/admin/CustomerLedger"));
+const CustomerDetail    = lazy(() => import("./pages/admin/CustomerDetail"));
+const WalletManagement  = lazy(() => import("./pages/admin/WalletManagement"));
+const Notifications     = lazy(() => import("./pages/admin/Notifications"));
 
-import ShopHome from "./pages/shop/ShopHome";
-import ShopNotifications from "./pages/shop/ShopNotifications";
-import ShopProducts from "./pages/shop/ShopProducts";
-import ShopProduct from "./pages/shop/ShopProduct";
-import ShopCategory from "./pages/shop/ShopCategory";
-import TrackOrder from "./pages/shop/TrackOrder";
-import Cart from "./pages/shop/Cart";
-import Checkout from "./pages/shop/Checkout";
-import OrderConfirmed from "./pages/shop/OrderConfirmed";
-import About from "./pages/shop/About";
-import Contact from "./pages/shop/Contact";
-import FAQ from "./pages/shop/FAQ";
-import PrivacyPolicy from "./pages/shop/PrivacyPolicy";
-import Terms from "./pages/shop/Terms";
-import Returns from "./pages/shop/Returns";
-import Shipping from "./pages/shop/Shipping";
-import MyAccount from "./pages/shop/MyAccount";
-import ShopSignIn from "./pages/shop/ShopSignIn";
-import ShopSignUp from "./pages/shop/ShopSignUp";
-import ShopForgotPassword from "./pages/shop/ShopForgotPassword";
-import ShopResetPassword from "./pages/shop/ShopResetPassword";
+// ─── Lazy-loaded shop pages ──────────────────────────────────────────────────
+const ShopNotifications  = lazy(() => import("./pages/shop/ShopNotifications"));
+const ShopProducts       = lazy(() => import("./pages/shop/ShopProducts"));
+const ShopProduct        = lazy(() => import("./pages/shop/ShopProduct"));
+const ShopCategory       = lazy(() => import("./pages/shop/ShopCategory"));
+const TrackOrder         = lazy(() => import("./pages/shop/TrackOrder"));
+const Cart               = lazy(() => import("./pages/shop/Cart"));
+const Checkout           = lazy(() => import("./pages/shop/Checkout"));
+const OrderConfirmed     = lazy(() => import("./pages/shop/OrderConfirmed"));
+const About              = lazy(() => import("./pages/shop/About"));
+const Contact            = lazy(() => import("./pages/shop/Contact"));
+const FAQ                = lazy(() => import("./pages/shop/FAQ"));
+const PrivacyPolicy      = lazy(() => import("./pages/shop/PrivacyPolicy"));
+const Terms              = lazy(() => import("./pages/shop/Terms"));
+const Returns            = lazy(() => import("./pages/shop/Returns"));
+const Shipping           = lazy(() => import("./pages/shop/Shipping"));
+const MyAccount          = lazy(() => import("./pages/shop/MyAccount"));
+const ShopSignIn         = lazy(() => import("./pages/shop/ShopSignIn"));
+const ShopSignUp         = lazy(() => import("./pages/shop/ShopSignUp"));
+const ShopForgotPassword = lazy(() => import("./pages/shop/ShopForgotPassword"));
+const ShopResetPassword  = lazy(() => import("./pages/shop/ShopResetPassword"));
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
@@ -83,83 +89,99 @@ function HomeRoute() {
   return <ShopHome />;
 }
 
-function A({ component: C }: { component: React.ComponentType }) {
+/** Wraps a lazy admin page in the shared sidebar layout. */
+function A({ component: C }: { component: React.ElementType }) {
   return <AdminLayout><C /></AdminLayout>;
+}
+
+/** Shown while a lazy chunk is downloading (replaces blank white flash). */
+function PageLoader() {
+  return (
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh" }}>
+      <div style={{
+        width:40, height:40,
+        border:"3px solid #e5e7eb",
+        borderTop:"3px solid #EC2029",
+        borderRadius:"50%",
+        animation:"geem-spin 0.8s linear infinite",
+      }} />
+      <style>{`@keyframes geem-spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  );
 }
 
 function Router() {
   return (
-    <Switch>
-      <Route path="/login" component={Login} />
+    <Suspense fallback={<PageLoader />}>
+      <Switch>
+        <Route path="/login" component={Login} />
 
-      {/* Shop auth routes */}
-      <Route path="/shop/sign-in" component={ShopSignIn} />
-      <Route path="/shop/sign-up" component={ShopSignUp} />
-      <Route path="/shop/sso-callback" component={ShopGoogleCallback} />
-      <Route path="/shop/forgot-password" component={ShopForgotPassword} />
-      <Route path="/shop/reset-password" component={ShopResetPassword} />
+        {/* Shop auth routes */}
+        <Route path="/shop/sign-in" component={ShopSignIn as React.ComponentType} />
+        <Route path="/shop/sign-up" component={ShopSignUp as React.ComponentType} />
+        <Route path="/shop/sso-callback" component={ShopGoogleCallback} />
+        <Route path="/shop/forgot-password" component={ShopForgotPassword as React.ComponentType} />
+        <Route path="/shop/reset-password" component={ShopResetPassword as React.ComponentType} />
 
-      {/* Shop routes */}
-      <Route path="/" component={HomeRoute} />
-      <Route path="/shop" component={ShopHome} />
-      <Route path="/shop/products" component={ShopProducts} />
-      <Route path="/shop/products/:slug" component={ShopProduct} />
-      <Route path="/shop/category/:id" component={ShopCategory} />
-      <Route path="/shop/track" component={TrackOrder} />
-      <Route path="/shop/cart" component={Cart} />
-      <Route path="/shop/checkout" component={Checkout} />
-      <Route path="/shop/order-confirmed" component={OrderConfirmed} />
-      <Route path="/shop/about" component={About} />
-      <Route path="/shop/contact" component={Contact} />
-      <Route path="/shop/faq" component={FAQ} />
-      <Route path="/shop/privacy" component={PrivacyPolicy} />
-      <Route path="/shop/terms" component={Terms} />
-      <Route path="/shop/returns" component={Returns} />
-      <Route path="/shop/shipping" component={Shipping} />
-      <Route path="/shop/account" component={MyAccount} />
-      <Route path="/shop/notifications" component={ShopNotifications} />
+        {/* Shop routes */}
+        <Route path="/" component={HomeRoute} />
+        <Route path="/shop" component={ShopHome} />
+        <Route path="/shop/products" component={ShopProducts as React.ComponentType} />
+        <Route path="/shop/products/:slug" component={ShopProduct as React.ComponentType} />
+        <Route path="/shop/category/:id" component={ShopCategory as React.ComponentType} />
+        <Route path="/shop/track" component={TrackOrder as React.ComponentType} />
+        <Route path="/shop/cart" component={Cart as React.ComponentType} />
+        <Route path="/shop/checkout" component={Checkout as React.ComponentType} />
+        <Route path="/shop/order-confirmed" component={OrderConfirmed as React.ComponentType} />
+        <Route path="/shop/about" component={About as React.ComponentType} />
+        <Route path="/shop/contact" component={Contact as React.ComponentType} />
+        <Route path="/shop/faq" component={FAQ as React.ComponentType} />
+        <Route path="/shop/privacy" component={PrivacyPolicy as React.ComponentType} />
+        <Route path="/shop/terms" component={Terms as React.ComponentType} />
+        <Route path="/shop/returns" component={Returns as React.ComponentType} />
+        <Route path="/shop/shipping" component={Shipping as React.ComponentType} />
+        <Route path="/shop/account" component={MyAccount as React.ComponentType} />
+        <Route path="/shop/notifications" component={ShopNotifications as React.ComponentType} />
 
-      {/* Admin routes — explicit, flat */}
-      <Route path="/dashboard"><A component={Dashboard} /></Route>
-      <Route path="/inventory"><A component={Inventory} /></Route>
-      <Route path="/customers"><A component={Customers} /></Route>
-      <Route path="/wallet"><A component={WalletManagement} /></Route>
-      <Route path="/customers/:id"><A component={CustomerDetail} /></Route>
-      <Route path="/invoices/new"><A component={NewInvoice} /></Route>
-      <Route path="/invoices/:id/edit"><A component={NewInvoice} /></Route>
-      <Route path="/invoices/:id"><A component={InvoiceDetail} /></Route>
-      <Route path="/invoices"><A component={Invoices} /></Route>
-      <Route path="/pos"><A component={POS} /></Route>
-      <Route path="/products"><A component={Products} /></Route>
-      <Route path="/shop-orders"><A component={WebOrders} /></Route>
-      <Route path="/quotations/new"><A component={NewQuotation} /></Route>
-      <Route path="/quotations/:id/edit"><A component={NewQuotation} /></Route>
-      <Route path="/quotations/:id"><A component={QuotationDetail} /></Route>
-      <Route path="/quotations"><A component={Quotations} /></Route>
-      <Route path="/procurement"><A component={Procurement} /></Route>
-      <Route path="/shipments"><A component={Shipments} /></Route>
-      <Route path="/service-tickets"><A component={ServiceTickets} /></Route>
-      <Route path="/chat"><A component={Chat} /></Route>
-      <Route path="/vault"><A component={Vault} /></Route>
-      <Route path="/reports"><A component={Reports} /></Route>
-      <Route path="/settings"><A component={Settings} /></Route>
-      <Route path="/master-data"><A component={MasterData} /></Route>
-      <Route path="/system"><A component={SystemMaintenance} /></Route>
-      <Route path="/visitors"><A component={Visitors} /></Route>
-      <Route path="/imei-management"><A component={ImeiManagement} /></Route>
-      <Route path="/activity-log"><A component={ActivityLog} /></Route>
-      <Route path="/expenses"><A component={Expenses} /></Route>
-      <Route path="/customers/:id/ledger"><A component={CustomerLedger} /></Route>
-      <Route path="/notifications"><A component={Notifications} /></Route>
+        {/* Admin routes */}
+        <Route path="/dashboard"><A component={Dashboard} /></Route>
+        <Route path="/inventory"><A component={Inventory} /></Route>
+        <Route path="/customers"><A component={Customers} /></Route>
+        <Route path="/wallet"><A component={WalletManagement} /></Route>
+        <Route path="/customers/:id"><A component={CustomerDetail} /></Route>
+        <Route path="/invoices/new"><A component={NewInvoice} /></Route>
+        <Route path="/invoices/:id/edit"><A component={NewInvoice} /></Route>
+        <Route path="/invoices/:id"><A component={InvoiceDetail} /></Route>
+        <Route path="/invoices"><A component={Invoices} /></Route>
+        <Route path="/pos"><A component={POS} /></Route>
+        <Route path="/products"><A component={Products} /></Route>
+        <Route path="/shop-orders"><A component={WebOrders} /></Route>
+        <Route path="/quotations/new"><A component={NewQuotation} /></Route>
+        <Route path="/quotations/:id/edit"><A component={NewQuotation} /></Route>
+        <Route path="/quotations/:id"><A component={QuotationDetail} /></Route>
+        <Route path="/quotations"><A component={Quotations} /></Route>
+        <Route path="/procurement"><A component={Procurement} /></Route>
+        <Route path="/shipments"><A component={Shipments} /></Route>
+        <Route path="/service-tickets"><A component={ServiceTickets} /></Route>
+        <Route path="/chat"><A component={Chat} /></Route>
+        <Route path="/vault"><A component={Vault} /></Route>
+        <Route path="/reports"><A component={Reports} /></Route>
+        <Route path="/settings"><A component={Settings} /></Route>
+        <Route path="/master-data"><A component={MasterData} /></Route>
+        <Route path="/system"><A component={SystemMaintenance} /></Route>
+        <Route path="/visitors"><A component={Visitors} /></Route>
+        <Route path="/imei-management"><A component={ImeiManagement} /></Route>
+        <Route path="/activity-log"><A component={ActivityLog} /></Route>
+        <Route path="/expenses"><A component={Expenses} /></Route>
+        <Route path="/customers/:id/ledger"><A component={CustomerLedger} /></Route>
+        <Route path="/notifications"><A component={Notifications} /></Route>
 
-      <Route component={NotFound} />
-    </Switch>
+        <Route component={NotFound} />
+      </Switch>
+    </Suspense>
   );
 }
 
-// Google sign-in for the customer shop only (external Clerk account, proxied
-// through this app's own domain — see /api/__clerk on the backend). Never used
-// on the staff/admin (erp.geem.pk) side, which stays password-only.
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
   import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
@@ -167,9 +189,6 @@ const clerkPubKey = publishableKeyFromHost(
 if (!clerkPubKey) {
   throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY in .env file");
 }
-// Same-origin proxy path exposed by the API server's clerkProxyMiddleware.
-// This is a VPS deployment (not a Replit-managed deployment), so there is no
-// auto-injected VITE_CLERK_PROXY_URL — compute it from the current origin instead.
 const clerkProxyUrl = `${window.location.origin}/api/__clerk`;
 
 function stripBase(path: string): string {
@@ -178,7 +197,6 @@ function stripBase(path: string): string {
 
 function ClerkAwareShopAuth({ children }: { children: React.ReactNode }) {
   const [, setLocation] = useLocation();
-
   return (
     <ClerkProvider
       publishableKey={clerkPubKey}
@@ -218,8 +236,6 @@ function App() {
           (m as HTMLMetaElement).content = scVerification;
           if (!m.parentNode) document.head.appendChild(m);
         }
-        // Favicon links now point to /api/shop/favicon-icon (a server-side
-        // proxy that always reads the DB) — no client-side DOM manipulation needed.
         if (companyName && document.title === "Geem") document.title = companyName;
       })
       .catch(() => {});

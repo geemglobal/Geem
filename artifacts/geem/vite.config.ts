@@ -303,6 +303,22 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    // Split heavy third-party libs into dedicated chunks so the main bundle
+    // stays small and each library is cached independently by the browser.
+    rollupOptions: {
+      output: {
+        manualChunks(id: string) {
+          if (!id.includes("node_modules")) return;
+          if (id.includes("/xlsx/"))                                     return "vendor-xlsx";
+          if (id.includes("/recharts/") || id.includes("/d3-"))          return "vendor-charts";
+          if (id.includes("/@clerk/react"))                              return "vendor-clerk";
+          if (id.includes("/@uppy/"))                                    return "vendor-uppy";
+          if (id.includes("/react-dom/"))                                return "vendor-react-dom";
+          if (id.includes("/react/") || id.includes("/react-is/"))       return "vendor-react";
+          if (id.includes("/@tanstack/"))                                return "vendor-query";
+        },
+      },
+    },
   },
   server: {
     port,
