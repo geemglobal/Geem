@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import OpenAI from "openai";
+import sharp from "sharp";
 import { db, brandsTable, categoriesTable, integrationSettingsTable, productsTable } from "@workspace/db";
 import { eq, ilike } from "drizzle-orm";
 import * as fs from "fs";
@@ -150,6 +151,30 @@ function detectCategory(title: string): CategoryMatch | null {
     };
   }
 
+  // GPS Tracking & Telematics detection
+  if (
+    t.includes("GPS") ||
+    t.includes("TRACKER") ||
+    t.includes("SINOTRACK") ||
+    t.includes("YUNTRACK") ||
+    t.includes("MICODUS") ||
+    t.includes("WANWAY") ||
+    t.includes("GOOME") ||
+    t.includes("TKSTAR") ||
+    t.includes("COBAN") ||
+    t.includes("GARMIN") ||
+    t.includes("365GPS") ||
+    t.includes("360GPS") ||
+    t.includes("IOT GATEWAY") ||
+    t.includes("VEHICLE TRACKER") ||
+    t.includes("ASSET TRACKER")
+  ) {
+    return {
+      parentName: "GPS Tracking & Telematics",
+      childName: "Vehicle & Asset Trackers",
+    };
+  }
+
   return null;
 }
 
@@ -239,30 +264,6 @@ async function searchImagesViaDDG(query: string): Promise<string[]> {
   }
 }
 
-function getImageExt(url: string): string {
-  const u = url.split("?")[0].toLowerCase();
-  if (u.endsWith(".webp")) return ".webp";
-  if (u.endsWith(".png")) return ".png";
-  if (u.endsWith(".gif")) return ".gif";
-  return ".jpg";
-}
-
-async function downloadImageToFile(url: string, destPath: string): Promise<boolean> {
-  try {
-    const res = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0" },
-      signal: AbortSignal.timeout(12000),
-    });
-    if (!res.ok) return false;
-    const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.length < 2000) return false; // skip tiny/broken images
-    fs.writeFileSync(destPath, buf);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function sanitizeFilePrefix(title: string): string {
   return title
     .toLowerCase()
@@ -271,40 +272,67 @@ function sanitizeFilePrefix(title: string): string {
     .slice(0, 55);
 }
 
+/**
+ * Download a URL, convert to optimised WebP via sharp, and save to destPath.
+ * destPath should already end in .webp.
+ */
+async function downloadImageAsWebP(url: string, destPath: string): Promise<boolean> {
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!res.ok) return false;
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length < 2000) return false; // skip tiny / broken images
+    await sharp(buf)
+      .resize({ width: 1200, withoutEnlargement: true }) // cap at 1200px wide
+      .webp({ quality: 85 })
+      .toFile(destPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function fetchAndSaveProductImages(
   searchQuery: string,
   filePrefix: string,
 ): Promise<{ main: string | null; gallery: string[] }> {
   const productsDir = path.join(getUploadsDir(), "public", "products");
-  const galleryDir = path.join(productsDir, "gallery");
+  const galleryDir  = path.join(productsDir, "gallery");
   fs.mkdirSync(productsDir, { recursive: true });
-  fs.mkdirSync(galleryDir, { recursive: true });
+  fs.mkdirSync(galleryDir,  { recursive: true });
 
-  const imageUrls = await searchImagesViaDDG(searchQuery);
+  // Try two queries so we have enough candidate URLs for 5 images (1 main + 4 gallery)
+  let imageUrls = await searchImagesViaDDG(searchQuery);
+  if (imageUrls.length < 6) {
+    const extra = await searchImagesViaDDG(`${searchQuery} product photo`);
+    for (const u of extra) if (!imageUrls.includes(u)) imageUrls.push(u);
+  }
   if (!imageUrls.length) return { main: null, gallery: [] };
 
   let main: string | null = null;
   const gallery: string[] = [];
 
-  // Download main image
-  if (imageUrls[0]) {
-    const ext = getImageExt(imageUrls[0]);
-    const mainFile = `${filePrefix}-main${ext}`;
-    const mainPath = path.join(productsDir, mainFile);
-    if (await downloadImageToFile(imageUrls[0], mainPath)) {
-      main = `/api/storage/public-objects/products/${mainFile}`;
-    }
-  }
+  for (const url of imageUrls) {
+    if (main && gallery.length >= 4) break;
 
-  // Download up to 4 gallery images from remaining URLs
-  for (let i = 1; i < imageUrls.length && gallery.length < 4; i++) {
-    const url = imageUrls[i];
-    if (!url) continue;
-    const ext = getImageExt(url);
-    const galleryFile = `${filePrefix}-gallery-${gallery.length + 1}${ext}`;
-    const galleryPath = path.join(galleryDir, galleryFile);
-    if (await downloadImageToFile(url, galleryPath)) {
-      gallery.push(`/api/storage/public-objects/products/gallery/${galleryFile}`);
+    if (!main) {
+      // Main / featured image
+      const mainFile = `${filePrefix}-main.webp`;
+      const mainPath = path.join(productsDir, mainFile);
+      if (await downloadImageAsWebP(url, mainPath)) {
+        main = `/api/storage/public-objects/products/${mainFile}`;
+      }
+    } else if (gallery.length < 4) {
+      // Gallery images
+      const n = gallery.length + 1;
+      const galleryFile = `${filePrefix}-gallery-${n}.webp`;
+      const galleryPath = path.join(galleryDir, galleryFile);
+      if (await downloadImageAsWebP(url, galleryPath)) {
+        gallery.push(`/api/storage/public-objects/products/gallery/${galleryFile}`);
+      }
     }
   }
 

@@ -384,13 +384,7 @@ export default function Products() {
       <Dialog open={showForm} onOpenChange={v => { setShowForm(v); if (!v) setEditProduct(null); }}>
         <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto">
           <DialogHeader>
-            <div className="flex items-center justify-between">
-              <DialogTitle>{editProduct ? "Edit Product" : "New Product"}</DialogTitle>
-              <Button variant="outline" size="sm" onClick={handleAutoGenerate} disabled={aiLoading} className="gap-1.5 border-purple-300 hover:border-purple-500">
-                <Sparkles className="h-3.5 w-3.5 text-purple-500" />
-                {aiLoading ? (aiProgress || "Generating…") : "✨ Auto-Generate All"}
-              </Button>
-            </div>
+            <DialogTitle>{editProduct ? "Edit Product" : "New Product"}</DialogTitle>
           </DialogHeader>
 
           {/* Auto-generate warnings */}
@@ -462,7 +456,26 @@ export default function Products() {
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
                 <Label>Title *</Label>
-                <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Yuntrack CJ780 4G LTE Vehicle GPS Tracker" />
+                <div className="flex gap-2">
+                  <Input
+                    value={form.title}
+                    onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                    placeholder="e.g. LawMate PV-RC200HDW or Toray T700 Carbon Fiber Spool"
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAutoGenerate}
+                    disabled={aiLoading}
+                    className="shrink-0 gap-1.5 border-purple-300 hover:border-purple-500 text-purple-700 hover:text-purple-900"
+                    title="Auto-generate SEO content, detect category, and download images"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    {aiLoading ? (aiProgress || "Generating…") : "Auto-Generate"}
+                  </Button>
+                </div>
               </div>
               <div>
                 <Label>URL Slug</Label>
