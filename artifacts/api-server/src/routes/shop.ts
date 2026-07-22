@@ -164,6 +164,29 @@ router.get("/shop/products/:slug", async (req, res): Promise<void> => {
 
 // Public: XML Sitemap for search engines
 // Public: fetch SEO/Google config (GA Measurement ID, Search Console verification)
+// Dynamic app-icon: always reads gLogo from DB and 302-redirects.
+// No SW caching (NetworkOnly rule) so every page load gets the current logo.
+router.get("/shop/app-icon", async (_req, res): Promise<void> => {
+  try {
+    const [company] = await db.select({ gLogo: companySettingsTable.gLogo }).from(companySettingsTable);
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.redirect(302, company?.gLogo ?? "/icon-192.png");
+  } catch {
+    res.redirect(302, "/icon-192.png");
+  }
+});
+
+// Dynamic favicon: always reads favicon from DB and 302-redirects.
+router.get("/shop/favicon-icon", async (_req, res): Promise<void> => {
+  try {
+    const [company] = await db.select({ favicon: companySettingsTable.favicon }).from(companySettingsTable);
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.redirect(302, company?.favicon ?? "/favicon.svg");
+  } catch {
+    res.redirect(302, "/favicon.svg");
+  }
+});
+
 router.get("/shop/seo-config", async (req, res): Promise<void> => {
   const [gaRow] = await db.select().from(integrationSettingsTable).where(eq(integrationSettingsTable.type, "google_analytics"));
   const [scRow] = await db.select().from(integrationSettingsTable).where(eq(integrationSettingsTable.type, "google_search_console"));

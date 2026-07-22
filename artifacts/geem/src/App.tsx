@@ -218,22 +218,8 @@ function App() {
           (m as HTMLMetaElement).content = scVerification;
           if (!m.parentNode) document.head.appendChild(m);
         }
-        if (favicon) {
-          // Remove ALL existing icon link elements — their hardcoded `type` attributes
-          // (e.g. image/svg+xml, image/x-icon) cause browsers to silently reject a
-          // PNG/JPEG href update.  Create fresh links without type restrictions instead.
-          document.querySelectorAll<HTMLLinkElement>(
-            "link[rel*='icon'], link[rel='shortcut icon']"
-          ).forEach(el => el.remove());
-          const link = document.createElement('link');
-          link.rel = 'icon';
-          link.href = favicon;
-          document.head.appendChild(link);
-          const shortcut = document.createElement('link');
-          shortcut.rel = 'shortcut icon';
-          shortcut.href = favicon;
-          document.head.appendChild(shortcut);
-        }
+        // Favicon links now point to /api/shop/favicon-icon (a server-side
+        // proxy that always reads the DB) — no client-side DOM manipulation needed.
         if (companyName && document.title === "Geem") document.title = companyName;
       })
       .catch(() => {});

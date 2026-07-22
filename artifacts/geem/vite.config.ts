@@ -112,6 +112,14 @@ const pwaWorkbox =
         navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
           {
+            // app-icon and favicon-icon are server-side DB-proxies — never cache them
+            // so every page load picks up the latest logo the admin has saved.
+            urlPattern: ({ url }: { url: URL }) =>
+              url.pathname === "/api/shop/app-icon" ||
+              url.pathname === "/api/shop/favicon-icon",
+            handler: "NetworkOnly" as const,
+          },
+          {
             // seo-config carries live branding (logo, favicon, colors) — always network-first
             // so the browser immediately reflects changes the admin saves in Settings.
             urlPattern: ({ url }: { url: URL }) => url.pathname === "/api/shop/seo-config",
