@@ -219,30 +219,37 @@ const htmlPatchPlugin = {
       fs.writeFileSync(swPath, sw, "utf-8");
     }
 
-    // 4. Bake the company logo into the static PNG icon files so the PWA
-    //    manifest can reference direct PNG paths (Chrome requires this for the
-    //    install button to appear — it does NOT follow 302 redirects when
-    //    validating manifest icons).  The API server is already running on VPS
-    //    so this fetch succeeds; on dev/CI it is a no-op if unreachable.
-    try {
-      const iconResp = await fetch("http://localhost:8080/api/shop/app-icon", {
-        redirect: "follow",
-        signal: AbortSignal.timeout(5000),
-      });
-      if (iconResp.ok) {
-        const iconBuf = Buffer.from(await iconResp.arrayBuffer());
-        if (iconBuf.length > 1024) { // sanity: must be a real image, not an error page
-          const iconTargets = [
-            "icon-192.png", "icon-512.png", "icon-512-maskable.png", "apple-touch-icon.png",
-          ];
-          for (const name of iconTargets) {
-            fs.writeFileSync(path.join(outDir, name), iconBuf);
+    // 4. Verify brand icons are present in dist.
+    //    public/geem-icon-source.png is the canonical transparent G logo.
+    //    Vite copies everything in public/ → dist/public/ automatically, so the
+    //    pre-generated icon-192.png, icon-512.png, icon-512-maskable.png and
+    //    apple-touch-icon.png are already in place after the Vite build step.
+    //    Nothing extra to do — just log confirmation.
+    const iconNames = ["icon-192.png", "icon-512.png", "icon-512-maskable.png", "apple-touch-icon.png"];
+    const iconsMissing = iconNames.filter(n => !fs.existsSync(path.join(outDir, n)));
+    if (iconsMissing.length === 0) {
+      const sz = fs.statSync(path.join(outDir, "icon-192.png")).size;
+      console.log(`[geem] brand icons ready in dist (icon-192 = ${sz} B, transparent G logo)`);
+    } else {
+      // One or more icons are absent — try fetching from API as last resort
+      console.warn(`[geem] missing icons: ${iconsMissing.join(", ")} — trying API fallback`);
+      try {
+        const iconResp = await fetch("http://localhost:8080/api/shop/app-icon", {
+          redirect: "follow",
+          signal: AbortSignal.timeout(5000),
+        });
+        if (iconResp.ok) {
+          const iconBuf = Buffer.from(await iconResp.arrayBuffer());
+          if (iconBuf.length > 1024) {
+            for (const name of iconsMissing) {
+              fs.writeFileSync(path.join(outDir, name), iconBuf);
+            }
+            console.log(`[geem] missing icons filled from API (${iconBuf.length} B)`);
           }
-          console.log(`[geem] company icon (${iconBuf.length} B) baked into static PNG files`);
         }
+      } catch {
+        console.warn("[geem] API fallback also failed — icons may be missing from build");
       }
-    } catch {
-      console.warn("[geem] icon bake skipped — API not reachable during build (OK on dev/CI)");
     }
   },
 };
