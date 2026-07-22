@@ -144,7 +144,7 @@ function SidebarContent({
             <img
               src={logo}
               alt="Logo"
-              className="h-11 w-11 rounded-xl object-contain flex-shrink-0"
+              className="h-16 w-16 rounded-xl object-contain flex-shrink-0"
             />
             <div>
               <p className="font-bold text-base leading-none">Geem ERP</p>
@@ -153,7 +153,7 @@ function SidebarContent({
           </div>
         ) : (
           <div className="flex items-center gap-3">
-            <img src="/icon-192.png" alt="Geem ERP" className="h-9 w-9 rounded-lg object-contain flex-shrink-0" />
+            <img src="/icon-192.png" alt="Geem ERP" className="h-12 w-12 rounded-lg object-contain flex-shrink-0" />
             <div>
               <p className="font-bold text-base leading-none">Geem ERP</p>
               <p className="text-xs text-sidebar-foreground/60 mt-1">Management System</p>

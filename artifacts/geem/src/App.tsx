@@ -219,17 +219,20 @@ function App() {
           if (!m.parentNode) document.head.appendChild(m);
         }
         if (favicon) {
-          // Update every icon-related link element (favicon, apple-touch-icon, shortcut)
+          // Remove ALL existing icon link elements — their hardcoded `type` attributes
+          // (e.g. image/svg+xml, image/x-icon) cause browsers to silently reject a
+          // PNG/JPEG href update.  Create fresh links without type restrictions instead.
           document.querySelectorAll<HTMLLinkElement>(
             "link[rel*='icon'], link[rel='shortcut icon']"
-          ).forEach(el => { el.href = favicon; });
-          // If somehow none exist yet, create one
-          if (!document.querySelector("link[rel*='icon']")) {
-            const link = document.createElement('link');
-            link.rel = 'icon';
-            link.href = favicon;
-            document.head.appendChild(link);
-          }
+          ).forEach(el => el.remove());
+          const link = document.createElement('link');
+          link.rel = 'icon';
+          link.href = favicon;
+          document.head.appendChild(link);
+          const shortcut = document.createElement('link');
+          shortcut.rel = 'shortcut icon';
+          shortcut.href = favicon;
+          document.head.appendChild(shortcut);
         }
         if (companyName && document.title === "Geem") document.title = companyName;
       })

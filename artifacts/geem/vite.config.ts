@@ -112,6 +112,18 @@ const pwaWorkbox =
         navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
           {
+            // seo-config carries live branding (logo, favicon, colors) — always network-first
+            // so the browser immediately reflects changes the admin saves in Settings.
+            urlPattern: ({ url }: { url: URL }) => url.pathname === "/api/shop/seo-config",
+            handler: "NetworkFirst" as const,
+            options: {
+              cacheName: "geem-seo-config-v1",
+              networkTimeoutSeconds: 4,
+              expiration: { maxEntries: 1, maxAgeSeconds: 60 * 5 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
             urlPattern: ({ url }: { url: URL }) =>
               url.pathname.startsWith("/api/shop") ||
               url.pathname.startsWith("/api/brands") ||
