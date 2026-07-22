@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, count, sum, sql, desc, inArray } from "drizzle-orm";
+import { eq, and, count, sum, sql, desc, inArray, notInArray } from "drizzle-orm";
 import {
   db, invoicesTable, invoiceItemsTable, paymentsTable, posDraftsTable,
   customersTable, inventoryItemsTable, invoiceSettingsTable, companySettingsTable,
@@ -607,21 +607,10 @@ router.delete("/invoices/:id/payments/:paymentId", async (req, res): Promise<voi
   await db.update(invoicesTable).set({ paid: String(newPaid), status: newStatus }).where(eq(invoicesTable.id, id));
 
   if (inv.customerId) {
+    // Delete only this payment's ledger entry (unique reference per payment)
     await db.delete(ledgerEntriesTable).where(
-      and(eq(ledgerEntriesTable.reference, inv.invoiceNumber), eq(ledgerEntriesTable.type, "payment"))
+      eq(ledgerEntriesTable.reference, `${inv.invoiceNumber}-PMT${paymentId}`)
     );
-    for (const p of remaining) {
-      await db.insert(ledgerEntriesTable).values({
-        customerId: inv.customerId,
-        type: "payment",
-        description: `Payment received — ${inv.invoiceNumber} (${p.method})${p.memo ? ` — ${p.memo}` : ""}`,
-        reference: inv.invoiceNumber,
-        debit: "0",
-        credit: String(p.amount),
-        balance: "0",
-        date: new Date(String(p.date) + "T00:00:00"),
-      });
-    }
     await recalculateCustomerLedger(inv.customerId);
   }
 
@@ -656,21 +645,12 @@ router.patch("/invoices/:id/payments/:paymentId", async (req, res): Promise<void
   await db.update(invoicesTable).set({ paid: String(newPaid), status: newStatus }).where(eq(invoicesTable.id, id));
 
   if (inv.customerId) {
-    await db.delete(ledgerEntriesTable).where(
-      and(eq(ledgerEntriesTable.reference, inv.invoiceNumber), eq(ledgerEntriesTable.type, "payment"))
-    );
-    for (const p of allPayments) {
-      await db.insert(ledgerEntriesTable).values({
-        customerId: inv.customerId,
-        type: "payment",
-        description: `Payment received — ${inv.invoiceNumber} (${p.method})${p.memo ? ` — ${p.memo}` : ""}`,
-        reference: inv.invoiceNumber,
-        debit: "0",
-        credit: String(p.amount),
-        balance: "0",
-        date: new Date(String(p.date) + "T00:00:00"),
-      });
-    }
+    // Update this specific payment's ledger entry in place (unique reference per payment)
+    await db.update(ledgerEntriesTable).set({
+      credit: String(amount ?? (await db.select().from(paymentsTable).where(eq(paymentsTable.id, paymentId)).then(r => r[0]?.amount ?? 0))),
+      description: `Payment received — ${inv.invoiceNumber} (${method ?? ""})${memo ? ` — ${memo}` : ""}`,
+      ...(date ? { date: new Date(String(date)) } : {}),
+    }).where(eq(ledgerEntriesTable.reference, `${inv.invoiceNumber}-PMT${paymentId}`));
     await recalculateCustomerLedger(inv.customerId);
   }
 
@@ -931,14 +911,14 @@ router.post("/invoices/:id/payment", async (req, res): Promise<void> => {
     const newStatus = newPaid >= total ? "paid" : "partial";
     await db.update(invoicesTable).set({ paid: String(newPaid), status: newStatus }).where(eq(invoicesTable.id, id));
 
-    // Ledger: create credit entry for this payment
+    // Ledger: create credit entry for this payment (reference = INV-PMT{id} to be unique)
     if (inv.customerId) {
       const paidAmt = parseFloat(String(amount));
       await addLedgerEntry({
         customerId: inv.customerId,
         type: "payment",
         description: `Payment received — ${inv.invoiceNumber} (${method})${memo ? ` — ${memo}` : ""}`,
-        reference: inv.invoiceNumber,
+        reference: `${inv.invoiceNumber}-PMT${payment.id}`,
         debit: 0,
         credit: paidAmt,
         date: new Date(String(date)),
@@ -1021,72 +1001,76 @@ router.post("/invoices/:id/email", async (req, res): Promise<void> => {
  * Also rebuilds running balances for every affected customer.
  */
 router.post("/invoices/sync-ledger", async (req, res): Promise<void> => {
+  // ── HARD RESET: wipe all generated ledger entries, then rebuild from
+  // the authoritative invoices + payments tables. This eliminates duplicates
+  // that built up from previous incremental syncs using inconsistent keys.
+  await db.delete(ledgerEntriesTable);
+
   const allInvoices = await db.select().from(invoicesTable).orderBy(invoicesTable.date, invoicesTable.id);
   const allPayments = await db.select().from(paymentsTable).orderBy(paymentsTable.date, paymentsTable.id);
 
-  // Existing ledger entries (all) — use reference + type to deduplicate
-  const existingEntries = await db.select({
-    reference: ledgerEntriesTable.reference,
-    type: ledgerEntriesTable.type,
-  }).from(ledgerEntriesTable);
-  const existing = new Set(existingEntries.map(e => `${e.type}::${e.reference}`));
-
   const affectedCustomers = new Set<number>();
 
+  // One DEBIT per invoice (what the customer owes)
   for (const inv of allInvoices) {
     if (!inv.customerId) continue;
     const total = parseFloat(String(inv.total));
     if (total <= 0) continue;
 
-    const key = `invoice::${inv.invoiceNumber}`;
-    if (!existing.has(key)) {
-      const [cust] = await db.select({ name: customersTable.name }).from(customersTable).where(eq(customersTable.id, inv.customerId));
-      await db.insert(ledgerEntriesTable).values({
-        customerId: inv.customerId,
-        type: "invoice",
-        description: `Invoice ${inv.invoiceNumber}${cust ? ` — ${cust.name}` : ""}`,
-        reference: inv.invoiceNumber,
-        debit: String(total),
-        credit: "0",
-        balance: "0",
-        date: new Date(String(inv.date)),
-      });
-      affectedCustomers.add(inv.customerId);
-    }
+    const [cust] = await db.select({ name: customersTable.name })
+      .from(customersTable).where(eq(customersTable.id, inv.customerId));
+    await db.insert(ledgerEntriesTable).values({
+      customerId: inv.customerId,
+      type: "invoice",
+      description: `Invoice ${inv.invoiceNumber}${cust ? ` — ${cust.name}` : ""}`,
+      reference: inv.invoiceNumber,
+      debit: String(total),
+      credit: "0",
+      balance: "0",
+      date: new Date(String(inv.date)),
+    });
+    affectedCustomers.add(inv.customerId);
   }
 
+  // One CREDIT per payment (what the customer actually paid)
   for (const pmt of allPayments) {
     const [inv] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, pmt.invoiceId));
     if (!inv?.customerId) continue;
     const pmtAmt = parseFloat(String(pmt.amount));
     if (pmtAmt <= 0) continue;
 
-    // Use payment id to make key unique per payment
-    const key = `payment::${inv.invoiceNumber}-PMT${pmt.id}`;
-    if (!existing.has(key)) {
-      await db.insert(ledgerEntriesTable).values({
-        customerId: inv.customerId,
-        type: "payment",
-        description: `Payment received — ${inv.invoiceNumber} (${pmt.method})`,
-        reference: inv.invoiceNumber,
-        debit: "0",
-        credit: String(pmtAmt),
-        balance: "0",
-        date: new Date(String(pmt.date)),
-      });
-      affectedCustomers.add(inv.customerId);
-    }
+    await db.insert(ledgerEntriesTable).values({
+      customerId: inv.customerId,
+      type: "payment",
+      description: `Payment received — ${inv.invoiceNumber} (${pmt.method})${pmt.memo ? ` — ${pmt.memo}` : ""}`,
+      reference: `${inv.invoiceNumber}-PMT${pmt.id}`,
+      debit: "0",
+      credit: String(pmtAmt),
+      balance: "0",
+      date: new Date(String(pmt.date)),
+    });
+    affectedCustomers.add(inv.customerId);
   }
 
-  // Recalculate running balances for all affected customers
+  // Recalculate running balance for every customer that had activity
   for (const custId of affectedCustomers) {
     await recalculateCustomerLedger(custId);
   }
 
+  // Zero out customers with no ledger activity
+  if (affectedCustomers.size > 0) {
+    await db.update(customersTable)
+      .set({ ledgerBalance: "0" })
+      .where(notInArray(customersTable.id, [...affectedCustomers]));
+  } else {
+    await db.update(customersTable).set({ ledgerBalance: "0" });
+  }
+
   res.json({
-    message: "Ledger sync complete",
+    message: "Ledger rebuilt from scratch — all duplicates removed",
     customersUpdated: affectedCustomers.size,
     invoicesProcessed: allInvoices.length,
+    paymentsProcessed: allPayments.length,
   });
 });
 
