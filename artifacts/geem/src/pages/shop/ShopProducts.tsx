@@ -129,6 +129,23 @@ export default function ShopProducts() {
   const [sort, setSort] = useState("newest");
   const [page, setPage] = useState(1);
 
+  // ── Data fetching (must be declared BEFORE any useEffect that reads them) ──
+  const { data, isLoading } = useQuery({
+    queryKey: ["shop-catalog", search, brandId, categoryId, sort, page],
+    queryFn: () => axiosInstance.get<{ products: Product[]; total: number }>(
+      `/shop/products?search=${encodeURIComponent(search)}&brandId=${brandId}&categoryId=${categoryId}&sort=${sort}&page=${page}&limit=24`
+    ).then(r => r.data),
+  });
+
+  const { data: brands } = useQuery({
+    queryKey: ["brands"],
+    queryFn: () => axiosInstance.get<Brand[]>("/brands").then(r => r.data),
+  });
+  const { data: allCategories } = useQuery({
+    queryKey: ["categories"],
+    queryFn: () => axiosInstance.get<Category[]>("/categories").then(r => r.data),
+  });
+
   // Sync local state whenever the URL query string changes
   useEffect(() => {
     const params = new URLSearchParams(searchStr);
@@ -154,22 +171,6 @@ export default function ShopProducts() {
       setPendingCategoryName("");
     }
   }, [pendingCategoryName, allCategories]);
-
-  const { data, isLoading } = useQuery({
-    queryKey: ["shop-catalog", search, brandId, categoryId, sort, page],
-    queryFn: () => axiosInstance.get<{ products: Product[]; total: number }>(
-      `/shop/products?search=${encodeURIComponent(search)}&brandId=${brandId}&categoryId=${categoryId}&sort=${sort}&page=${page}&limit=24`
-    ).then(r => r.data),
-  });
-
-  const { data: brands } = useQuery({
-    queryKey: ["brands"],
-    queryFn: () => axiosInstance.get<Brand[]>("/brands").then(r => r.data),
-  });
-  const { data: allCategories } = useQuery({
-    queryKey: ["categories"],
-    queryFn: () => axiosInstance.get<Category[]>("/categories").then(r => r.data),
-  });
 
   const products = data?.products ?? [];
   const categoryTree = buildTree(allCategories ?? []);
