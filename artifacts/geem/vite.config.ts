@@ -31,9 +31,11 @@ const pwaManifest =
         start_url: "/dashboard",
         categories: ["business", "productivity"],
         icons: [
-          { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
-          { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
-          { src: "/icon-512-maskable.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+          // Dynamic: server reads gLogo from DB and 302-redirects to the uploaded image.
+          // Users must reinstall the PWA (remove + re-add to home screen) to pick up a
+          // changed logo; the OS caches the icon at install time.
+          { src: "/api/shop/app-icon", sizes: "192x192", purpose: "any" },
+          { src: "/api/shop/app-icon", sizes: "512x512", purpose: "any maskable" },
         ],
       }
     : {
@@ -48,9 +50,8 @@ const pwaManifest =
         start_url: "/",
         categories: ["shopping", "lifestyle"],
         icons: [
-          { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
-          { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
-          { src: "/icon-512-maskable.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+          { src: "/api/shop/app-icon", sizes: "192x192", purpose: "any" },
+          { src: "/api/shop/app-icon", sizes: "512x512", purpose: "any maskable" },
         ],
       };
 
