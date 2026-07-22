@@ -30,12 +30,12 @@ const pwaManifest =
         scope: "/",
         start_url: "/dashboard",
         categories: ["business", "productivity"],
+        // Static PNG paths — these files are overwritten at build-time by the
+        // closeBundle icon-bake step with the actual company logo bytes.
         icons: [
-          // Dynamic: server reads gLogo from DB and 302-redirects to the uploaded image.
-          // Users must reinstall the PWA (remove + re-add to home screen) to pick up a
-          // changed logo; the OS caches the icon at install time.
-          { src: "/api/shop/app-icon", sizes: "192x192", purpose: "any" },
-          { src: "/api/shop/app-icon", sizes: "512x512", purpose: "any maskable" },
+          { src: "/icon-192.png",          sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: "/icon-512.png",          sizes: "512x512", type: "image/png", purpose: "any" },
+          { src: "/icon-512-maskable.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       }
     : {
@@ -50,19 +50,24 @@ const pwaManifest =
         start_url: "/",
         categories: ["shopping", "lifestyle"],
         icons: [
-          { src: "/api/shop/app-icon", sizes: "192x192", purpose: "any" },
-          { src: "/api/shop/app-icon", sizes: "512x512", purpose: "any maskable" },
+          { src: "/icon-192.png",          sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: "/icon-512.png",          sizes: "512x512", type: "image/png", purpose: "any" },
+          { src: "/icon-512-maskable.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       };
 
 const pwaWorkbox =
   appMode === "admin"
     ? {
-        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        // 10 MB — allow larger JS chunks & assets to be precached for full offline ERP
+        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2,woff,ttf}"],
         navigateFallback: "/index.html",
         navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
+          // ── All ERP API routes ─────────────────────────────────────────────
+          // NetworkFirst: always try network; if unreachable within 4 s fall back
+          // to the most recent cached copy so the app stays usable offline.
           {
             urlPattern: ({ url }: { url: URL }) =>
               url.pathname.startsWith("/api/inventory") ||
@@ -78,29 +83,29 @@ const pwaWorkbox =
               url.pathname.startsWith("/api/service-tickets") ||
               url.pathname.startsWith("/api/visitors") ||
               url.pathname.startsWith("/api/expenses") ||
-              url.pathname.startsWith("/api/search"),
-            handler: "StaleWhileRevalidate" as const,
+              url.pathname.startsWith("/api/search") ||
+              url.pathname.startsWith("/api/dashboard") ||
+              url.pathname.startsWith("/api/settings") ||
+              url.pathname.startsWith("/api/returns") ||
+              url.pathname.startsWith("/api/reports") ||
+              url.pathname.startsWith("/api/company") ||
+              url.pathname.startsWith("/api/push-subscriptions"),
+            handler: "NetworkFirst" as const,
             options: {
-              cacheName: "geem-admin-api-v3",
-              expiration: { maxEntries: 2000, maxAgeSeconds: 60 * 60 * 24 * 14 },
+              cacheName: "geem-admin-api-v4",
+              networkTimeoutSeconds: 4,
+              expiration: { maxEntries: 3000, maxAgeSeconds: 60 * 60 * 24 * 30 }, // 30 days
               cacheableResponse: { statuses: [0, 200] },
             },
           },
-          {
-            urlPattern: ({ url }: { url: URL }) => url.pathname.startsWith("/api/dashboard"),
-            handler: "StaleWhileRevalidate" as const,
-            options: {
-              cacheName: "geem-dashboard-v3",
-              expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
+          // ── Storage objects (product images, PDFs, logos) ──────────────────
+          // CacheFirst: bitmaps don't change at the same URL; huge offline win.
           {
             urlPattern: ({ url }: { url: URL }) => url.pathname.startsWith("/api/storage/objects"),
             handler: "CacheFirst" as const,
             options: {
-              cacheName: "geem-images-v3",
-              expiration: { maxEntries: 500, maxAgeSeconds: 60 * 60 * 24 * 60 },
+              cacheName: "geem-images-v4",
+              expiration: { maxEntries: 1000, maxAgeSeconds: 60 * 60 * 24 * 90 }, // 90 days
               cacheableResponse: { statuses: [0, 200] },
             },
           },
@@ -161,7 +166,7 @@ const htmlPatchPlugin = {
   name: "geem-html-patch",
   apply: "build" as const,
   enforce: "post" as const,
-  closeBundle() {
+  async closeBundle() {
     const outDir  = path.resolve(import.meta.dirname, "dist/public");
     const idxPath = path.join(outDir, "index.html");
     const swPath  = path.join(outDir, "sw.js");
@@ -201,6 +206,32 @@ const htmlPatchPlugin = {
       }
 
       fs.writeFileSync(swPath, sw, "utf-8");
+    }
+
+    // 4. Bake the company logo into the static PNG icon files so the PWA
+    //    manifest can reference direct PNG paths (Chrome requires this for the
+    //    install button to appear — it does NOT follow 302 redirects when
+    //    validating manifest icons).  The API server is already running on VPS
+    //    so this fetch succeeds; on dev/CI it is a no-op if unreachable.
+    try {
+      const iconResp = await fetch("http://localhost:8080/api/shop/app-icon", {
+        redirect: "follow",
+        signal: AbortSignal.timeout(5000),
+      });
+      if (iconResp.ok) {
+        const iconBuf = Buffer.from(await iconResp.arrayBuffer());
+        if (iconBuf.length > 1024) { // sanity: must be a real image, not an error page
+          const iconTargets = [
+            "icon-192.png", "icon-512.png", "icon-512-maskable.png", "apple-touch-icon.png",
+          ];
+          for (const name of iconTargets) {
+            fs.writeFileSync(path.join(outDir, name), iconBuf);
+          }
+          console.log(`[geem] company icon (${iconBuf.length} B) baked into static PNG files`);
+        }
+      }
+    } catch {
+      console.warn("[geem] icon bake skipped — API not reachable during build (OK on dev/CI)");
     }
   },
 };

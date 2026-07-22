@@ -7,7 +7,7 @@ self.addEventListener("push", (event) => {
   const title = data.title || "Geem";
   const options = {
     body: data.body || "",
-    icon: "/geem-logo.png",
+    icon: "/icon-192.png",
     badge: "/icon-192.png",
     tag: data.tag || "geem-notification",
     data: { url: data.url || "/" },
