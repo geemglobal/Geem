@@ -693,9 +693,15 @@ importers:
       drizzle-orm:
         specifier: 'catalog:'
         version: 0.45.2(@types/pg@8.20.0)(pg@8.22.0)
+      openai:
+        specifier: ^4.103.0
+        version: 4.104.0(zod@3.25.76)
       pg:
         specifier: ^8.20.0
         version: 8.22.0
+      sharp:
+        specifier: ^0.35.3
+        version: 0.35.3(@types/node@25.9.4)
     devDependencies:
       '@types/node':
         specifier: 'catalog:'

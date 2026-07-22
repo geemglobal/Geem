@@ -177,7 +177,7 @@ async function downloadProductImages(
   const galleryPaths: string[] = [];
 
   for (const url of collected) {
-    if (mainPath && galleryPaths.length >= 3) break;
+    if (mainPath && galleryPaths.length >= 4) break;
 
     const ext = fileExt(url);
 
@@ -188,7 +188,7 @@ async function downloadProductImages(
         mainPath = `public/products/main/${fname}`;
         console.log(`    📸 main      → ${fname}`);
       }
-    } else if (galleryPaths.length < 3) {
+    } else if (galleryPaths.length < 4) {
       const idx   = galleryPaths.length + 1;
       const fname = `${slug}-g${idx}${ext}`;
       const dest  = path.join(GALLERY_DIR, fname);

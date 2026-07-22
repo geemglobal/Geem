@@ -17,12 +17,15 @@
     "update-product-images": "tsx ./src/update-product-images.ts",
     "sync-inventory-catalog": "tsx ./src/sync-inventory-to-catalog.ts",
     "full-catalog": "tsx ./src/full-catalog-generator.ts",
+    "batch-complete": "tsx ./src/batch-complete-catalog.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@workspace/db": "workspace:*",
     "drizzle-orm": "catalog:",
-    "pg": "^8.20.0"
+    "openai": "^4.103.0",
+    "pg": "^8.20.0",
+    "sharp": "^0.35.3"
   },
   "devDependencies": {
     "@types/node": "catalog:",
