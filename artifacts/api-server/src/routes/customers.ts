@@ -249,7 +249,7 @@ router.get("/customers/:id/ledger", async (req, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
   const entries = await db.select().from(ledgerEntriesTable)
     .where(eq(ledgerEntriesTable.customerId, id))
-    .orderBy(ledgerEntriesTable.date);
+    .orderBy(desc(ledgerEntriesTable.date), desc(ledgerEntriesTable.id));
   const mapped = entries.map(e => ({
     ...e,
     date: e.date.toISOString(),
