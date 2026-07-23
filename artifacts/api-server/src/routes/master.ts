@@ -5,6 +5,7 @@ import {
   brandsTable,
   deviceModelsTable,
   categoriesTable,
+  productsTable,
   vendorsTable,
   couriersTable,
   paymentMethodsTable,
@@ -115,7 +116,14 @@ router.delete("/models/:id", async (req, res): Promise<void> => {
 // --- CATEGORIES ---
 router.get("/categories", async (req, res): Promise<void> => {
   const cats = await db.select().from(categoriesTable).orderBy(categoriesTable.name);
-  res.json(cats.map(c => ({ ...c, parentName: null, productsCount: 0, parentId: c.parentId ?? null })));
+  // Count published products per category in one query
+  const counts = await db
+    .select({ categoryId: productsTable.categoryId, total: count() })
+    .from(productsTable)
+    .where(eq(productsTable.published, true))
+    .groupBy(productsTable.categoryId);
+  const countMap = new Map(counts.map(r => [r.categoryId, Number(r.total)]));
+  res.json(cats.map(c => ({ ...c, parentName: null, productsCount: countMap.get(c.id) ?? 0, parentId: c.parentId ?? null })));
 });
 
 router.post("/categories", async (req, res): Promise<void> => {
