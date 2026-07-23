@@ -112,7 +112,54 @@
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"></noscript>
   </head>
   <body>
-    <div id="root"><div id="app-splash" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#ffffff;z-index:9999;"><img id="app-splash-icon" src="/api/shop/app-icon" alt="Geem" style="width:96px;height:96px;object-fit:contain;" fetchpriority="low" /><div style="margin-top:20px;width:56px;height:3px;background:#EC2029;border-radius:3px;animation:geem-load 1.2s ease-in-out infinite;"></div><style>@keyframes geem-load{0%,100%{opacity:.25;transform:scaleX(.5)}50%{opacity:1;transform:scaleX(1)}}</style></div></div>
+    <!--
+      Static content for AI agents, crawlers and no-JS environments.
+      React replaces #root when it loads; this is invisible to sighted users.
+    -->
+    <noscript>
+      <style>
+        .ns-wrap{font-family:system-ui,sans-serif;max-width:900px;margin:0 auto;padding:24px 16px;color:#1a1a1a}
+        .ns-wrap h1{font-size:1.75rem;margin:0 0 8px}
+        .ns-wrap p{color:#4b5563;line-height:1.6}
+        .ns-nav{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
+        .ns-nav a{background:#dc2626;color:#fff;padding:6px 14px;border-radius:6px;text-decoration:none;font-size:.875rem}
+        .ns-cats{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin:16px 0}
+        .ns-cat{border:1px solid #e5e7eb;border-radius:8px;padding:12px;font-size:.875rem}
+      </style>
+      <div class="ns-wrap">
+        <h1>Geem.pk — Military-Grade Security &amp; Surveillance Equipment</h1>
+        <p>Pakistan's specialist supplier of GPS trackers, spy cameras, RF detectors, and covert communications gear. Genuine brands. Nationwide delivery in 2–5 business days.</p>
+        <div class="ns-nav">
+          <a href="/shop/products">All Products</a>
+          <a href="/shop/products?search=gps+tracker">GPS Trackers</a>
+          <a href="/shop/products?search=spy+camera">Spy Cameras</a>
+          <a href="/shop/products?search=rf+detector">RF Detectors</a>
+          <a href="/shop/track">Track Order</a>
+          <a href="/contact">Contact Us</a>
+          <a href="/faq">FAQ</a>
+        </div>
+        <h2>Product Categories</h2>
+        <div class="ns-cats">
+          <div class="ns-cat"><strong>GPS Trackers</strong><br>Vehicle, OBD2, personal, kids watches, motorcycle</div>
+          <div class="ns-cat"><strong>Spy Cameras</strong><br>Pinhole, body-worn, hidden recording devices</div>
+          <div class="ns-cat"><strong>RF Detectors</strong><br>Bug sweepers, TSCM, spectrum analysers</div>
+          <div class="ns-cat"><strong>Communications</strong><br>Encrypted radios, covert earpieces</div>
+          <div class="ns-cat"><strong>3D Filaments</strong><br>PLA, ABS, PETG, TPU, Nylon, Carbon Fiber</div>
+          <div class="ns-cat"><strong>Industrial</strong><br>Carbon fibre sheets, epoxy resin systems</div>
+        </div>
+        <p><strong>Contact:</strong> +92-307-8680005 &nbsp;|&nbsp; info@geem.pk &nbsp;|&nbsp; WhatsApp: Mon–Sat 9AM–5PM PKT</p>
+        <p><strong>Payment:</strong> Cash on Delivery, Bank Transfer, EasyPaisa, JazzCash</p>
+        <p>JavaScript is required to browse the full shop. Please enable JavaScript in your browser.</p>
+      </div>
+    </noscript>
+
+    <div id="root"><div id="app-splash" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#ffffff;z-index:9999;">
+      <img id="app-splash-icon" src="/api/shop/app-icon" alt="Geem" style="width:80px;height:80px;object-fit:contain;" fetchpriority="low" />
+      <p style="margin:10px 0 2px;font-family:system-ui,sans-serif;font-size:1.1rem;font-weight:700;color:#111827;letter-spacing:-.01em;">Geem.pk</p>
+      <p style="margin:0 0 14px;font-family:system-ui,sans-serif;font-size:.7rem;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">Security &amp; Surveillance</p>
+      <div style="width:48px;height:3px;background:#EC2029;border-radius:3px;animation:geem-load 1.2s ease-in-out infinite;"></div>
+      <style>@keyframes geem-load{0%,100%{opacity:.3;transform:scaleX(.5)}50%{opacity:1;transform:scaleX(1)}}</style>
+    </div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
