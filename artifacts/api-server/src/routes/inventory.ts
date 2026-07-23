@@ -1072,7 +1072,12 @@ router.patch("/inventory/:id", async (req, res): Promise<void> => {
     updates.status = restoreStatus;
     updates.previousStatus = null;
   }
-  if (isImeiUpdate) {
+  // Only reset PTA status for real phone IMEIs.
+  // GPS trackers are identified by having a device_id — their PTA approval is model-based, not IMEI-based.
+  // ICCIDs (SIM identifiers, start with "89", length > 15) are also PTA-exempt.
+  const isIccidIdentifier = (v: string) => v.startsWith("89") && v.length > 15;
+  const isGpsTracker = !!(current.deviceId && current.deviceId.trim());
+  if (isImeiUpdate && !isGpsTracker && !isIccidIdentifier(String(updates.imei))) {
     updates.ptaStatus = "unpaid";
   }
 
