@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, or } from "drizzle-orm";
-import { db, usersTable } from "@workspace/db";
+import { db, usersTable, integrationSettingsTable } from "@workspace/db";
 import { hashPassword, verifyPassword, generateToken, storeToken, revokeToken, getUserIdFromToken } from "../lib/auth";
 import { logger } from "../lib/logger";
 import { logActivity } from "./activity";
@@ -13,6 +13,23 @@ const router: IRouter = Router();
 
 // In-memory store for password reset tokens (token -> { userId, expires })
 const adminResetTokens = new Map<string, { userId: number; expires: number }>();
+
+// Public endpoint: returns the reCAPTCHA v3 site key so the frontend
+// doesn't need VITE_RECAPTCHA_SITE_KEY baked in at build time.
+router.get("/auth/recaptcha-config", async (_req, res): Promise<void> => {
+  try {
+    const [row] = await db
+      .select()
+      .from(integrationSettingsTable)
+      .where(eq(integrationSettingsTable.type, "recaptcha"));
+    if (row?.enabled && row.config) {
+      const cfg = JSON.parse(row.config as string) as Record<string, string>;
+      res.json({ enabled: true, siteKey: cfg.siteKey ?? null });
+      return;
+    }
+  } catch { /* no DB row yet — fall through */ }
+  res.json({ enabled: false, siteKey: null });
+});
 
 router.post("/auth/login", async (req, res): Promise<void> => {
   const { email, password, recaptchaToken, latitude, longitude, locationName, browser, os, deviceType } = req.body;
