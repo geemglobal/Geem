@@ -278,6 +278,94 @@ router.post("/invoices", async (req, res): Promise<void> => {
   const paidAmount = walletUsed + cashPortion;
   const derivedStatus = status ?? (paidAmount >= total && total > 0 ? "paid" : "draft");
 
+  // ── Same-day merge ────────────────────────────────────────────────────────
+  // If a non-paid invoice already exists for this customer on the same date,
+  // add the new items into it instead of creating a separate invoice.
+  if (customerId && !invoiceNumber) {
+    const [sameDayInv] = await db.select().from(invoicesTable)
+      .where(and(
+        eq(invoicesTable.customerId, customerId),
+        eq(invoicesTable.date, String(date)),
+        sql`${invoicesTable.status} != 'paid'`,
+      ))
+      .orderBy(invoicesTable.id).limit(1);
+
+    if (sameDayInv) {
+      // Append all incoming items to the existing invoice
+      for (const item of items) {
+        const qty    = parseFloat(String(item.qty ?? 1));
+        const price  = parseFloat(String(item.price));
+        const taxR   = parseFloat(String(item.taxRate ?? 0));
+        await db.insert(invoiceItemsTable).values({
+          invoiceId: sameDayInv.id,
+          description: item.description, imei: item.imei,
+          inventoryItemId: item.inventoryItemId,
+          qty: String(qty), price: String(price),
+          taxRate: String(taxR), amount: String(qty * price),
+        });
+        if (item.inventoryItemId) {
+          await db.update(inventoryItemsTable).set({ status: "sold" }).where(eq(inventoryItemsTable.id, item.inventoryItemId));
+        }
+      }
+
+      // Recalculate merged totals
+      const allMergedItems = await db.select().from(invoiceItemsTable).where(eq(invoiceItemsTable.invoiceId, sameDayInv.id));
+      const mergedSubtotal  = allMergedItems.reduce((s, i) => s + parseFloat(String(i.amount)), 0);
+      const mergedDiscount  = parseFloat(String(sameDayInv.discount))  + totalDiscount;
+      const mergedTax       = parseFloat(String(sameDayInv.tax))       + totalTax;
+      const mergedShipping  = parseFloat(String(sameDayInv.shipping))  + totalShipping;
+      const mergedTotal     = mergedSubtotal - mergedDiscount + mergedTax + mergedShipping;
+
+      // Wallet payment for this addition (walletUsed already clamped above)
+      let addedWallet = walletUsed;
+      if (addedWallet > 0) {
+        const [c] = await db.select({ walletBalance: customersTable.walletBalance }).from(customersTable).where(eq(customersTable.id, customerId));
+        const prevBal  = parseFloat(String(c?.walletBalance ?? "0"));
+        const newBal   = Math.max(0, prevBal - addedWallet);
+        await db.update(customersTable).set({ walletBalance: String(newBal) }).where(eq(customersTable.id, customerId));
+        await db.insert(walletTransactionsTable).values({ customerId, type: "debit", amount: String(addedWallet), balanceAfter: String(newBal), description: `Used on Invoice ${sameDayInv.invoiceNumber}`, reference: sameDayInv.invoiceNumber });
+        const [wPmt] = await db.insert(paymentsTable).values({ invoiceId: sameDayInv.id, date: String(date), method: "wallet", amount: String(addedWallet), memo: "Wallet deduction" }).returning();
+        await addLedgerEntry({ customerId, type: "payment", description: `Wallet payment — Invoice ${sameDayInv.invoiceNumber}`, reference: `${sameDayInv.invoiceNumber}-PMT${wPmt.id}`, debit: 0, credit: addedWallet, date: new Date(String(date)) });
+      }
+
+      // Cash payment for this addition
+      if (cashPortion > 0 && paymentMethod) {
+        const [cPmt] = await db.insert(paymentsTable).values({ invoiceId: sameDayInv.id, date: String(date), method: String(paymentMethod), amount: String(cashPortion) }).returning();
+        await addLedgerEntry({ customerId, type: "payment", description: `${String(paymentMethod)} payment — Invoice ${sameDayInv.invoiceNumber}`, reference: `${sameDayInv.invoiceNumber}-PMT${cPmt.id}`, debit: 0, credit: cashPortion, date: new Date(String(date)) });
+      }
+
+      // Recalculate paid & status
+      const allMergedPmts = await db.select().from(paymentsTable).where(eq(paymentsTable.invoiceId, sameDayInv.id));
+      const mergedPaid   = allMergedPmts.reduce((s, p) => s + parseFloat(String(p.amount)), 0);
+      const mergedStatus = mergedPaid >= mergedTotal && mergedTotal > 0 ? "paid"
+                         : mergedPaid > 0 ? "partial"
+                         : sameDayInv.status === "draft" ? "draft" : "unpaid";
+
+      await db.update(invoicesTable).set({
+        subtotal: String(mergedSubtotal), discount: String(mergedDiscount),
+        tax: String(mergedTax), shipping: String(mergedShipping),
+        total: String(mergedTotal), paid: String(mergedPaid),
+        walletAmountUsed: String(parseFloat(String(sameDayInv.walletAmountUsed)) + addedWallet),
+        status: mergedStatus,
+      }).where(eq(invoicesTable.id, sameDayInv.id));
+
+      // Update existing ledger debit entry to new total (or create if missing)
+      const [invLedger] = await db.select().from(ledgerEntriesTable)
+        .where(and(eq(ledgerEntriesTable.reference, sameDayInv.invoiceNumber), eq(ledgerEntriesTable.type, "invoice"))).limit(1);
+      if (invLedger) {
+        await db.update(ledgerEntriesTable).set({ debit: String(mergedTotal) }).where(eq(ledgerEntriesTable.id, invLedger.id));
+        await recalculateCustomerLedger(customerId);
+      } else {
+        await addLedgerEntry({ customerId, type: "invoice", description: `Invoice ${sameDayInv.invoiceNumber}`, reference: sameDayInv.invoiceNumber, debit: mergedTotal, credit: 0, date: new Date(String(sameDayInv.date)) });
+      }
+
+      const [refreshed] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, sameDayInv.id));
+      res.status(200).json(await buildInvoice(refreshed));
+      return;
+    }
+  }
+  // ── End same-day merge ────────────────────────────────────────────────────
+
   const [inv] = await db.insert(invoicesTable).values({
     invoiceNumber: invNumber,
     customerId, date, dueDate,
@@ -1000,6 +1088,93 @@ router.post("/invoices/:id/email", async (req, res): Promise<void> => {
  * Safe to call multiple times — skips invoices/payments already in the ledger.
  * Also rebuilds running balances for every affected customer.
  */
+
+/**
+ * POST /invoices/merge-same-day
+ * Retroactively merge all invoices that share the same customer + date into
+ * a single invoice (keeping the earliest one). Rebuilds the ledger afterwards.
+ */
+router.post("/invoices/merge-same-day", async (req, res): Promise<void> => {
+  const allInvoices = await db.select().from(invoicesTable)
+    .orderBy(invoicesTable.customerId, invoicesTable.date, invoicesTable.id);
+
+  // Group by customerId::date
+  const groups = new Map<string, (typeof allInvoices)>();
+  for (const inv of allInvoices) {
+    const key = `${inv.customerId}::${inv.date}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(inv);
+  }
+
+  let groupsMerged = 0;
+  let invoicesDeleted = 0;
+  const affectedCustomers = new Set<number>();
+
+  for (const [, group] of groups) {
+    if (group.length < 2) continue;
+    const [master, ...secondaries] = group;
+
+    for (const sec of secondaries) {
+      // Re-point items and payments to master before deleting secondary
+      await db.update(invoiceItemsTable).set({ invoiceId: master.id }).where(eq(invoiceItemsTable.invoiceId, sec.id));
+      await db.update(paymentsTable).set({ invoiceId: master.id }).where(eq(paymentsTable.invoiceId, sec.id));
+      await db.delete(invoicesTable).where(eq(invoicesTable.id, sec.id));
+      invoicesDeleted++;
+    }
+
+    // Recalculate master totals from everything now merged into it
+    const allItems = await db.select().from(invoiceItemsTable).where(eq(invoiceItemsTable.invoiceId, master.id));
+    const allPmts  = await db.select().from(paymentsTable).where(eq(paymentsTable.invoiceId, master.id));
+
+    const newSubtotal  = allItems.reduce((s, i) => s + parseFloat(String(i.amount)), 0);
+    const newDiscount  = group.reduce((s, inv) => s + parseFloat(String(inv.discount)), 0);
+    const newTax       = group.reduce((s, inv) => s + parseFloat(String(inv.tax)), 0);
+    const newShipping  = group.reduce((s, inv) => s + parseFloat(String(inv.shipping)), 0);
+    const newTotal     = newSubtotal - newDiscount + newTax + newShipping;
+    const newPaid      = allPmts.reduce((s, p) => s + parseFloat(String(p.amount)), 0);
+    const newWallet    = group.reduce((s, inv) => s + parseFloat(String(inv.walletAmountUsed)), 0);
+    const newStatus    = newPaid >= newTotal && newTotal > 0 ? "paid"
+                       : newPaid > 0 ? "partial"
+                       : master.status === "draft" ? "draft" : "unpaid";
+
+    await db.update(invoicesTable).set({
+      subtotal: String(newSubtotal), discount: String(newDiscount),
+      tax: String(newTax), shipping: String(newShipping),
+      total: String(newTotal), paid: String(newPaid),
+      walletAmountUsed: String(newWallet), status: newStatus,
+    }).where(eq(invoicesTable.id, master.id));
+
+    if (master.customerId) affectedCustomers.add(master.customerId);
+    groupsMerged++;
+  }
+
+  // Full ledger rebuild after structural changes (payments moved to new invoice IDs)
+  await db.delete(ledgerEntriesTable);
+  const rebuildInvs = await db.select().from(invoicesTable).orderBy(invoicesTable.date, invoicesTable.id);
+  const rebuildPmts = await db.select().from(paymentsTable).orderBy(paymentsTable.date, paymentsTable.id);
+  const allAffected = new Set<number>();
+
+  for (const inv of rebuildInvs) {
+    if (!inv.customerId) continue;
+    const t = parseFloat(String(inv.total));
+    if (t <= 0) continue;
+    const [cust] = await db.select({ name: customersTable.name }).from(customersTable).where(eq(customersTable.id, inv.customerId));
+    await db.insert(ledgerEntriesTable).values({ customerId: inv.customerId, type: "invoice", description: `Invoice ${inv.invoiceNumber}${cust ? ` — ${cust.name}` : ""}`, reference: inv.invoiceNumber, debit: String(t), credit: "0", balance: "0", date: new Date(String(inv.date)) });
+    allAffected.add(inv.customerId);
+  }
+  for (const pmt of rebuildPmts) {
+    const [inv] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, pmt.invoiceId));
+    if (!inv?.customerId) continue;
+    const a = parseFloat(String(pmt.amount));
+    if (a <= 0) continue;
+    await db.insert(ledgerEntriesTable).values({ customerId: inv.customerId, type: "payment", description: `Payment received — ${inv.invoiceNumber} (${pmt.method})${pmt.memo ? ` — ${pmt.memo}` : ""}`, reference: `${inv.invoiceNumber}-PMT${pmt.id}`, debit: "0", credit: String(a), balance: "0", date: new Date(String(pmt.date)) });
+    allAffected.add(inv.customerId);
+  }
+  for (const custId of allAffected) await recalculateCustomerLedger(custId);
+
+  res.json({ message: "Same-day invoices merged and ledger rebuilt", groupsMerged, invoicesDeleted, customersAffected: affectedCustomers.size });
+});
+
 router.post("/invoices/sync-ledger", async (req, res): Promise<void> => {
   // ── HARD RESET: wipe all generated ledger entries, then rebuild from
   // the authoritative invoices + payments tables. This eliminates duplicates
