@@ -369,7 +369,7 @@ export function GlobalSearch() {
   function getFirstHref(d: SearchResult): string | null {
     if (d.inventory.length > 0) {
       const item = d.inventory[0];
-      if (item.status === "in_stock") return "/pos";
+      if (item.status === "in_stock") return `/pos?itemId=${item.id}`;
       if (item.saleInfo?.invoiceId) return `/invoices/${item.saleInfo.invoiceId}`;
       return "/inventory";
     }
@@ -396,7 +396,7 @@ export function GlobalSearch() {
     if (!data) return [];
     const items: { href: string }[] = [];
     (data.inventory ?? []).forEach(item =>
-      items.push({ href: item.status === "in_stock" ? "/pos" : `/invoices/${item.saleInfo?.invoiceId ?? ""}` })
+      items.push({ href: item.status === "in_stock" ? `/pos?itemId=${item.id}` : `/invoices/${item.saleInfo?.invoiceId ?? ""}` })
     );
     (data.customers ?? []).forEach(() => items.push({ href: "/customers" }));
     (data.invoices ?? []).forEach(inv => items.push({ href: `/invoices/${inv.id}` }));
@@ -525,7 +525,7 @@ export function GlobalSearch() {
                           if (isSold) {
                             setExpandedSold(prev => ({ ...prev, [item.id]: !prev[item.id] }));
                           } else {
-                            go("/pos");
+                            go(`/pos?itemId=${item.id}`);
                           }
                         }}
                         className={`w-full text-left px-3 py-2.5 transition-colors text-sm border-b border-border/50 ${isSold ? "" : "last:border-0"} ${isActive ? "bg-accent" : "hover:bg-accent"}`}

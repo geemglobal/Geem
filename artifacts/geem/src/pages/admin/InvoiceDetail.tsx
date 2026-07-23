@@ -288,11 +288,16 @@ function openInvoiceTab(html: string) {
   if (w) { w.document.write(html); w.document.close(); w.focus(); }
 }
 
+function fmtItemLine(sym: string, i: { description: string; imei: string | null; deviceId: string | null; amount: number }) {
+  const ids: string[] = [];
+  if (i.deviceId) ids.push(`Device ID: ${i.deviceId}`);
+  if (i.imei) ids.push(`${imeiLabel(i.imei)}: ${i.imei}`);
+  return `• ${i.description}${ids.length ? ` (${ids.join(" | ")})` : ""} — ${sym} ${i.amount.toLocaleString()}`;
+}
+
 function handleWhatsAppWeb(invoice: Invoice) {
   const sym = invoice.currencySymbol;
-  const items = invoice.items.map(i =>
-    `• ${i.description}${i.imei ? ` (${imeiLabel(i.imei)}: ${i.imei})` : ""} — ${sym} ${i.amount.toLocaleString()}`
-  ).join("\n");
+  const items = invoice.items.map(i => fmtItemLine(sym, i)).join("\n");
   const invoiceUrl = `https://geem.pk/api/invoices/${invoice.id}/print`;
   const msg = `*Invoice ${invoice.invoiceNumber}*\nDate: ${invoice.date}\n\n*Items:*\n${items}\n\n*Total: ${sym} ${invoice.total.toLocaleString()}*\n${invoice.balanceDue > 0 ? `Balance Due: ${sym} ${invoice.balanceDue.toLocaleString()}` : "✅ Fully Paid"}\n\nView/Download Invoice:\n${invoiceUrl}\n\n_Geem.pk_`;
   const url = `https://wa.me/${toWaPhone(invoice.customerPhone)}?text=${encodeURIComponent(msg)}`;
@@ -521,22 +526,17 @@ export default function InvoiceDetail() {
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => {
                 const sym = invoice.currencySymbol;
-                const items = invoice.items.map(i =>
-                  `• ${i.description}${i.imei ? ` (${imeiLabel(i.imei)}: ${i.imei})` : ""} — ${sym} ${i.amount.toLocaleString()}`
-                ).join("\n");
+                const items = invoice.items.map(i => fmtItemLine(sym, i)).join("\n");
                 const invoiceUrl = `https://geem.pk/api/invoices/${invoice.id}/print`;
                 const msg = `*Invoice ${invoice.invoiceNumber}*\nDate: ${invoice.date}\n\n*Items:*\n${items}\n\n*Total: ${sym} ${invoice.total.toLocaleString()}*\n${invoice.balanceDue > 0 ? `Balance Due: ${sym} ${invoice.balanceDue.toLocaleString()}` : "✅ Fully Paid"}\n\nView/Download Invoice:\n${invoiceUrl}\n\n_Geem.pk_`;
                 const intl = toWaPhone(invoice.customerPhone);
-                // whatsapp:// opens the installed desktop app on Windows/Mac
                 window.location.href = `whatsapp://send?phone=${intl}&text=${encodeURIComponent(msg)}`;
               }}>
                 <MessageCircle className="h-4 w-4 mr-2 text-teal-600" /> WhatsApp Desktop App (PC)
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => {
                 const sym = invoice.currencySymbol;
-                const items = invoice.items.map(i =>
-                  `• ${i.description}${i.imei ? ` (${imeiLabel(i.imei)}: ${i.imei})` : ""} — ${sym} ${i.amount.toLocaleString()}`
-                ).join("\n");
+                const items = invoice.items.map(i => fmtItemLine(sym, i)).join("\n");
                 const invoiceUrl = `https://geem.pk/api/invoices/${invoice.id}/print`;
                 const msg = `*Invoice ${invoice.invoiceNumber}*\nDate: ${invoice.date}\n\n*Items:*\n${items}\n\n*Total: ${sym} ${invoice.total.toLocaleString()}*\n${invoice.balanceDue > 0 ? `Balance Due: ${sym} ${invoice.balanceDue.toLocaleString()}` : "✅ Fully Paid"}\n\nView/Download Invoice:\n${invoiceUrl}\n\n_Geem.pk_`;
                 window.open(`https://web.whatsapp.com/send?phone=${toWaPhone(invoice.customerPhone)}&text=${encodeURIComponent(msg)}`, "_blank");

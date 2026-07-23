@@ -612,7 +612,12 @@ export default function NewQuotation() {
                           {!custQuery && <p className="px-4 py-4 text-sm text-muted-foreground text-center">Start typing to search…</p>}
                         </div>
                         <div className="border-t bg-gray-50/70">
-                          <button type="button" className="w-full text-left px-4 py-2.5 hover:bg-blue-50 text-sm text-blue-600 flex items-center gap-2" onClick={() => { setCreatingCust(true); setNewCust(n => ({ ...n, name: custQuery })); }}>
+                          <button type="button" className="w-full text-left px-4 py-2.5 hover:bg-blue-50 text-sm text-blue-600 flex items-center gap-2" onClick={() => {
+                              setCreatingCust(true);
+                              const q = custQuery.trim();
+                              const isPhone = /^[0+]/.test(q) || /^\d[\d\s\-]{5,}$/.test(q);
+                              setNewCust(n => ({ ...n, name: isPhone ? "" : q, mobile: isPhone ? q : "" }));
+                            }}>
                             <PlusCircle className="h-4 w-4" />Create {custQuery ? `"${custQuery}"` : "a new customer"}
                           </button>
                         </div>

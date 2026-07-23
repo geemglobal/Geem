@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { axiosInstance } from "@/lib/axios";
 import { isIccid, imeiLabel } from "@/lib/utils";
@@ -310,6 +310,46 @@ export default function POS() {
     prevRateRef.current = newRate;
   }, [exchangeRate]);
 
+  // ── Pre-fill item from IMEI global-search (itemId= URL param) ──────────────
+  const prefillItemId = useMemo(() => new URLSearchParams(window.location.search).get("itemId"), []);
+  const { data: prefillData } = useQuery<InvItem & { brandName?: string; modelName?: string; productName?: string }>({
+    queryKey: ["pos-prefill", prefillItemId],
+    queryFn: () => axiosInstance.get(`/inventory/${prefillItemId}`).then(r => r.data),
+    enabled: !!prefillItemId,
+    staleTime: 60_000,
+  });
+  const prefillApplied = useRef(false);
+  useEffect(() => {
+    if (!prefillData || prefillApplied.current) return;
+    prefillApplied.current = true;
+    const it = prefillData;
+    const parts: string[] = [];
+    if (it.deviceId) parts.push(`Device ID: ${it.deviceId}`);
+    if (it.imei) parts.push(`${imeiLabel(it.imei)}: ${it.imei}`);
+    if (it.ptaStatus === "approved") parts.push("✓ PTA Approved");
+    const name = it.productName || [it.brandName, it.modelName].filter(Boolean).join(" ") || "Item";
+    setLines([{
+      key: String(++_key),
+      inventoryItemId: it.id,
+      description: name,
+      details: parts.join("\n"),
+      deviceId: it.deviceId ?? null,
+      imei: it.imei ?? "",
+      ptaStatus: it.ptaStatus ?? null,
+      qty: 1,
+      price: String(it.sellingPrice),
+      taxRate: 0,
+      taxLabel: "",
+      searchQuery: name,
+      searchOpen: false,
+      isCreatingItem: false,
+      newDesc: "",
+      newPrice: "",
+    }]);
+    setCustOpen(true); // Auto-open customer panel — just add customer details to complete the sale
+  }, [prefillData]);
+  // ─────────────────────────────────────────────────────────────────────────────
+
   const { data: custResults } = useQuery({ queryKey: ["pos-cust", custQuery], queryFn: () => axiosInstance.get<{ customers: Customer[] }>(`/customers?search=${encodeURIComponent(custQuery)}&limit=8`).then(r => r.data), enabled: custQuery.length >= 1 });
   const custList = custResults?.customers ?? [];
   useEffect(() => { setCustHighlight(0); }, [custList.length, custQuery]);
@@ -472,7 +512,12 @@ export default function POS() {
                           {!custQuery && <p className="px-4 py-4 text-sm text-muted-foreground text-center">Start typing to search…</p>}
                         </div>
                         <div className="border-t bg-gray-50/70">
-                          <button type="button" className="w-full text-left px-4 py-2.5 hover:bg-blue-50 text-sm text-blue-600 flex items-center gap-2" onClick={() => { setCreatingCust(true); setNewCust(n => ({ ...n, name: custQuery })); }}>
+                          <button type="button" className="w-full text-left px-4 py-2.5 hover:bg-blue-50 text-sm text-blue-600 flex items-center gap-2" onClick={() => {
+                              setCreatingCust(true);
+                              const q = custQuery.trim();
+                              const isPhone = /^[0+]/.test(q) || /^\d[\d\s\-]{5,}$/.test(q);
+                              setNewCust(n => ({ ...n, name: isPhone ? "" : q, mobile: isPhone ? q : "" }));
+                            }}>
                             <PlusCircle className="h-4 w-4" />Create {custQuery ? `"${custQuery}"` : "a new customer"}
                           </button>
                         </div>
