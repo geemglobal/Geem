@@ -15,5 +15,7 @@ export function resolveImgUrl(url: string | null | undefined): string | null {
   if (!url) return null;
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
   if (url.startsWith("/products/")) return `https://geem.pk${url}`;
+  // Uploaded files stored as /objects/uploads/<uuid> must be fetched via the API route
+  if (url.startsWith("/objects/")) return `/api/storage/objects${url.slice("/objects".length)}`;
   return url; // /api/storage/... or other relative paths stay as-is
 }
