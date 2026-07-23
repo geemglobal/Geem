@@ -188,9 +188,10 @@ export function ShopLayout({ children }: { children: React.ReactNode }) {
             onSubmit={handleSearch}
             className="hidden md:flex items-center flex-1 max-w-xs mx-3 relative"
           >
-            <Search className="absolute left-3 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            <Search className="absolute left-3 h-3.5 w-3.5 text-muted-foreground pointer-events-none" aria-hidden="true" />
             <input
-              type="text"
+              type="search"
+              aria-label="Search products"
               value={searchQ}
               onChange={e => setSearchQ(e.target.value)}
               placeholder="Search products…"
@@ -262,7 +263,7 @@ export function ShopLayout({ children }: { children: React.ReactNode }) {
                 ${location === "/shop/cart"
                   ? "bg-primary/10 text-primary font-semibold border-primary/30"
                   : "text-foreground border-border hover:bg-primary/8 hover:text-primary hover:border-primary/30"}`}>
-                <ShoppingCart className="h-4 w-4" />
+                <ShoppingCart className="h-4 w-4" aria-hidden="true" />
                 {count > 0 && (
                   <span className="absolute -top-1.5 -right-1.5 h-5 w-5 bg-primary text-primary-foreground rounded-full text-xs flex items-center justify-center font-bold">
                     {count > 9 ? "9+" : count}
@@ -271,8 +272,8 @@ export function ShopLayout({ children }: { children: React.ReactNode }) {
                 <span className="hidden sm:inline">Cart</span>
               </span>
             </Link>
-            <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileOpen(!mobileOpen)}>
-              {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileOpen(!mobileOpen)} aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"} aria-expanded={mobileOpen}>
+              {mobileOpen ? <X className="h-5 w-5" aria-hidden="true" /> : <Menu className="h-5 w-5" aria-hidden="true" />}
             </Button>
           </div>
         </div>
@@ -282,9 +283,10 @@ export function ShopLayout({ children }: { children: React.ReactNode }) {
           <div className="md:hidden border-t bg-white px-4 py-3 space-y-1 max-h-[80vh] overflow-y-auto">
             {/* Mobile search */}
             <form onSubmit={handleSearch} className="relative mb-3">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" aria-hidden="true" />
               <input
-                type="text"
+                type="search"
+                aria-label="Search products"
                 value={searchQ}
                 onChange={e => setSearchQ(e.target.value)}
                 placeholder="Search products…"

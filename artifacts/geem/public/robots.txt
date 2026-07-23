@@ -22,3 +22,46 @@ Disallow: /api/inventory
 Disallow: /api/invoices
 
 Sitemap: https://geem.pk/api/sitemap.xml
+
+# AI / LLM crawlers — allowed to read public shop content
+User-agent: GPTBot
+Allow: /shop/
+Allow: /shop/products/
+Allow: /shop/category/
+Allow: /about
+Allow: /contact
+Allow: /faq
+Disallow: /api/auth
+Disallow: /api/dashboard
+
+User-agent: ChatGPT-User
+Allow: /shop/
+Allow: /shop/products/
+Allow: /shop/category/
+
+User-agent: Claude-Web
+Allow: /shop/
+Allow: /shop/products/
+Allow: /shop/category/
+Allow: /about
+
+User-agent: anthropic-ai
+Allow: /shop/
+Allow: /shop/products/
+Allow: /shop/category/
+
+User-agent: PerplexityBot
+Allow: /shop/
+Allow: /shop/products/
+Allow: /shop/category/
+
+User-agent: Googlebot-Extended
+Allow: /
+
+User-agent: Meta-ExternalAgent
+Allow: /shop/
+Allow: /shop/products/
+
+User-agent: Applebot-Extended
+Allow: /shop/
+Allow: /shop/products/

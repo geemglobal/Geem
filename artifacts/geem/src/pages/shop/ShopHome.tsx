@@ -46,7 +46,7 @@ function ProductCard({ product }: { product: Product }) {
       <Link href={`/shop/products/${product.slug}`}>
         <div className="aspect-square bg-gray-50 overflow-hidden relative">
           {product.featuredImage && !imgFailed ? (
-            <img src={product.featuredImage} alt={product.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onError={() => setImgFailed(true)} />
+            <img src={product.featuredImage} alt={product.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" decoding="async" onError={() => setImgFailed(true)} />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-muted-foreground bg-gray-100"><Package className="h-12 w-12 opacity-20" /></div>
           )}
@@ -126,7 +126,7 @@ export default function ShopHome() {
         {branding.banner ? (
           <>
             <div className="absolute inset-0">
-              <img src={branding.banner} alt="" className="w-full h-full object-cover object-center" aria-hidden="true" />
+              <img src={branding.banner} alt="" className="w-full h-full object-cover object-center" aria-hidden="true" fetchPriority="high" decoding="sync" />
             </div>
             <div className="absolute inset-0 bg-black/70" />
           </>
