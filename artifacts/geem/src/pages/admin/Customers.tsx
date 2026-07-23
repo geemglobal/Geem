@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Pencil, Trash2, Download, BookOpen, Building2, User, Shield, Globe, RefreshCw, ExternalLink, Mail, Loader2 } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Download, BookOpen, Building2, User, Shield, Globe, ExternalLink, Mail, Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { PAKISTAN_CITIES } from "@/data/pakistan-cities";
@@ -125,15 +125,6 @@ export default function Customers() {
     },
   });
 
-  const syncLedgerMutation = useMutation({
-    mutationFn: () => axiosInstance.post<{ customersUpdated: number; invoicesProcessed: number }>("/invoices/sync-ledger").then(r => r.data),
-    onSuccess: (data) => {
-      qc.invalidateQueries({ queryKey: ["customers"] });
-      toast({ title: `Ledger synced — ${data.customersUpdated} customer(s) updated from ${data.invoicesProcessed} invoice(s)` });
-    },
-    onError: () => toast({ title: "Ledger sync failed", variant: "destructive" }),
-  });
-
   function openNew() {
     setEditCustomer(null);
     setForm(emptyForm);
@@ -183,15 +174,6 @@ export default function Customers() {
           <p className="text-muted-foreground text-sm">Manage clients, agencies &amp; government contacts</p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline" size="sm"
-            onClick={() => syncLedgerMutation.mutate()}
-            disabled={syncLedgerMutation.isPending}
-            title="Backfill ledger entries for all existing invoices"
-          >
-            <RefreshCw className={`h-4 w-4 mr-1.5 ${syncLedgerMutation.isPending ? "animate-spin" : ""}`} />
-            {syncLedgerMutation.isPending ? "Syncing…" : "Sync Ledger"}
-          </Button>
           {customers.length > 0 && (
             <Button variant="outline" size="sm" onClick={() => exportCSV(customers)}>
               <Download className="h-4 w-4 mr-1.5" />Export CSV
