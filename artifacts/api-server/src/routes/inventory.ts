@@ -572,6 +572,7 @@ async function enrichItem(item: typeof inventoryItemsTable.$inferSelect) {
 }
 
 router.get("/inventory", async (req, res): Promise<void> => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   const page = parseInt(String(req.query.page ?? "1"), 10);
   const limit = parseInt(String(req.query.limit ?? "50"), 10);
   const offset = (page - 1) * limit;
