@@ -530,43 +530,43 @@ export default function Inventory() {
 
       {summary && (
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-          <Card className="cursor-pointer hover:border-primary transition-colors" onClick={() => { setFilterStatus("in_stock"); setPage(1); }}>
+          <Card className="cursor-pointer hover:border-primary transition-colors" onClick={() => { setFilterStatus("in_stock"); setFilterPta(""); setPage(1); }}>
             <CardContent className="pt-4 pb-4">
               <div className="text-2xl font-bold text-green-600">{summary.inStock?.toLocaleString() ?? 0}</div>
               <div className="text-xs text-muted-foreground">In Stock</div>
             </CardContent>
           </Card>
-          <Card className="cursor-pointer hover:border-primary transition-colors" onClick={() => { setFilterStatus("sold"); setPage(1); }}>
+          <Card className="cursor-pointer hover:border-primary transition-colors" onClick={() => { setFilterStatus("sold"); setFilterPta(""); setPage(1); }}>
             <CardContent className="pt-4 pb-4">
               <div className="text-2xl font-bold text-blue-600">{summary.sold?.toLocaleString() ?? 0}</div>
               <div className="text-xs text-muted-foreground">Sold</div>
             </CardContent>
           </Card>
-          <Card className="cursor-pointer hover:border-primary transition-colors" onClick={() => { setFilterStatus("damaged"); setPage(1); }}>
+          <Card className="cursor-pointer hover:border-primary transition-colors" onClick={() => { setFilterStatus("damaged"); setFilterPta(""); setPage(1); }}>
             <CardContent className="pt-4 pb-4">
               <div className="text-2xl font-bold text-red-600">{summary.damaged?.toLocaleString() ?? 0}</div>
               <div className="text-xs text-muted-foreground">Damaged</div>
             </CardContent>
           </Card>
-          <Card className="cursor-pointer hover:border-primary transition-colors" onClick={() => { setFilterStatus("missing"); setPage(1); }}>
+          <Card className="cursor-pointer hover:border-primary transition-colors" onClick={() => { setFilterStatus("missing"); setFilterPta(""); setPage(1); }}>
             <CardContent className="pt-4 pb-4">
               <div className="text-2xl font-bold text-yellow-600">{summary.missing?.toLocaleString() ?? 0}</div>
               <div className="text-xs text-muted-foreground">Missing / Lost</div>
             </CardContent>
           </Card>
-          <Card className="cursor-pointer hover:border-primary transition-colors" onClick={() => { setFilterStatus("not_for_use"); setPage(1); }}>
+          <Card className="cursor-pointer hover:border-primary transition-colors" onClick={() => { setFilterStatus("not_for_use"); setFilterPta(""); setPage(1); }}>
             <CardContent className="pt-4 pb-4">
               <div className="text-2xl font-bold text-gray-500">{summary.notForUse?.toLocaleString() ?? 0}</div>
               <div className="text-xs text-muted-foreground">Blocked / N/A</div>
             </CardContent>
           </Card>
-          <Card className="cursor-pointer hover:border-primary transition-colors" onClick={() => { setFilterPta("unpaid"); setPage(1); }}>
+          <Card className="cursor-pointer hover:border-primary transition-colors" onClick={() => { setFilterPta("unpaid"); setFilterStatus(""); setPage(1); }}>
             <CardContent className="pt-4 pb-4">
               <div className="text-2xl font-bold text-orange-600">{summary.ptaUnpaid?.toLocaleString() ?? 0}</div>
               <div className="text-xs text-muted-foreground">PTA Unpaid</div>
             </CardContent>
           </Card>
-          <Card className="cursor-pointer hover:border-primary transition-colors" onClick={() => { setFilterPta("pending"); setPage(1); }}>
+          <Card className="cursor-pointer hover:border-primary transition-colors" onClick={() => { setFilterPta("pending"); setFilterStatus(""); setPage(1); }}>
             <CardContent className="pt-4 pb-4">
               <div className="text-2xl font-bold text-yellow-600">{summary.ptaPending?.toLocaleString() ?? 0}</div>
               <div className="text-xs text-muted-foreground">PTA Pending</div>

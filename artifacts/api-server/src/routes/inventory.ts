@@ -582,7 +582,13 @@ router.get("/inventory", async (req, res): Promise<void> => {
   const modelId = req.query.modelId ? parseInt(String(req.query.modelId), 10) : undefined;
 
   const conditions: ReturnType<typeof eq>[] = [];
-  if (status) conditions.push(eq(inventoryItemsTable.status, status));
+  if (status === "missing") {
+    conditions.push(sql`${inventoryItemsTable.status} in ('missing','lost')` as ReturnType<typeof eq>);
+  } else if (status === "not_for_use") {
+    conditions.push(sql`${inventoryItemsTable.status} in ('not_for_use','pta_blocked')` as ReturnType<typeof eq>);
+  } else if (status) {
+    conditions.push(eq(inventoryItemsTable.status, status));
+  }
   if (ptaStatus) conditions.push(eq(inventoryItemsTable.ptaStatus, ptaStatus));
   if (brandId) conditions.push(eq(inventoryItemsTable.brandId, brandId));
   if (modelId) conditions.push(eq(inventoryItemsTable.modelId, modelId));
