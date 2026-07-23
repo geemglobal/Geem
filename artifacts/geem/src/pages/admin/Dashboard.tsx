@@ -1,4 +1,12 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useSyncExternalStore } from "react";
+
+function useOnlineStatus() {
+  return useSyncExternalStore(
+    (cb) => { window.addEventListener("online", cb); window.addEventListener("offline", cb); return () => { window.removeEventListener("online", cb); window.removeEventListener("offline", cb); }; },
+    () => navigator.onLine,
+    () => true,
+  );
+}
 import { useGetDashboardStats, useGetDashboardRecentSales, useGetDashboardRevenue } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { axiosInstance } from "@/lib/axios";
@@ -243,6 +251,17 @@ export default function Dashboard() {
   const { data: revenueData } = useGetDashboardRevenue(undefined, { query: { queryKey: ["dashboard-revenue"] } });
   const [lowStockLoading, setLowStockLoading] = useState(false);
   const { toast } = useToast();
+  const isOnline = useOnlineStatus();
+  const prevOnline = useRef(isOnline);
+  useEffect(() => {
+    if (prevOnline.current === isOnline) return;
+    prevOnline.current = isOnline;
+    if (isOnline) {
+      toast({ title: "Back online", description: "Connection restored." });
+    } else {
+      toast({ title: "You're offline", description: "No internet connection detected.", variant: "destructive" });
+    }
+  }, [isOnline, toast]);
 
   async function sendLowStockAlert() {
     setLowStockLoading(true);
@@ -288,7 +307,16 @@ export default function Dashboard() {
       <div className="flex flex-col md:flex-row md:items-center gap-4 justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">Geem CRM — Overview</p>
+          <div className="flex items-center gap-2 mt-0.5">
+            <p className="text-sm text-muted-foreground">Geem CRM — Overview</p>
+            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold ${isOnline ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+              <span className={`relative flex h-2 w-2`}>
+                {isOnline && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75" />}
+                <span className={`relative inline-flex rounded-full h-2 w-2 ${isOnline ? "bg-green-500" : "bg-red-500"}`} />
+              </span>
+              {isOnline ? "Online" : "Offline"}
+            </span>
+          </div>
         </div>
         <GlobalSearch />
       </div>
