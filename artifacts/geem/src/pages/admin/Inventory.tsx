@@ -744,9 +744,15 @@ export default function Inventory() {
                         {item.saleDate && (
                           <span className="flex items-center gap-1"><Calendar className="h-3 w-3 opacity-60" />Sold {item.saleDate}</span>
                         )}
-                        <span className="flex items-center gap-1 text-blue-600">
-                          <Receipt className="h-3 w-3 opacity-60" />{item.salesInvoiceNumber ?? "No Invoice"}
-                        </span>
+                        {item.salesInvoiceId ? (
+                          <Link href={`/invoices/${item.salesInvoiceId}`} className="flex items-center gap-1 text-blue-600 underline hover:text-blue-800 cursor-pointer">
+                            <Receipt className="h-3 w-3 opacity-60" />{item.salesInvoiceNumber ?? "No Invoice"}
+                          </Link>
+                        ) : (
+                          <span className="flex items-center gap-1 text-blue-600">
+                            <Receipt className="h-3 w-3 opacity-60" />No Invoice
+                          </span>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
