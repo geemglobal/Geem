@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Package, ShoppingCart, FileText, Users, Store,
   ClipboardList, Truck, Wrench, MessageSquare, Lock,
   BarChart3, Settings, Database, Globe, LogOut, ChevronDown, ChevronRight, Eye, Shield, History,
-  Hash, Wallet, Menu, WifiOff, X, Receipt, Bell,
+  Hash, Wallet, Menu, WifiOff, X, Receipt, Bell, Upload, RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { axiosInstance } from "@/lib/axios";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getQueue, syncQueue } from "@/lib/offlineQueue";
+import { useToast } from "@/hooks/use-toast";
 import { useShopBranding } from "@/lib/shopBranding";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
@@ -268,6 +270,31 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   });
   const [offlineDismissed, setOfflineDismissed] = useState(false);
   const { canInstall, install } = usePwaInstall();
+  const { toast } = useToast();
+  const [pendingSync, setPendingSync] = useState(0);
+  const [syncing, setSyncing] = useState(false);
+
+  // Keep pending count in sync with the IndexedDB queue
+  useEffect(() => {
+    async function refreshCount() {
+      try { setPendingSync((await getQueue()).length); } catch {}
+    }
+    refreshCount();
+    window.addEventListener("offline-queue-updated", refreshCount);
+    return () => window.removeEventListener("offline-queue-updated", refreshCount);
+  }, []);
+
+  async function handleManualSync() {
+    if (!isOnline || syncing) return;
+    setSyncing(true);
+    try {
+      const { ok, failed } = await syncQueue();
+      setPendingSync(0);
+      if (ok > 0) { toast({ title: `✓ Synced ${ok} operation${ok > 1 ? "s" : ""}` }); qc.invalidateQueries(); }
+      if (failed > 0) toast({ title: `${failed} failed to sync`, variant: "destructive" });
+      window.dispatchEvent(new Event("offline-queue-updated"));
+    } finally { setSyncing(false); }
+  }
 
   usePushNotifications({
     authHeader: () => {
@@ -431,6 +458,21 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
                   <span className="hidden md:inline">Install App</span>
                 </Button>
               )}
+              {/* Pending-sync badge — shown when there are queued offline mutations */}
+              {pendingSync > 0 && (
+                <button
+                  onClick={handleManualSync}
+                  disabled={!isOnline || syncing}
+                  title={`${pendingSync} operation${pendingSync > 1 ? "s" : ""} waiting to sync — click to sync now`}
+                  className="hidden sm:flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 disabled:opacity-60 transition-colors"
+                >
+                  {syncing
+                    ? <RefreshCw className="h-3 w-3 animate-spin" />
+                    : <Upload className="h-3 w-3" />}
+                  <span>{pendingSync} pending</span>
+                </button>
+              )}
+              {/* Online / Offline indicator */}
               <span
                 className={`hidden sm:flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full border flex-shrink-0 ${
                   isOnline

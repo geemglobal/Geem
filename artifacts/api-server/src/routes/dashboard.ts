@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, invoicesTable, inventoryItemsTable, customersTable, webOrdersTable, chatSessionsTable, brandsTable, deviceModelsTable } from "@workspace/db";
-import { count, sum, eq, and, gte, sql, lte } from "drizzle-orm";
+import { count, sum, eq, and, gte, sql, lte, or, inArray } from "drizzle-orm";
 import { sendLowStockAlert } from "../lib/mailer";
 
 const router: IRouter = Router();
@@ -24,10 +24,20 @@ router.get("/dashboard/stats", async (req, res): Promise<void> => {
     .from(invoicesTable)
     .where(and(eq(invoicesTable.status, "paid"), sql`date(${invoicesTable.date}) = ${today}`));
 
-  const overdueResult = await db
-    .select({ total: sum(invoicesTable.total) })
+  // Overdue = explicitly marked 'overdue' OR past due date and not yet settled
+  const [overdueResult] = await db
+    .select({ total: count() })
     .from(invoicesTable)
-    .where(eq(invoicesTable.status, "overdue"));
+    .where(
+      or(
+        eq(invoicesTable.status, "overdue"),
+        and(
+          sql`${invoicesTable.dueDate} IS NOT NULL`,
+          sql`${invoicesTable.dueDate}::date < CURRENT_DATE`,
+          inArray(invoicesTable.status, ["pending", "partial", "unpaid"]),
+        ),
+      ),
+    );
 
   const [ptaCount] = await db
     .select({ count: count() })
@@ -43,13 +53,13 @@ router.get("/dashboard/stats", async (req, res): Promise<void> => {
     totalProductsInStock: stockCount.count,
     totalSalesToday: parseFloat(String(todaySalesResult[0]?.total ?? "0")),
     totalOrdersPending: pendingOrders.count,
-    totalOverdueInvoices: parseFloat(String(overdueResult[0]?.total ?? "0")),
+    totalOverdueInvoices: overdueResult?.total ?? 0,
     totalCustomers: customerCount.count,
     lowStockCount: 0,
     ptaPendingCount: ptaCount.count,
     unreadChats: chatCount.count,
     totalInvoicesOutstanding: 0,
-    totalInvoicesOverdue: parseFloat(String(overdueResult[0]?.total ?? "0")),
+    totalInvoicesOverdue: overdueResult?.total ?? 0,
   });
 });
 

@@ -750,6 +750,11 @@ export default function NewInvoice() {
   const saveMutation = useMutation({
     mutationFn: (b: object) => axiosInstance.post("/invoices", b).then(r => r.data),
     onSuccess: (data) => {
+      if (data?._offlineQueued) {
+        toast({ title: "Invoice queued offline", description: "Will sync automatically when connected." });
+        navigate("/invoices");
+        return;
+      }
       qc.invalidateQueries({ queryKey: ["invoices"] });
       toast({ title: "Invoice saved!", description: data.invoiceNumber });
       navigate(`/invoices/${data.id}`);
@@ -760,6 +765,11 @@ export default function NewInvoice() {
   const updateMutation = useMutation({
     mutationFn: (b: object) => axiosInstance.put(`/invoices/${editId}`, b).then(r => r.data),
     onSuccess: (data) => {
+      if (data?._offlineQueued) {
+        toast({ title: "Invoice update queued offline", description: "Will sync automatically when connected." });
+        navigate("/invoices");
+        return;
+      }
       qc.invalidateQueries({ queryKey: ["invoices"] });
       qc.invalidateQueries({ queryKey: ["invoice", String(editId)] });
       toast({ title: "Invoice updated!", description: data.invoiceNumber });

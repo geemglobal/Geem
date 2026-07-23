@@ -1,12 +1,15 @@
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { lazy, Suspense, useEffect } from "react";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { applyPrimaryColor, applyBorderRadius } from "@/lib/theme";
 import { ShopAuthProvider } from "@/lib/shopAuth";
 import { ClerkProvider } from "@clerk/react";
 import { publishableKeyFromHost } from "@clerk/react/internal";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { useToast } from "@/hooks/use-toast";
+import { syncQueue } from "@/lib/offlineQueue";
 
 // ─── Eager — critical first-paint components ─────────────────────────────────
 import NotFound from "@/pages/not-found";
@@ -72,8 +75,72 @@ const ShopResetPassword  = lazy(() => import("./pages/shop/ShopResetPassword"));
 // ─────────────────────────────────────────────────────────────────────────────
 
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      gcTime: 24 * 60 * 60 * 1000,   // keep cache for 24 h
+      retry: 1,
+      // 'offlineFirst': queries fire even without a network connection so the
+      // SW / persisted cache is used instead of pausing with a spinner.
+      networkMode: "offlineFirst",
+    },
+    mutations: { networkMode: "offlineFirst" },
+  },
 });
+
+// ── Query-cache persistence ───────────────────────────────────────────────────
+// Hydrate React Query cache from localStorage on every cold start so that
+// previously-fetched data is available immediately (even offline).
+const QCACHE_KEY = "geem_qcache_v2";
+try {
+  const saved = JSON.parse(localStorage.getItem(QCACHE_KEY) ?? "[]") as Array<{
+    queryKey: unknown[];
+    data: unknown;
+  }>;
+  for (const { queryKey, data } of saved) queryClient.setQueryData(queryKey, data);
+} catch { /* corrupt entry — ignore */ }
+
+// Persist successful queries to localStorage (2 s debounce, max 200 entries).
+let _cacheTimer: ReturnType<typeof setTimeout> | undefined;
+queryClient.getQueryCache().subscribe(() => {
+  clearTimeout(_cacheTimer);
+  _cacheTimer = setTimeout(() => {
+    try {
+      const entries = queryClient
+        .getQueryCache()
+        .getAll()
+        .filter((q) => q.state.status === "success" && q.state.data !== undefined)
+        .slice(-200)
+        .map((q) => ({ queryKey: q.queryKey, data: q.state.data }));
+      localStorage.setItem(QCACHE_KEY, JSON.stringify(entries));
+    } catch { /* quota exceeded — fine */ }
+  }, 2000);
+});
+
+// ── Offline sync manager ──────────────────────────────────────────────────────
+// Lives inside QueryClientProvider so it can use hooks.
+// Auto-syncs the offline mutation queue the moment connectivity is restored.
+function OfflineSyncManager() {
+  const isOnline = useOnlineStatus();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const prev = useRef(isOnline);
+
+  useEffect(() => {
+    if (!isOnline || prev.current === isOnline) { prev.current = isOnline; return; }
+    prev.current = isOnline;
+    syncQueue().then(({ ok, failed }) => {
+      if (ok > 0) {
+        toast({ title: `✓ Synced ${ok} offline operation${ok > 1 ? "s" : ""}`, description: "All queued changes are now saved." });
+        qc.invalidateQueries();
+      }
+      if (failed > 0) toast({ title: `${failed} sync failed`, description: "Some offline operations could not sync.", variant: "destructive" });
+      window.dispatchEvent(new Event("offline-queue-updated"));
+    }).catch(() => {});
+  }, [isOnline, qc, toast]);
+
+  return null;
+}
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -243,6 +310,7 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <OfflineSyncManager />
       <TooltipProvider>
         <WouterRouter base={basePath}>
           <ClerkAwareShopAuth>

@@ -330,7 +330,16 @@ export default function POS() {
 
   const saveMutation = useMutation({
     mutationFn: (b: object) => axiosInstance.post("/invoices", b).then(r => r.data),
-    onSuccess: (data) => { qc.invalidateQueries({ queryKey: ["invoices"] }); toast({ title: "Sale processed!", description: data.invoiceNumber }); navigate(`/invoices/${data.id}`); },
+    onSuccess: (data) => {
+      if (data?._offlineQueued) {
+        toast({ title: "Sale queued offline", description: "Will sync automatically when connected." });
+        navigate("/invoices");
+        return;
+      }
+      qc.invalidateQueries({ queryKey: ["invoices"] });
+      toast({ title: "Sale processed!", description: data.invoiceNumber });
+      navigate(`/invoices/${data.id}`);
+    },
     onError: () => toast({ title: "Error processing sale", variant: "destructive" }),
   });
 
