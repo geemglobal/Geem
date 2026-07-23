@@ -617,9 +617,7 @@ router.get("/inventory", async (req, res): Promise<void> => {
     sql`${inventoryItemsTable.status} in ('not_for_use','pta_blocked')`
   );
   const [ptaPending] = await db.select({ c: count() }).from(inventoryItemsTable).where(eq(inventoryItemsTable.ptaStatus, "pending"));
-  const [ptaUnpaid] = await db.select({ c: count() }).from(inventoryItemsTable).where(
-    and(eq(inventoryItemsTable.ptaStatus, "unpaid"), eq(inventoryItemsTable.status, "sold"))
-  );
+  const [ptaUnpaid] = await db.select({ c: count() }).from(inventoryItemsTable).where(eq(inventoryItemsTable.ptaStatus, "unpaid"));
 
   const enriched = await Promise.all(items.map(enrichItem));
   res.json({
