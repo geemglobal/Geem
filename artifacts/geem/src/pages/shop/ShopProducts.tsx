@@ -24,13 +24,14 @@ interface Category { id: number; name: string; parentId: number | null; active: 
 interface CategoryNode extends Category { children: Category[]; }
 
 const CAT_ICONS: Record<string, React.ElementType> = {
-  "Covert Surveillance & Audio Gear": Camera,
-  "Industrial Composite Materials": FlaskConical,
-  "Custom Battery Design & Manufacturing Services": Battery,
   "Security Equipment": Shield,
-  "Signal & RF Detectors": Radio,
   "GPS Tracking & Telematics": MapPin,
   "3D Printer Filaments": Printer,
+  "Industrial Composite Materials": FlaskConical,
+  "Battery & Power Systems": Battery,
+  "Custom Battery Design & Manufacturing Services": Battery,
+  "Covert Surveillance & Audio Gear": Camera,
+  "Signal & RF Detectors": Radio,
 };
 
 function buildTree(cats: Category[]): CategoryNode[] {
