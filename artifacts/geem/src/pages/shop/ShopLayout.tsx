@@ -115,7 +115,13 @@ export function ShopLayout({ children }: { children: React.ReactNode }) {
         <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center justify-between gap-4">
           {/* Logo (small, sticky only) */}
           <Link href="/shop">
-            <img src={branding.logo ?? "/geem-logo.svg"} alt={branding.companyName} className="h-8 w-auto cursor-pointer" />
+            {branding.logo
+              ? <img src={branding.logo} alt={branding.companyName} className="h-8 w-auto cursor-pointer" />
+              : <div className="flex items-center gap-2 cursor-pointer">
+                  <img src="/api/shop/app-icon" alt={branding.companyName} className="h-8 w-8 object-contain rounded" />
+                  <span className="font-bold text-lg leading-none text-gray-900">{branding.companyName}</span>
+                </div>
+            }
           </Link>
 
           {/* Desktop Nav */}
@@ -369,11 +375,13 @@ export function ShopLayout({ children }: { children: React.ReactNode }) {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-10">
             <div className="md:col-span-1">
               <div className="flex items-center mb-3">
-                <img
-                src={branding.logo ?? "/geem-logo-white.svg"}
-                alt={branding.companyName}
-                className={`h-9 w-auto${branding.logo ? " brightness-0 invert" : ""}`}
-              />
+                {branding.logo
+                  ? <img src={branding.logo} alt={branding.companyName} className="h-9 w-auto brightness-0 invert" />
+                  : <div className="flex items-center gap-2">
+                      <img src="/api/shop/app-icon" alt={branding.companyName} className="h-9 w-9 object-contain rounded brightness-0 invert" />
+                      <span className="font-bold text-xl text-white leading-none">{branding.companyName}</span>
+                    </div>
+                }
               </div>
               <p className="text-sm font-bold text-gray-100 leading-snug mb-2">
                 Military-Grade<br />Security &amp; Surveillance<br />Equipment
