@@ -560,13 +560,13 @@ export default function Inventory() {
               <div className="text-xs text-muted-foreground">Blocked / N/A</div>
             </CardContent>
           </Card>
-          <Card className="cursor-pointer hover:border-primary transition-colors" onClick={() => { setFilterPta("unpaid"); setFilterStatus("sold"); setPage(1); }}>
+          <Card className="cursor-pointer hover:border-primary transition-colors" onClick={() => { setFilterPta("unpaid"); setFilterStatus(""); setPage(1); }}>
             <CardContent className="pt-4 pb-4">
               <div className="text-2xl font-bold text-orange-600">{summary.ptaUnpaid?.toLocaleString() ?? 0}</div>
               <div className="text-xs text-muted-foreground">PTA Unpaid</div>
             </CardContent>
           </Card>
-          <Card className="cursor-pointer hover:border-primary transition-colors" onClick={() => { setFilterPta("pending"); setFilterStatus(""); setPage(1); }}>
+          <Card className="cursor-pointer hover:border-primary transition-colors" onClick={() => { setFilterPta("pending"); setFilterStatus("sold"); setPage(1); }}>
             <CardContent className="pt-4 pb-4">
               <div className="text-2xl font-bold text-yellow-600">{summary.ptaPending?.toLocaleString() ?? 0}</div>
               <div className="text-xs text-muted-foreground">PTA Pending</div>
