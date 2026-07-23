@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useSEO } from "@/hooks/useSEO";
 import {
   Package, Search, MessageCircle, ChevronRight, SlidersHorizontal, X,
-  Camera, Radio, FlaskConical, Battery, Shield,
+  Camera, Radio, FlaskConical, Battery, Shield, MapPin, Layers, Printer,
 } from "lucide-react";
 
 interface Product {
@@ -29,6 +29,8 @@ const CAT_ICONS: Record<string, React.ElementType> = {
   "Custom Battery Design & Manufacturing Services": Battery,
   "Security Equipment": Shield,
   "Signal & RF Detectors": Radio,
+  "GPS Tracking & Telematics": MapPin,
+  "3D Printer Filaments": Printer,
 };
 
 function buildTree(cats: Category[]): CategoryNode[] {
@@ -274,19 +276,26 @@ export default function ShopProducts() {
               {/* Category tree */}
               {categoryTree.map(parent => {
                 const Icon = CAT_ICONS[parent.name] ?? Shield;
-                if (!parent.children.length) return null;
+                const parentActive = categoryId === String(parent.id);
+                const childActive = parent.children.some(c => categoryId === String(c.id));
                 return (
-                  <div key={parent.id} className="pt-2">
-                    <p className="flex items-center gap-1.5 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                      <Icon className="h-3 w-3" />{parent.name}
-                    </p>
+                  <div key={parent.id} className="pt-1">
+                    {/* Parent category — clickable, filters by parent (API returns children too) */}
+                    <button
+                      onClick={() => { setFilter({ categoryId: String(parent.id), brandId: "" }); setShowMobileSidebar(false); }}
+                      className={`w-full flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-colors text-left ${parentActive ? "bg-primary text-primary-foreground" : childActive ? "text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+                    >
+                      <Icon className="h-3 w-3 flex-shrink-0" />
+                      <span className="line-clamp-1">{parent.name}</span>
+                    </button>
+                    {/* Sub-categories */}
                     {parent.children.map(child => (
                       <button
                         key={child.id}
                         onClick={() => { setFilter({ categoryId: String(child.id), brandId: "" }); setShowMobileSidebar(false); }}
-                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors text-left ${categoryId === String(child.id) ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted text-foreground"}`}
+                        className={`w-full flex items-center gap-2 pl-7 pr-3 py-1.5 rounded-lg text-sm transition-colors text-left ${categoryId === String(child.id) ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted text-foreground"}`}
                       >
-                        <ChevronRight className="h-3 w-3 flex-shrink-0 opacity-50" />
+                        <ChevronRight className="h-3 w-3 flex-shrink-0 opacity-40" />
                         <span className="line-clamp-1">{child.name}</span>
                       </button>
                     ))}

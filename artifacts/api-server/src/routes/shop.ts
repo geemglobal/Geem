@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, ilike, and, count, sql, or, gt } from "drizzle-orm";
+import { eq, ilike, and, count, sql, or, gt, inArray } from "drizzle-orm";
 import { db, productsTable, webOrdersTable, webOrderItemsTable, brandsTable, categoriesTable, integrationSettingsTable, companySettingsTable, shopCustomersTable, shopSessionsTable, customersTable, walletTransactionsTable, webOrderReturnsTable, invoicesTable } from "@workspace/db";
 import { hashPassword, verifyPassword, generateToken } from "../lib/auth.js";
 import { getAuth, clerkClient } from "@clerk/express";
@@ -104,7 +104,12 @@ router.get("/shop/products", async (req, res): Promise<void> => {
   if (search) conditions.push(ilike(productsTable.title, `%${search}%`));
   if (featured === "true") conditions.push(eq(productsTable.featured, true));
   if (brandId) conditions.push(eq(productsTable.brandId, brandId));
-  if (categoryId) conditions.push(eq(productsTable.categoryId, categoryId));
+  if (categoryId) {
+    // Include products in child categories too so clicking a parent shows all its items
+    const childCats = await db.select({ id: categoriesTable.id }).from(categoriesTable).where(eq(categoriesTable.parentId, categoryId));
+    const catIds = [categoryId, ...childCats.map(c => c.id)];
+    conditions.push(catIds.length === 1 ? eq(productsTable.categoryId, categoryId) : inArray(productsTable.categoryId, catIds));
+  }
   const where = and(...conditions);
 
   const [{ total }] = await db.select({ total: count() }).from(productsTable).where(where);
