@@ -2,8 +2,10 @@ import { useState, useEffect, useRef } from "react";
 import { MessageCircle, X, Send, Mic, MicOff, Paperclip, ChevronDown, Loader2, Bot, UserRound, Sparkles } from "lucide-react";
 import { axiosInstance } from "@/lib/axios";
 
-const SESSION_KEY_STORAGE = "geem_chat_session_key";
-const SESSION_ID_STORAGE  = "geem_chat_session_id";
+const SESSION_KEY_STORAGE    = "geem_chat_session_key";
+const SESSION_ID_STORAGE     = "geem_chat_session_id";
+const CHAT_CUSTOMER_NAME_KEY = "geem_chat_name";
+const CHAT_CUSTOMER_MOBILE_KEY = "geem_chat_mobile";
 const API = (path: string) => `/api${path}`;
 
 interface Msg {
@@ -109,6 +111,9 @@ export default function ShopChatWidget() {
       setSessionKey(data.sessionKey);
       localStorage.setItem(SESSION_KEY_STORAGE, data.sessionKey);
       localStorage.setItem(SESSION_ID_STORAGE, String(data.session.id));
+      // Persist for checkout auto-fill
+      if (name.trim()) localStorage.setItem(CHAT_CUSTOMER_NAME_KEY, name.trim());
+      if (mobile.trim()) localStorage.setItem(CHAT_CUSTOMER_MOBILE_KEY, mobile.trim());
       setShowForm(false);
       const { data: msgs } = await axiosInstance.get<Msg[]>(API(`/chat/sessions/${data.session.id}/messages`), {
         headers: { "X-Session-Key": data.sessionKey },

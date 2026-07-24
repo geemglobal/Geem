@@ -61,6 +61,10 @@ export default function Checkout() {
     const hdrs = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 
     // Fetch profile + last order in parallel, then fill form once
+    // Guest fallbacks from chat widget intro form
+    const chatName   = localStorage.getItem("geem_chat_name")   || "";
+    const chatMobile = localStorage.getItem("geem_chat_mobile") || "";
+
     Promise.all([
       fetch("/api/shop/auth/profile", { headers: hdrs }).then(r => r.ok ? r.json() as Promise<ShopProfile> : null).catch(() => null),
       fetch("/api/shop/auth/orders",  { headers: hdrs }).then(r => r.ok ? r.json() as Promise<RecentOrder[]> : []).catch(() => [] as RecentOrder[]),
@@ -70,9 +74,9 @@ export default function Checkout() {
       if (wallet) setWalletBalance((wallet as WalletData).balance ?? 0);
       setForm(p => ({
         ...p,
-        name:    p.name    || (profile as ShopProfile | null)?.name    || last?.customerName    || "",
+        name:    p.name    || (profile as ShopProfile | null)?.name    || last?.customerName    || chatName   || "",
         email:   p.email   || (profile as ShopProfile | null)?.email   || last?.customerEmail   || "",
-        mobile:  p.mobile  || (profile as ShopProfile | null)?.mobile  || last?.customerMobile  || "",
+        mobile:  p.mobile  || (profile as ShopProfile | null)?.mobile  || last?.customerMobile  || chatMobile || "",
         city:    p.city    || (profile as ShopProfile | null)?.city    || last?.customerCity    || "",
         address: p.address || (profile as ShopProfile | null)?.address || last?.customerAddress || "",
       }));
