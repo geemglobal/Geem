@@ -23,6 +23,7 @@ import activityRouter from "./activity";
 import expensesRouter from "./expenses";
 import simRouter from "./sim";
 import pushRouter from "./push";
+import chatRouter from "./chat";
 
 const router: IRouter = Router();
 
@@ -50,5 +51,6 @@ router.use(activityRouter);
 router.use(expensesRouter);
 router.use(simRouter);
 router.use(pushRouter);
+router.use(chatRouter);
 
 export default router;

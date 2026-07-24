@@ -12,6 +12,7 @@ import { axiosInstance } from "@/lib/axios";
 import { markShopNotifsRead } from "./ShopNotifications";
 import { AppSetupPrompt } from "@/components/AppSetupPrompt";
 import { WhatsAppChooser } from "@/components/WhatsAppChooser";
+import ShopChatWidget from "@/components/shop/ShopChat";
 
 const CATEGORIES = [
   { href: "/shop/products?category=Security+Equipment",     label: "Security Equipment",       icon: Shield },
@@ -436,6 +437,7 @@ export function ShopLayout({ children }: { children: React.ReactNode }) {
 
       <AppSetupPrompt appName="Geem Shop" appIcon={branding.gLogo ?? "/icon-192.png"} />
       <WhatsAppChooser />
+      <ShopChatWidget />
     </div>
   );
 }
