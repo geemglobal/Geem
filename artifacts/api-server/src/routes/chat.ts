@@ -35,7 +35,22 @@ function getSessionKey(req: any): string | undefined {
 
 /** Customer session key always wins over admin token — prevents admin cookies leaking into shop */
 async function getSenderRole(req: any, session: any): Promise<"customer" | "agent" | null> {
-  const key = getSessionKey(req);
+  const headerKey = req.headers["x-session-key"] as string | undefined;
+  const bodyKey = req.body?.sessionKey as string | undefined;
+  const key = headerKey ?? bodyKey;
+  const hasBearer = !!(req.headers.authorization as string | undefined)?.startsWith("Bearer ");
+
+  // Debug log — remove once stable
+  logger.info({
+    sessionId: session.id,
+    sessionKeyDb: session.sessionKey,
+    headerKey,
+    bodyKey,
+    key,
+    hasBearer,
+    match: sessionKeyMatch(session, key),
+  }, "getSenderRole debug");
+
   if (sessionKeyMatch(session, key)) return "customer";
   if (await isAdminAuth(req)) return "agent";
   return null;
