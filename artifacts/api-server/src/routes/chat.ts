@@ -173,7 +173,7 @@ async function generateAiReply(session: typeof chatSessionsTable.$inferSelect): 
       await sendPushToAdmins({
         title: "🔔 Human Agent Requested",
         body: `${session.customerName || "A customer"} wants to speak with a human agent.`,
-        url: "/erp/chat",
+        url: "https://erp.geem.pk/erp/chat",
         tag: `chat-transfer-${session.id}`,
         requireInteraction: true,
       }).catch(() => {});
@@ -237,7 +237,7 @@ router.post("/chat/sessions", async (req, res): Promise<void> => {
   await sendPushToAdmins({
     title: "New Chat Session",
     body: `${name || "A customer"} started a chat${mobile ? ` (${mobile})` : ""}`,
-    url: "/admin/chat",
+    url: "https://erp.geem.pk/erp/chat",
     tag: `chat-session-${session.id}`,
   }).catch(() => {});
 
@@ -321,7 +321,7 @@ router.post("/chat/sessions/:id/messages", async (req, res): Promise<void> => {
     await sendPushToAdmins({
       title: "🔔 Human Agent Requested",
       body: `${session.customerName || "A customer"} wants to speak with a human agent.`,
-      url: "/erp/chat",
+      url: "https://erp.geem.pk/erp/chat",
       tag: `chat-transfer-${id}`,
       requireInteraction: true,
     }).catch(() => {});
@@ -349,7 +349,7 @@ router.post("/chat/sessions/:id/messages", async (req, res): Promise<void> => {
   if (!admin) {
     await sendPushToAdmins({
       title: session.customerName ? `${session.customerName} – Chat` : "New Message",
-      body: preview, url: "/admin/chat",
+      body: preview, url: "https://erp.geem.pk/erp/chat",
       tag: `chat-msg-${id}`, requireInteraction: true,
     }).catch(() => {});
   }

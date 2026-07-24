@@ -50,16 +50,23 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = event.notification.data?.url || "/";
+  const rawUrl = event.notification.data?.url || "/";
+  // Always use an absolute URL so the correct domain is opened regardless of
+  // which origin this SW was registered on (geem.pk vs erp.geem.pk).
+  const targetUrl = rawUrl.startsWith("http")
+    ? rawUrl
+    : "https://erp.geem.pk" + rawUrl;
+
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
+      // If the ERP is already open, navigate that tab and focus it
       for (const client of windowClients) {
-        if (client.url.includes(self.location.origin) && "focus" in client) {
-          client.navigate(url);
+        if (client.url.includes("erp.geem.pk") && "focus" in client) {
+          client.navigate(targetUrl);
           return client.focus();
         }
       }
-      if (clients.openWindow) return clients.openWindow(url);
+      if (clients.openWindow) return clients.openWindow(targetUrl);
     })
   );
 });
