@@ -86,6 +86,11 @@ const HUMAN_KEYWORDS = [
   /\boperator\b/i, /\bsupport team\b/i, /\btalk to someone\b/i,
   /\bconnect me\b/i, /\blive chat\b/i, /\bspeak to\b/i,
   /\binsaan\b/i, /\bbanda\b/i, /\badmi\b/i,
+  // Roman Urdu phrases
+  /\bbat kar[wa]+o\b/i, /\bbaat kar[wa]+o\b/i, /\bbaat karo\b/i,
+  /\bse bat\b/i, /\bse baat\b/i, /\bagen[t]? se\b/i,
+  /\bbandey se\b/i, /\binsaan se\b/i, /\breal\b.*\bse\b/i,
+  /\bhelp karo\b/i, /\bhelp kar[wa]+o\b/i,
 ];
 
 function wantsHuman(text: string): boolean {
@@ -301,9 +306,25 @@ router.post("/chat/sessions/:id/messages", async (req, res): Promise<void> => {
 
   // Detect human transfer request from customer
   let sessionAiMode = session.aiMode;
-  if (!admin && messageType === "text" && wantsHuman(content)) {
+  if (!admin && messageType === "text" && session.aiMode && wantsHuman(content)) {
     sessionAiMode = false;
     await db.update(chatSessionsTable).set({ aiMode: false, updatedAt: new Date() }).where(eq(chatSessionsTable.id, id));
+
+    // Save system message so ShopChat detects humanMode and hides the button
+    const [sysMsg] = await db.insert(chatMessagesTable).values({
+      sessionId: id, role: "system", messageType: "text",
+      content: "🧑‍💼 Connecting you to a live agent. Please wait a moment…",
+    }).returning();
+    broadcast(id, "message", sysMsg);
+    broadcast(id, "human_requested", { sessionId: id, customerName: session.customerName });
+
+    await sendPushToAdmins({
+      title: "🔔 Human Agent Requested",
+      body: `${session.customerName || "A customer"} wants to speak with a human agent.`,
+      url: "/erp/chat",
+      tag: `chat-transfer-${id}`,
+      requireInteraction: true,
+    }).catch(() => {});
   }
 
   const [msg] = await db.insert(chatMessagesTable).values({
