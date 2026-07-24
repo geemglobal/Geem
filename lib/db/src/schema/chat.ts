@@ -10,6 +10,7 @@ export const chatSessionsTable = pgTable("chat_sessions", {
   customerMobile: text("customer_mobile"),
   assignedStaffId: integer("assigned_staff_id"),
   status: text("status").notNull().default("open"), // open | resolved | closed
+  aiMode: boolean("ai_mode").notNull().default(true), // true = AI handles, false = human agent
   unreadCount: integer("unread_count").notNull().default(0),
   lastMessage: text("last_message"),
   ticketNumber: text("ticket_number"),

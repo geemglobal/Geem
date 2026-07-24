@@ -650,6 +650,8 @@ importers:
         specifier: ^0.31.10
         version: 0.31.10
 
+  lib/integrations-openai-ai-react: {}
+
   lib/integrations-openai-ai-server:
     dependencies:
       openai:

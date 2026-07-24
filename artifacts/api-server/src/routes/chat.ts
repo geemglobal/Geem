@@ -5,6 +5,7 @@ import { addListener, removeListener, broadcast } from "../lib/chat-events";
 import { sendPushToAdmins } from "../lib/push";
 import { logger } from "../lib/logger";
 import crypto from "node:crypto";
+import { openai } from "@workspace/integrations-openai-ai-server";
 
 const router = Router();
 
@@ -19,14 +20,12 @@ function sessionKeyMatch(session: any, key: string | undefined) {
 }
 
 async function autoAssignStaff(): Promise<number | null> {
-  // Pick active staff member with fewest open sessions
   try {
     const staff = await db
       .select({ id: usersTable.id })
       .from(usersTable)
       .where(eq(usersTable.active, true));
     if (!staff.length) return null;
-
     const counts = await Promise.all(
       staff.map(async (s) => {
         const [{ c }] = await db
@@ -49,11 +48,120 @@ function ticketNumber() {
   return `TKT-${ts}-${rand}`;
 }
 
+// Keywords that signal a customer wants to talk to a human
+const HUMAN_KEYWORDS = [
+  /\bhuman\b/i, /\bagent\b/i, /\bstaff\b/i, /\breal person\b/i,
+  /\boperator\b/i, /\bsupport team\b/i, /\btalk to someone\b/i,
+  /\bconnect me\b/i, /\blive chat\b/i, /\bspeak to\b/i,
+];
+
+function wantsHuman(text: string): boolean {
+  return HUMAN_KEYWORDS.some(re => re.test(text));
+}
+
+// ─── AI reply (fires after customer message if aiMode=true) ──────────────────
+
+async function generateAiReply(session: typeof chatSessionsTable.$inferSelect): Promise<void> {
+  try {
+    // Fetch recent conversation history (last 20 msgs)
+    const history = await db
+      .select()
+      .from(chatMessagesTable)
+      .where(eq(chatMessagesTable.sessionId, session.id))
+      .orderBy(asc(chatMessagesTable.createdAt))
+      .limit(20);
+
+    const chatHistory = history
+      .filter(m => m.role !== "system")
+      .map(m => ({
+        role: (m.role === "agent" ? "assistant" : "user") as "assistant" | "user",
+        content: m.messageType === "text" ? m.content : `[${m.messageType} message]`,
+      }));
+
+    const systemPrompt = `You are a friendly and helpful customer support assistant for Geem — a Pakistani tech shop specialising in GPS trackers, mobile accessories, surveillance cameras, and smart security products.
+
+Your goal: resolve customer queries quickly, warmly, and professionally in the same language the customer uses (Urdu, English, or Roman Urdu).
+
+If the customer asks to speak with a human, or if you genuinely cannot help (complex orders, refunds, technical faults requiring hands-on support), reply with exactly this token on the very first line: [TRANSFER]
+Then add a short, warm message explaining a human agent will be with them shortly.
+
+Keep replies concise (2-4 sentences). Use emojis sparingly but warmly 😊.`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-5.6-luna",
+      max_completion_tokens: 400,
+      messages: [
+        { role: "system", content: systemPrompt },
+        ...chatHistory,
+      ],
+    });
+
+    const aiText = response.choices[0]?.message?.content?.trim() ?? "";
+    const shouldTransfer = aiText.startsWith("[TRANSFER]");
+    const displayText = shouldTransfer
+      ? aiText.replace("[TRANSFER]", "").trim()
+      : aiText;
+
+    if (shouldTransfer) {
+      // Switch session to human mode
+      await db
+        .update(chatSessionsTable)
+        .set({ aiMode: false, updatedAt: new Date() })
+        .where(eq(chatSessionsTable.id, session.id));
+
+      // System message to customer
+      const sysMsg = await db
+        .insert(chatMessagesTable)
+        .values({
+          sessionId: session.id,
+          role: "system",
+          messageType: "text",
+          content: "🧑‍💼 Connecting you to a live agent. Please wait a moment…",
+        })
+        .returning();
+      broadcast(session.id, "message", sysMsg[0]);
+
+      // Notify admins
+      await sendPushToAdmins({
+        title: "🔔 Human Agent Requested",
+        body: `${session.customerName || "A customer"} wants to speak with a human agent.`,
+        url: "/admin/chat",
+        tag: `chat-transfer-${session.id}`,
+        requireInteraction: true,
+      }).catch(() => {});
+    }
+
+    // Save AI reply
+    if (displayText) {
+      const [aiMsg] = await db
+        .insert(chatMessagesTable)
+        .values({
+          sessionId: session.id,
+          role: "agent",
+          messageType: "text",
+          content: displayText,
+        })
+        .returning();
+
+      const preview = displayText.slice(0, 100);
+      await db
+        .update(chatSessionsTable)
+        .set({ lastMessage: preview, updatedAt: new Date() })
+        .where(eq(chatSessionsTable.id, session.id));
+
+      broadcast(session.id, "message", aiMsg);
+      broadcast(session.id, "session_updated", { id: session.id, lastMessage: preview, aiMode: shouldTransfer ? false : true });
+    }
+  } catch (err) {
+    logger.error("AI reply failed:", err);
+    // Silently fall back — admin will still see the message
+  }
+}
+
 // ─── create session (shop, no auth needed) ────────────────────────────────────
 router.post("/chat/sessions", async (req, res): Promise<void> => {
   const { name, mobile, email, sessionKey: existingKey } = req.body;
 
-  // Resume existing session by key
   if (existingKey) {
     const [existing] = await db
       .select()
@@ -76,22 +184,26 @@ router.post("/chat/sessions", async (req, res): Promise<void> => {
       customerEmail: email || null,
       customerMobile: mobile || null,
       assignedStaffId,
+      aiMode: true,
       status: "open",
       unreadCount: 0,
     })
     .returning();
 
-  // System welcome message
+  // Warm welcome from AI persona
+  const greeting = name
+    ? `Hi ${name}! 👋 Welcome to Geem. I'm your virtual assistant — ask me anything about our GPS trackers, cameras, or accessories. How can I help you today?`
+    : `Hi there! 👋 Welcome to Geem. I'm your virtual assistant — ask me anything about our GPS trackers, cameras, or accessories. How can I help?`;
+
   await db.insert(chatMessagesTable).values({
     sessionId: session.id,
-    role: "system",
+    role: "agent",
     messageType: "text",
-    content: `Welcome${name ? `, ${name}` : ""}! 👋 How can we help you today?`,
+    content: greeting,
   });
 
-  // Notify admins of new session
   await sendPushToAdmins({
-    title: "New Chat",
+    title: "New Chat Session",
     body: `${name || "A customer"} started a chat${mobile ? ` (${mobile})` : ""}`,
     url: "/admin/chat",
     tag: `chat-session-${session.id}`,
@@ -111,6 +223,7 @@ router.get("/chat/sessions", async (req, res): Promise<void> => {
       customerMobile: chatSessionsTable.customerMobile,
       assignedStaffId: chatSessionsTable.assignedStaffId,
       status: chatSessionsTable.status,
+      aiMode: chatSessionsTable.aiMode,
       unreadCount: chatSessionsTable.unreadCount,
       lastMessage: chatSessionsTable.lastMessage,
       ticketNumber: chatSessionsTable.ticketNumber,
@@ -140,7 +253,6 @@ router.get("/chat/sessions/:id/messages", async (req, res): Promise<void> => {
     .where(eq(chatMessagesTable.sessionId, id))
     .orderBy(asc(chatMessagesTable.createdAt));
 
-  // Mark customer messages as read (for admin)
   if (isAdminAuth(req) && session.unreadCount > 0) {
     await db.update(chatSessionsTable).set({ unreadCount: 0 }).where(eq(chatSessionsTable.id, id));
     broadcast(id, "session_updated", { id, unreadCount: 0 });
@@ -163,12 +275,18 @@ router.post("/chat/sessions/:id/messages", async (req, res): Promise<void> => {
   const { content = "", messageType = "text", fileUrl, fileName } = req.body;
   const role = admin ? "agent" : "customer";
 
+  // If customer explicitly asks for human, switch aiMode off immediately
+  let sessionAiMode = session.aiMode;
+  if (!admin && messageType === "text" && wantsHuman(content)) {
+    sessionAiMode = false;
+    await db.update(chatSessionsTable).set({ aiMode: false, updatedAt: new Date() }).where(eq(chatSessionsTable.id, id));
+  }
+
   const [msg] = await db
     .insert(chatMessagesTable)
     .values({ sessionId: id, role, messageType, content, fileUrl: fileUrl || null, fileName: fileName || null })
     .returning();
 
-  // Update session metadata
   const preview =
     messageType === "voice" ? "🎤 Voice message" :
     messageType === "image" ? "🖼️ Image" :
@@ -181,11 +299,10 @@ router.post("/chat/sessions/:id/messages", async (req, res): Promise<void> => {
     .set({ lastMessage: preview, unreadCount: newUnread, updatedAt: new Date() })
     .where(eq(chatSessionsTable.id, id));
 
-  // SSE broadcast to this session's listeners
   broadcast(id, "message", msg);
   broadcast(id, "session_updated", { id, lastMessage: preview, unreadCount: newUnread });
 
-  // Push notifications
+  // Push to admins for customer messages
   if (!admin) {
     await sendPushToAdmins({
       title: session.customerName ? `${session.customerName} – Chat` : "New Message",
@@ -197,6 +314,12 @@ router.post("/chat/sessions/:id/messages", async (req, res): Promise<void> => {
   }
 
   res.json(msg);
+
+  // After responding to customer — trigger AI reply asynchronously (don't block HTTP response)
+  if (!admin && messageType === "text" && sessionAiMode) {
+    const freshSession = { ...session, aiMode: sessionAiMode };
+    setImmediate(() => generateAiReply(freshSession));
+  }
 });
 
 // ─── SSE stream for a session ─────────────────────────────────────────────────
@@ -211,29 +334,24 @@ router.get("/chat/sessions/:id/events", async (req, res): Promise<void> => {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
-  res.setHeader("X-Accel-Buffering", "no"); // disable nginx buffering
+  res.setHeader("X-Accel-Buffering", "no");
   res.flushHeaders();
 
-  // Heartbeat every 25s to keep connection alive
   const hb = setInterval(() => { try { res.write(": heartbeat\n\n"); } catch { clearInterval(hb); } }, 25000);
-
   addListener(id, res);
-
-  req.on("close", () => {
-    clearInterval(hb);
-    removeListener(id, res);
-  });
+  req.on("close", () => { clearInterval(hb); removeListener(id, res); });
 });
 
 // ─── update session (admin only) ─────────────────────────────────────────────
 router.patch("/chat/sessions/:id", async (req, res): Promise<void> => {
   if (!isAdminAuth(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
   const id = parseInt(req.params.id);
-  const { status, assignedStaffId } = req.body;
+  const { status, assignedStaffId, aiMode } = req.body;
 
   const patch: Record<string, unknown> = { updatedAt: new Date() };
   if (status !== undefined) patch.status = status;
   if (assignedStaffId !== undefined) patch.assignedStaffId = assignedStaffId;
+  if (aiMode !== undefined) patch.aiMode = aiMode;
 
   const [session] = await db.update(chatSessionsTable).set(patch).where(eq(chatSessionsTable.id, id)).returning();
 
