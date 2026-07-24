@@ -487,27 +487,6 @@ router.get("/reports/customer-dues", async (req, res): Promise<void> => {
   res.json(result);
 });
 
-// --- CHAT ---
-router.get("/chat/sessions", async (req, res): Promise<void> => {
-  const status = String(req.query.status ?? "");
-  let sessions = await db.select().from(chatSessionsTable).orderBy(sql`${chatSessionsTable.createdAt} desc`).limit(100);
-  if (status) sessions = sessions.filter(s => s.status === status);
-  res.json(sessions.map(s => ({ ...s, customerName: s.customerName ?? null, customerEmail: s.customerEmail ?? null, lastMessage: s.lastMessage ?? null, createdAt: s.createdAt.toISOString() })));
-});
-
-router.get("/chat/sessions/:id/messages", async (req, res): Promise<void> => {
-  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
-  const messages = await db.select().from(chatMessagesTable).where(eq(chatMessagesTable.sessionId, id)).orderBy(chatMessagesTable.createdAt);
-  res.json(messages.map(m => ({ ...m, createdAt: m.createdAt.toISOString() })));
-});
-
-router.post("/chat/sessions/:id/messages", async (req, res): Promise<void> => {
-  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
-  const { content, role } = req.body;
-  if (!content) { res.status(400).json({ error: "content required" }); return; }
-  const [message] = await db.insert(chatMessagesTable).values({ sessionId: id, content, role: role ?? "agent" }).returning();
-  await db.update(chatSessionsTable).set({ lastMessage: content }).where(eq(chatSessionsTable.id, id));
-  res.status(201).json({ ...message, createdAt: message.createdAt.toISOString() });
-});
+// Chat routes moved to routes/chat.ts — do not add them back here.
 
 export default router;
