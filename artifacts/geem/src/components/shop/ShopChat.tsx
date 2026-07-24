@@ -1,13 +1,18 @@
 import { useState, useEffect, useRef } from "react";
 import { MessageCircle, X, Send, Mic, MicOff, Paperclip, ChevronDown, Loader2, Bot, UserRound, RefreshCw, XCircle } from "lucide-react";
-import { axiosInstance } from "@/lib/axios";
+import Axios from "axios";
+
+// Dedicated axios instance for shop chat — intentionally has NO auth interceptor.
+// The shared chatApi adds the admin Bearer token to every request, which
+// causes the server to treat shop customers as admins. Chat uses sessionKey only.
+const chatApi = Axios.create({ baseURL: "/api" });
 
 const SESSION_KEY_STORAGE     = "geem_chat_session_key";
 const SESSION_ID_STORAGE      = "geem_chat_session_id";
 const CHAT_CUSTOMER_NAME_KEY  = "geem_chat_name";
 const CHAT_CUSTOMER_MOBILE_KEY = "geem_chat_mobile";
 
-// SSE connects directly to /api/... (not via axiosInstance baseURL)
+// SSE connects directly to /api/... (not via chatApi baseURL)
 const API_BASE = "/api";
 
 interface Msg {
@@ -54,7 +59,7 @@ export default function ShopChatWidget() {
     if (storedKey && storedId) {
       // Validate session is still active before restoring
       const id = parseInt(storedId);
-      axiosInstance.post("/chat/sessions", { sessionKey: storedKey })
+      chatApi.post("/chat/sessions", { sessionKey: storedKey })
         .then(({ data }) => {
           if (data.expired || !data.session) {
             // Session closed/resolved — clear and show fresh form
@@ -80,7 +85,7 @@ export default function ShopChatWidget() {
   // ── SSE real-time ──
   useEffect(() => {
     if (!sessionId || !sessionKey || !open) return;
-    // EventSource uses the full path directly (not via axiosInstance)
+    // EventSource uses the full path directly (not via chatApi)
     const url = `${API_BASE}/chat/sessions/${sessionId}/events?sessionKey=${encodeURIComponent(sessionKey)}`;
     const es = new EventSource(url);
     esRef.current = es;
@@ -132,7 +137,7 @@ export default function ShopChatWidget() {
   async function fetchMessages() {
     if (!sessionId || !sessionKey) return;
     try {
-      const { data } = await axiosInstance.get<Msg[]>(`/chat/sessions/${sessionId}/messages`, {
+      const { data } = await chatApi.get<Msg[]>(`/chat/sessions/${sessionId}/messages`, {
         headers: { "X-Session-Key": sessionKey },
       });
       setMessages(data);
@@ -142,7 +147,7 @@ export default function ShopChatWidget() {
   async function startSession() {
     setLoading(true);
     try {
-      const { data } = await axiosInstance.post("/chat/sessions", {
+      const { data } = await chatApi.post("/chat/sessions", {
         name: name.trim() || undefined,
         mobile: mobile.trim() || undefined,
       });
@@ -160,7 +165,7 @@ export default function ShopChatWidget() {
       if (mobile.trim()) localStorage.setItem(CHAT_CUSTOMER_MOBILE_KEY, mobile.trim());
       setShowForm(false);
 
-      const { data: msgs } = await axiosInstance.get<Msg[]>(`/chat/sessions/${data.session.id}/messages`, {
+      const { data: msgs } = await chatApi.get<Msg[]>(`/chat/sessions/${data.session.id}/messages`, {
         headers: { "X-Session-Key": data.sessionKey },
       });
       setMessages(msgs);
@@ -176,7 +181,7 @@ export default function ShopChatWidget() {
     try {
       if (sessionId && sessionKey) {
         // Post a goodbye message then clear locally — server keeps the record
-        await axiosInstance.post(
+        await chatApi.post(
           `/chat/sessions/${sessionId}/messages`,
           { messageType: "text", content: "Chat ended by customer.", sessionKey },
           { headers: { "X-Session-Key": sessionKey } }
@@ -207,7 +212,7 @@ export default function ShopChatWidget() {
   async function sendMessage(payload: { messageType: string; content?: string; fileUrl?: string; fileName?: string }) {
     if (!sessionId || !sessionKey) return;
     try {
-      const { data: msg } = await axiosInstance.post<Msg>(
+      const { data: msg } = await chatApi.post<Msg>(
         `/chat/sessions/${sessionId}/messages`,
         { ...payload, sessionKey },
         { headers: { "X-Session-Key": sessionKey } }
@@ -239,7 +244,7 @@ export default function ShopChatWidget() {
     setLoading(true);
     try {
       const uuid = crypto.randomUUID();
-      const { data: urlData } = await axiosInstance.post(`/storage/uploads/direct/${uuid}`, { fileName, contentType: blob.type });
+      const { data: urlData } = await chatApi.post(`/storage/uploads/direct/${uuid}`, { fileName, contentType: blob.type });
       await fetch(urlData.url, { method: "PUT", body: blob, headers: { "Content-Type": blob.type } });
       await sendMessage({ messageType, fileUrl: urlData.publicUrl || urlData.url, fileName, content: "" });
     } catch (e) { console.error("Upload failed", e); }
