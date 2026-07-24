@@ -269,8 +269,11 @@ router.post("/chat/sessions/:id/messages", async (req, res): Promise<void> => {
   const [session] = await db.select().from(chatSessionsTable).where(eq(chatSessionsTable.id, id));
   if (!session) { res.status(404).json({ error: "Not found" }); return; }
 
-  const admin = isAdminAuth(req);
-  if (!admin && !sessionKeyMatch(session, key)) { res.status(403).json({ error: "Forbidden" }); return; }
+  // A valid sessionKey always means "customer" — even if an admin cookie is also present.
+  // This prevents shared session cookies from making shop customers appear as admins.
+  const isCustomer = sessionKeyMatch(session, key);
+  const admin = !isCustomer && isAdminAuth(req);
+  if (!isCustomer && !admin) { res.status(403).json({ error: "Forbidden" }); return; }
 
   const { content = "", messageType = "text", fileUrl, fileName } = req.body;
   const role = admin ? "agent" : "customer";
