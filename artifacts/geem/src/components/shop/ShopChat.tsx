@@ -233,10 +233,16 @@ export default function ShopChatWidget() {
     if (!sessionId) setShowForm(true);
   }
 
-  // Human mode: AI has handed off — detect from system message content
-  const humanMode = messages.some(
-    m => m.role === "system" && (m.content.includes("live agent") || m.content.includes("Connecting you"))
-  );
+  // Human mode: transfer happened but agent hasn't replied yet.
+  // Once an agent message arrives AFTER the system "connecting" message, hide the waiting indicator.
+  const humanMode = (() => {
+    const transferIdx = messages.findLastIndex(
+      m => m.role === "system" && (m.content.includes("live agent") || m.content.includes("Connecting you"))
+    );
+    if (transferIdx === -1) return false;
+    // Still waiting if no agent message exists after the transfer system message
+    return !messages.slice(transferIdx + 1).some(m => m.role === "agent");
+  })();
 
   async function sendText() {
     if (!input.trim() || !sessionId || !sessionKey) return;
