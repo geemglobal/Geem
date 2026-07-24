@@ -578,7 +578,7 @@ export default function Inventory() {
       <div className="bg-card p-4 rounded-lg border space-y-3">
         <div className="flex flex-wrap gap-2 items-center">
           <Input
-            placeholder="Search IMEI, Brand, Model… (Enter)"
+            placeholder="Search IMEI, Brand, Model, Name, Mobile… (Enter)"
             value={search}
             onChange={(e) => handleSearchChange(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") handleSearchCommit(); }}

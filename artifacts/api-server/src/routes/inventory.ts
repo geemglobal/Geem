@@ -599,7 +599,15 @@ router.get("/inventory", async (req, res): Promise<void> => {
         or ${inventoryItemsTable.deviceId} ilike ${'%' + search + '%'}
         or ${inventoryItemsTable.psid} ilike ${'%' + search + '%'}
         or exists (select 1 from brands where brands.id = ${inventoryItemsTable.brandId} and brands.name ilike ${'%' + search + '%'})
-        or exists (select 1 from device_models where device_models.id = ${inventoryItemsTable.modelId} and device_models.name ilike ${'%' + search + '%'}))` as ReturnType<typeof eq>
+        or exists (select 1 from device_models where device_models.id = ${inventoryItemsTable.modelId} and device_models.name ilike ${'%' + search + '%'})
+        or exists (
+          select 1 from invoice_items
+          join invoices on invoices.id = invoice_items.invoice_id
+          join customers on customers.id = invoices.customer_id
+          where invoice_items.inventory_item_id = ${inventoryItemsTable.id}
+            and invoices.invoice_number like 'INV-%'
+            and (customers.name ilike ${'%' + search + '%'} or customers.mobile ilike ${'%' + search + '%'})
+        ))` as ReturnType<typeof eq>
     );
   }
 
