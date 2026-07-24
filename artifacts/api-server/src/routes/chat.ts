@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { eq, desc, and, asc, count as sqlCount } from "drizzle-orm";
 import { db, chatSessionsTable, chatMessagesTable, usersTable } from "@workspace/db";
-import { addListener, removeListener, broadcast } from "../lib/chat-events";
+import { addListener, removeListener, broadcast, addGlobalListener, removeGlobalListener } from "../lib/chat-events";
 import { sendPushToAdmins } from "../lib/push";
 import { logger } from "../lib/logger";
 import crypto from "node:crypto";
@@ -337,6 +337,25 @@ router.post("/chat/sessions/:id/messages", async (req, res): Promise<void> => {
     const freshSession = { ...session, aiMode: sessionAiMode };
     setImmediate(() => generateAiReply(freshSession).catch(err => logger.error({ err }, "AI reply setImmediate error")));
   }
+});
+
+// ─── Global admin SSE (all sessions) ─────────────────────────────────────────
+router.get("/chat/admin/events", async (req, res): Promise<void> => {
+  // EventSource can't set headers — accept token as query param too
+  const queryToken = req.query.token as string | undefined;
+  const isAdmin = await isAdminAuth(req) ||
+    (queryToken ? !!(await getUserIdFromToken(queryToken).catch(() => null)) : false);
+  if (!isAdmin) { res.status(401).end(); return; }
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+
+  const hb = setInterval(() => { try { res.write(": heartbeat\n\n"); } catch { clearInterval(hb); } }, 25000);
+  addGlobalListener(res);
+  req.on("close", () => { clearInterval(hb); removeGlobalListener(res); });
 });
 
 // ─── SSE stream ───────────────────────────────────────────────────────────────

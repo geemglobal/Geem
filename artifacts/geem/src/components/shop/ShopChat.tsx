@@ -233,11 +233,16 @@ export default function ShopChatWidget() {
     if (!sessionId) setShowForm(true);
   }
 
+  // Human mode: AI has handed off — detect from system message content
+  const humanMode = messages.some(
+    m => m.role === "system" && (m.content.includes("live agent") || m.content.includes("Connecting you"))
+  );
+
   async function sendText() {
     if (!input.trim() || !sessionId || !sessionKey) return;
     const text = input.trim();
     setInput("");
-    setAiTyping(true);
+    if (!humanMode) setAiTyping(true);  // only show AI typing in AI mode
     await sendMessage({ messageType: "text", content: text });
   }
 
@@ -473,7 +478,7 @@ export default function ShopChatWidget() {
               {/* Messages */}
               <div className="flex-1 overflow-y-auto px-3 py-3 bg-gray-50 space-y-0.5">
                 {messages.map(renderMessage)}
-                {aiTyping && (
+                {aiTyping && !humanMode && (
                   <div className="flex justify-start mb-2 items-end gap-1.5">
                     <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center shrink-0 mb-1">
                       <Bot className="h-3.5 w-3.5 text-blue-600" />
@@ -487,18 +492,28 @@ export default function ShopChatWidget() {
                     </div>
                   </div>
                 )}
+                {humanMode && (
+                  <div className="flex justify-center my-2">
+                    <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                      Waiting for a live agent…
+                    </span>
+                  </div>
+                )}
                 <div ref={bottomRef} />
               </div>
 
-              {/* Talk to human pill */}
-              <div className="px-3 py-1.5 bg-gray-50 border-t border-gray-100 flex justify-center shrink-0">
-                <button
-                  onClick={requestHuman}
-                  className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-600 transition-colors px-3 py-1 rounded-full hover:bg-blue-50"
-                >
-                  <UserRound className="h-3.5 w-3.5" /> Talk to a human agent
-                </button>
-              </div>
+              {/* Talk to human pill — hide once already transferred */}
+              {!humanMode && (
+                <div className="px-3 py-1.5 bg-gray-50 border-t border-gray-100 flex justify-center shrink-0">
+                  <button
+                    onClick={requestHuman}
+                    className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-600 transition-colors px-3 py-1 rounded-full hover:bg-blue-50"
+                  >
+                    <UserRound className="h-3.5 w-3.5" /> Talk to a human agent
+                  </button>
+                </div>
+              )}
 
               {/* Input bar */}
               <div className="border-t bg-white px-3 py-2 flex items-center gap-2 shrink-0">

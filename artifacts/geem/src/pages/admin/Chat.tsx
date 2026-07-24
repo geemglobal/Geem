@@ -39,11 +39,14 @@ export default function Chat() {
   const qc = useQueryClient();
   const { toast } = useToast();
 
+  const globalEsRef = useRef<EventSource | null>(null);
+  const globalReconnRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // ── Data queries ──────────────────────────────────────────────────────────
   const { data: sessions = [], refetch: refetchSessions } = useQuery<ChatSession[]>({
     queryKey: ["chat-sessions"],
     queryFn: () => axiosInstance.get<ChatSession[]>(API("/chat/sessions")).then(r => r.data),
-    refetchInterval: 15000,
+    refetchInterval: 4000,
   });
 
   const { data: messages = [], refetch: refetchMessages } = useQuery<ChatMessage[]>({
@@ -57,21 +60,76 @@ export default function Chat() {
     queryFn: () => axiosInstance.get<StaffMember[]>(API("/chat/staff")).then(r => r.data),
   });
 
-  // ── SSE for selected session ──────────────────────────────────────────────
+  // ── Audio notification helper ─────────────────────────────────────────────
+  const prevUnreadTotalRef = useRef(0);
+  useEffect(() => {
+    const total = sessions.reduce((s, x) => s + (x.unreadCount ?? 0), 0);
+    if (total > prevUnreadTotalRef.current) {
+      try {
+        const ctx = new AudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.frequency.value = 880;
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+        osc.start(); osc.stop(ctx.currentTime + 0.4);
+      } catch { /* ignore */ }
+    }
+    prevUnreadTotalRef.current = total;
+  }, [sessions]);
+
+  // ── Global SSE (all sessions → triggers list refetch) ────────────────────
+  useEffect(() => {
+    let dead = false;
+    function connect() {
+      if (dead) return;
+      const token = localStorage.getItem("geem_token");
+      if (!token) return;
+      const es = new EventSource(API(`/chat/admin/events?token=${encodeURIComponent(token)}`), { withCredentials: true });
+      globalEsRef.current = es;
+      es.addEventListener("session_updated", () => refetchSessions());
+      es.addEventListener("message", () => refetchSessions());
+      es.onerror = () => {
+        es.close();
+        globalEsRef.current = null;
+        if (!dead) globalReconnRef.current = setTimeout(connect, 4000);
+      };
+    }
+    connect();
+    return () => {
+      dead = true;
+      globalEsRef.current?.close();
+      if (globalReconnRef.current) clearTimeout(globalReconnRef.current);
+    };
+  }, []);
+
+  // ── SSE for selected session (with reconnect) ─────────────────────────────
   useEffect(() => {
     if (!selectedSession) return;
-    const url = API(`/chat/sessions/${selectedSession.id}/events`);
-    const es = new EventSource(url, { withCredentials: true });
-    esRef.current = es;
+    let dead = false;
+    const reconnRef = { current: null as ReturnType<typeof setTimeout> | null };
 
-    es.addEventListener("message", () => {
-      refetchMessages();
-    });
-    es.addEventListener("session_updated", () => {
-      refetchSessions();
-    });
-
-    return () => { es.close(); esRef.current = null; };
+    function connect() {
+      if (dead) return;
+      const url = API(`/chat/sessions/${selectedSession!.id}/events`);
+      const es = new EventSource(url, { withCredentials: true });
+      esRef.current = es;
+      es.addEventListener("message", () => refetchMessages());
+      es.addEventListener("session_updated", () => { refetchSessions(); refetchMessages(); });
+      es.onerror = () => {
+        es.close();
+        esRef.current = null;
+        if (!dead) reconnRef.current = setTimeout(connect, 3000);
+      };
+    }
+    connect();
+    return () => {
+      dead = true;
+      esRef.current?.close();
+      esRef.current = null;
+      if (reconnRef.current) clearTimeout(reconnRef.current);
+    };
   }, [selectedSession?.id]);
 
   // ── Scroll to bottom on new messages ────────────────────────────────────
