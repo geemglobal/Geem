@@ -6,7 +6,7 @@ const SESSION_KEY_STORAGE    = "geem_chat_session_key";
 const SESSION_ID_STORAGE     = "geem_chat_session_id";
 const CHAT_CUSTOMER_NAME_KEY = "geem_chat_name";
 const CHAT_CUSTOMER_MOBILE_KEY = "geem_chat_mobile";
-const API = (path: string) => `/api${path}`;
+const API = (path: string) => path; // axiosInstance already has baseURL "/api"
 
 interface Msg {
   id: number;
