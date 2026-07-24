@@ -5,7 +5,6 @@ import { addListener, removeListener, broadcast } from "../lib/chat-events";
 import { sendPushToAdmins } from "../lib/push";
 import { logger } from "../lib/logger";
 import crypto from "node:crypto";
-import { openai } from "@workspace/integrations-openai-ai-server";
 import { getUserIdFromToken } from "../lib/auth";
 
 const router = Router();
@@ -93,7 +92,42 @@ function wantsHuman(text: string): boolean {
   return HUMAN_KEYWORDS.some(re => re.test(text));
 }
 
-// ─── AI reply ────────────────────────────────────────────────────────────────
+// ─── Gemini AI reply ──────────────────────────────────────────────────────────
+
+const SYSTEM_PROMPT = `You are a friendly and helpful customer support assistant for Geem — a Pakistani tech shop specialising in GPS trackers, mobile accessories, surveillance cameras, and smart security products.
+
+Your goal: resolve customer queries quickly, warmly, and professionally in the same language the customer uses (Urdu, English, or Roman Urdu).
+
+If the customer asks to speak with a human, or if you genuinely cannot help (complex orders, refunds, technical faults requiring hands-on support), reply with exactly this token on the very first line: [TRANSFER]
+Then add a short, warm message explaining a human agent will be with them shortly.
+
+Keep replies concise (2-4 sentences). Use emojis sparingly but warmly 😊.`;
+
+async function callGemini(contents: { role: string; parts: { text: string }[] }[]): Promise<string> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-goog-api-key": apiKey },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        contents,
+        generationConfig: { maxOutputTokens: 400, temperature: 0.7 },
+      }),
+    }
+  );
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Gemini API error ${res.status}: ${err.slice(0, 200)}`);
+  }
+
+  const data = await res.json() as any;
+  return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
+}
 
 async function generateAiReply(session: typeof chatSessionsTable.$inferSelect): Promise<void> {
   try {
@@ -106,29 +140,14 @@ async function generateAiReply(session: typeof chatSessionsTable.$inferSelect): 
       .orderBy(asc(chatMessagesTable.createdAt))
       .limit(20);
 
-    const chatHistory = history
+    const contents = history
       .filter(m => m.role !== "system")
       .map(m => ({
-        role: (m.role === "agent" ? "assistant" : "user") as "assistant" | "user",
-        content: m.messageType === "text" ? m.content : `[${m.messageType} message]`,
+        role: m.role === "agent" ? "model" : "user",
+        parts: [{ text: m.messageType === "text" ? m.content : `[${m.messageType} message]` }],
       }));
 
-    const systemPrompt = `You are a friendly and helpful customer support assistant for Geem — a Pakistani tech shop specialising in GPS trackers, mobile accessories, surveillance cameras, and smart security products.
-
-Your goal: resolve customer queries quickly, warmly, and professionally in the same language the customer uses (Urdu, English, or Roman Urdu).
-
-If the customer asks to speak with a human, or if you genuinely cannot help (complex orders, refunds, technical faults requiring hands-on support), reply with exactly this token on the very first line: [TRANSFER]
-Then add a short, warm message explaining a human agent will be with them shortly.
-
-Keep replies concise (2-4 sentences). Use emojis sparingly but warmly 😊.`;
-
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      max_completion_tokens: 400,
-      messages: [{ role: "system", content: systemPrompt }, ...chatHistory],
-    });
-
-    const aiText = response.choices[0]?.message?.content?.trim() ?? "";
+    const aiText = await callGemini(contents);
     logger.info({ sessionId: session.id, aiText: aiText.slice(0, 80) }, "AI reply: received");
 
     const shouldTransfer = aiText.startsWith("[TRANSFER]");
