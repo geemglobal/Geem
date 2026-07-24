@@ -48,9 +48,12 @@ export default function ShopChatWidget() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef        = useRef<Blob[]>([]);
 
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const fileRef   = useRef<HTMLInputElement>(null);
-  const esRef     = useRef<EventSource | null>(null);
+  const bottomRef    = useRef<HTMLDivElement>(null);
+  const fileRef      = useRef<HTMLInputElement>(null);
+  const esRef        = useRef<EventSource | null>(null);
+  const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollRef      = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastMsgIdRef = useRef<number>(0);
 
   // ── Restore session from localStorage ──
   useEffect(() => {
@@ -82,39 +85,67 @@ export default function ShopChatWidget() {
     fetchMessages();
   }, [sessionId, sessionKey]);
 
-  // ── SSE real-time ──
+  // ── SSE real-time + polling fallback ──
   useEffect(() => {
-    if (!sessionId || !sessionKey || !open) return;
-    // EventSource uses the full path directly (not via chatApi)
-    const url = `${API_BASE}/chat/sessions/${sessionId}/events?sessionKey=${encodeURIComponent(sessionKey)}`;
-    const es = new EventSource(url);
-    esRef.current = es;
+    if (!sessionId || !sessionKey) return;
 
-    es.addEventListener("message", (e) => {
+    function mergeMsg(msg: Msg) {
+      setMessages(prev => {
+        if (prev.some(m => m.id === msg.id)) return prev;
+        if (msg.id > lastMsgIdRef.current) lastMsgIdRef.current = msg.id;
+        return [...prev, msg];
+      });
+      setAiTyping(false);
+    }
+
+    function connectSSE() {
+      if (reconnectRef.current) clearTimeout(reconnectRef.current);
+      const url = `${API_BASE}/chat/sessions/${sessionId}/events?sessionKey=${encodeURIComponent(sessionKey!)}`;
+      const es = new EventSource(url);
+      esRef.current = es;
+
+      es.addEventListener("message", (e) => {
+        try { mergeMsg(JSON.parse(e.data)); } catch { /* ignore */ }
+      });
+
+      es.addEventListener("session_updated", (e) => {
+        try {
+          const d = JSON.parse(e.data);
+          if (d.status === "closed" || d.status === "resolved") setSessionExpired(true);
+        } catch { /* ignore */ }
+      });
+
+      // On error: reconnect after 3 s (don't just die)
+      es.onerror = () => {
+        es.close();
+        esRef.current = null;
+        reconnectRef.current = setTimeout(connectSSE, 3000);
+      };
+    }
+
+    connectSSE();
+
+    // Polling fallback — every 3 s fetch any messages newer than what we have
+    pollRef.current = setInterval(async () => {
+      if (!sessionId || !sessionKey) return;
       try {
-        const msg: Msg = JSON.parse(e.data);
-        setMessages(prev => {
-          if (prev.some(m => m.id === msg.id)) return prev;
-          return [...prev, msg];
+        const { data } = await chatApi.get<Msg[]>(
+          `/chat/sessions/${sessionId}/messages`,
+          { headers: { "X-Session-Key": sessionKey } }
+        );
+        data.forEach(msg => {
+          if (msg.id > lastMsgIdRef.current) mergeMsg(msg);
         });
-        setAiTyping(false);
-        if (!open) setUnread(u => u + 1);
       } catch { /* ignore */ }
-    });
+    }, 3000);
 
-    es.addEventListener("session_updated", (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        // If session got closed/resolved via admin, show expired state
-        if (data.status === "closed" || data.status === "resolved") {
-          setSessionExpired(true);
-        }
-      } catch { /* ignore */ }
-    });
-
-    es.onerror = () => { es.close(); };
-    return () => { es.close(); esRef.current = null; };
-  }, [sessionId, sessionKey, open]);
+    return () => {
+      esRef.current?.close();
+      esRef.current = null;
+      if (reconnectRef.current) clearTimeout(reconnectRef.current);
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [sessionId, sessionKey]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -141,6 +172,7 @@ export default function ShopChatWidget() {
         headers: { "X-Session-Key": sessionKey },
       });
       setMessages(data);
+      if (data.length) lastMsgIdRef.current = Math.max(...data.map(m => m.id));
     } catch { /* ignore */ }
   }
 
