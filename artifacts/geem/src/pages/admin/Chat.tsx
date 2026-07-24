@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import {
   MessageSquare, Send, Mic, MicOff, Paperclip, Phone, User,
-  Ticket, CheckCircle2, XCircle, RefreshCw, Loader2, Clock,
+  Ticket, CheckCircle2, XCircle, RefreshCw, Loader2, Clock, ArrowLeft,
 } from "lucide-react";
 
 interface ChatSession {
@@ -311,8 +311,8 @@ export default function Chat() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4" style={{ height: "calc(100vh - 200px)", minHeight: "500px" }}>
-        {/* ── Sessions sidebar ── */}
-        <Card className="overflow-hidden flex flex-col">
+        {/* ── Sessions sidebar — hidden on mobile when a chat is open ── */}
+        <Card className={`overflow-hidden flex-col ${selectedSession ? "hidden lg:flex" : "flex"}`}>
           <div className="p-3 border-b bg-muted/30 shrink-0">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Sessions</p>
             <div className="flex gap-2 mt-1">
@@ -378,8 +378,8 @@ export default function Chat() {
           </div>
         </Card>
 
-        {/* ── Chat panel ── */}
-        <Card className="lg:col-span-2 flex flex-col overflow-hidden">
+        {/* ── Chat panel — hidden on mobile when no session selected ── */}
+        <Card className={`lg:col-span-2 flex-col overflow-hidden ${!selectedSession ? "hidden lg:flex" : "flex"}`}>
           {!selectedSession ? (
             <CardContent className="flex-1 flex items-center justify-center text-muted-foreground">
               <div className="text-center">
@@ -392,14 +392,24 @@ export default function Chat() {
               {/* Header */}
               <div className="p-3 border-b bg-muted/20 shrink-0">
                 <div className="flex items-start justify-between gap-2 flex-wrap">
-                  <div>
-                    <p className="font-semibold text-sm">{selectedSession.customerName || `Session #${selectedSession.id}`}</p>
-                    {selectedSession.customerMobile && (
-                      <p className="text-xs text-muted-foreground flex items-center gap-1"><Phone className="h-3 w-3" />{selectedSession.customerMobile}</p>
-                    )}
-                    {selectedSession.ticketNumber && (
-                      <p className="text-xs font-medium text-amber-700 flex items-center gap-1"><Ticket className="h-3 w-3" />{selectedSession.ticketNumber}</p>
-                    )}
+                  <div className="flex items-center gap-2 min-w-0">
+                    {/* Back button — mobile only */}
+                    <button
+                      className="lg:hidden p-1 rounded-md hover:bg-accent shrink-0"
+                      onClick={() => setSelectedSession(null)}
+                      aria-label="Back to sessions"
+                    >
+                      <ArrowLeft className="h-5 w-5" />
+                    </button>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm">{selectedSession.customerName || `Session #${selectedSession.id}`}</p>
+                      {selectedSession.customerMobile && (
+                        <p className="text-xs text-muted-foreground flex items-center gap-1"><Phone className="h-3 w-3" />{selectedSession.customerMobile}</p>
+                      )}
+                      {selectedSession.ticketNumber && (
+                        <p className="text-xs font-medium text-amber-700 flex items-center gap-1"><Ticket className="h-3 w-3" />{selectedSession.ticketNumber}</p>
+                      )}
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {/* Assign staff */}
