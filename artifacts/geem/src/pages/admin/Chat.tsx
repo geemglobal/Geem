@@ -25,7 +25,10 @@ interface ChatMessage {
 }
 interface StaffMember { id: number; name: string; role: string; }
 
-const API = (path: string) => `/api${path}`;
+// axiosInstance already has baseURL="/api" — paths here must NOT include the /api prefix
+const API = (path: string) => path;
+// EventSource can't use axiosInstance — it needs the full /api prefix
+const SSE = (path: string) => `/api${path}`;
 
 export default function Chat() {
   const [selectedSession, setSelectedSession] = useState<ChatSession | null>(null);
@@ -108,7 +111,7 @@ export default function Chat() {
       if (dead) return;
       const token = localStorage.getItem("geem_token");
       if (!token) return;
-      const es = new EventSource(API(`/chat/admin/events?token=${encodeURIComponent(token)}`), { withCredentials: true });
+      const es = new EventSource(SSE(`/chat/admin/events?token=${encodeURIComponent(token)}`), { withCredentials: true });
       globalEsRef.current = es;
 
       es.addEventListener("session_updated", () => refetchSessions());
@@ -153,7 +156,7 @@ export default function Chat() {
 
     function connect() {
       if (dead) return;
-      const url = API(`/chat/sessions/${selectedSession!.id}/events`);
+      const url = SSE(`/chat/sessions/${selectedSession!.id}/events`);
       const es = new EventSource(url, { withCredentials: true });
       esRef.current = es;
       es.addEventListener("message", () => refetchMessages());
