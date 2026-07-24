@@ -259,14 +259,17 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const { data: bellCount = 0 } = useQuery<number>({
     queryKey: ["notif-bell-count"],
     queryFn: async () => {
-      const [orders, returns] = await Promise.all([
+      const [orders, returns, chatSessions] = await Promise.all([
         axiosInstance.get<{ orders: { id: number }[] }>("/web-orders?status=new").then(r => r.data.orders.length),
         axiosInstance.get<{ id: number; status: string }[]>("/web-orders/returns?status=pending").then(r => r.data.length),
+        axiosInstance.get<{ id: number; status: string; aiMode: boolean; unreadCount: number }[]>("/chat/sessions")
+          .then(r => r.data.filter(s => s.status === "open" && (!s.aiMode || s.unreadCount > 0)).length)
+          .catch(() => 0),
       ]);
-      return orders + returns;
+      return orders + returns + chatSessions;
     },
-    refetchInterval: 60_000,
-    staleTime: 30_000,
+    refetchInterval: 15_000,
+    staleTime: 10_000,
   });
   const [offlineDismissed, setOfflineDismissed] = useState(false);
   const { canInstall, install } = usePwaInstall();

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import {
   ShoppingCart, RotateCcw, CheckCircle2, Truck, XCircle, Clock,
-  Bell, BellOff, ArrowRight, RefreshCw, Package,
+  Bell, BellOff, ArrowRight, RefreshCw, Package, MessageSquare, UserRound,
 } from "lucide-react";
 
 interface WebOrder {
@@ -31,7 +31,19 @@ interface ReturnRequest {
   createdAt: string;
 }
 
-type NotifType = "new_order" | "return_request" | "order_update";
+interface ChatSession {
+  id: number;
+  customerName: string | null;
+  customerMobile: string | null;
+  status: string;
+  aiMode: boolean;
+  unreadCount: number;
+  lastMessage: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+
+type NotifType = "new_order" | "return_request" | "order_update" | "chat_human" | "chat_new";
 
 interface NotifItem {
   id: string;
@@ -41,7 +53,7 @@ interface NotifItem {
   time: string;
   status: string;
   href: string;
-  raw: WebOrder | ReturnRequest;
+  raw: WebOrder | ReturnRequest | ChatSession;
 }
 
 function timeAgo(iso: string) {
@@ -56,15 +68,17 @@ function timeAgo(iso: string) {
 }
 
 const STATUS_META: Record<string, { label: string; color: string; icon: React.ElementType }> = {
-  new:        { label: "New",        color: "bg-blue-500",   icon: ShoppingCart  },
-  confirmed:  { label: "Confirmed",  color: "bg-indigo-500", icon: CheckCircle2  },
-  shipped:    { label: "Shipped",    color: "bg-purple-500", icon: Truck         },
-  delivered:  { label: "Delivered",  color: "bg-green-500",  icon: CheckCircle2  },
-  cancelled:  { label: "Cancelled",  color: "bg-gray-400",   icon: XCircle       },
-  pending:    { label: "Pending",    color: "bg-orange-500", icon: Clock         },
-  approved:   { label: "Approved",   color: "bg-green-500",  icon: CheckCircle2  },
-  rejected:   { label: "Rejected",   color: "bg-red-500",    icon: XCircle       },
-  completed:  { label: "Completed",  color: "bg-teal-500",   icon: CheckCircle2  },
+  new:          { label: "New",          color: "bg-blue-500",   icon: ShoppingCart  },
+  confirmed:    { label: "Confirmed",    color: "bg-indigo-500", icon: CheckCircle2  },
+  shipped:      { label: "Shipped",      color: "bg-purple-500", icon: Truck         },
+  delivered:    { label: "Delivered",    color: "bg-green-500",  icon: CheckCircle2  },
+  cancelled:    { label: "Cancelled",    color: "bg-gray-400",   icon: XCircle       },
+  pending:      { label: "Pending",      color: "bg-orange-500", icon: Clock         },
+  approved:     { label: "Approved",     color: "bg-green-500",  icon: CheckCircle2  },
+  rejected:     { label: "Rejected",     color: "bg-red-500",    icon: XCircle       },
+  completed:    { label: "Completed",    color: "bg-teal-500",   icon: CheckCircle2  },
+  chat_human:   { label: "Needs Human",  color: "bg-orange-500", icon: UserRound     },
+  chat_new:     { label: "Chat",         color: "bg-blue-400",   icon: MessageSquare },
 };
 
 function NotifCard({ item, isUnread }: { item: NotifItem; isUnread: boolean }) {
@@ -127,6 +141,12 @@ export default function Notifications() {
     refetchInterval: 60_000,
   });
 
+  const { data: chatSessions = [], isLoading: chatLoading, refetch: refetchChat } = useQuery<ChatSession[]>({
+    queryKey: ["notif-chat-sessions"],
+    queryFn: () => axiosInstance.get<ChatSession[]>("/chat/sessions").then(r => r.data.filter(s => s.status === "open")),
+    refetchInterval: 10_000,
+  });
+
   const [lastRead, setLastReadState] = useState(getLastRead());
 
   const orderItems: NotifItem[] = (ordersData?.orders ?? []).map(o => ({
@@ -153,14 +173,41 @@ export default function Notifications() {
     raw: r,
   }));
 
-  const allItems: NotifItem[] = [...orderItems, ...returnItems].sort(
-    (a, b) => new Date((b.raw as { createdAt: string }).createdAt).getTime() - new Date((a.raw as { createdAt: string }).createdAt).getTime()
+  const chatItems: NotifItem[] = chatSessions.map(s => ({
+    id: `chat-${s.id}`,
+    type: (!s.aiMode ? "chat_human" : "chat_new") as NotifType,
+    title: !s.aiMode
+      ? `🙋 ${s.customerName || "Customer"} needs a human agent`
+      : `💬 Chat from ${s.customerName || "Customer"}${s.unreadCount > 0 ? ` (${s.unreadCount} unread)` : ""}`,
+    subtitle: s.lastMessage
+      ? `Last message: ${s.lastMessage}${s.customerMobile ? ` · ${s.customerMobile}` : ""}`
+      : s.customerMobile ?? "No messages yet",
+    time: timeAgo(s.updatedAt || s.createdAt),
+    status: !s.aiMode ? "chat_human" : "chat_new",
+    href: "/chat",
+    raw: s,
+  }));
+
+  const allItems: NotifItem[] = [...orderItems, ...returnItems, ...chatItems].sort(
+    (a, b) => new Date((b.raw as { createdAt: string; updatedAt?: string }).updatedAt || (b.raw as { createdAt: string }).createdAt).getTime()
+            - new Date((a.raw as { createdAt: string; updatedAt?: string }).updatedAt || (a.raw as { createdAt: string }).createdAt).getTime()
   );
 
-  const actionItems  = allItems.filter(i => i.type === "new_order" || (i.type === "return_request" && (i.raw as ReturnRequest).status === "pending"));
-  const activityItems = allItems.filter(i => i.type === "order_update" || (i.type === "return_request" && (i.raw as ReturnRequest).status !== "pending"));
+  const actionItems = allItems.filter(i =>
+    i.type === "new_order" ||
+    i.type === "chat_human" ||
+    (i.type === "return_request" && (i.raw as ReturnRequest).status === "pending")
+  );
+  const activityItems = allItems.filter(i =>
+    i.type === "order_update" ||
+    i.type === "chat_new" ||
+    (i.type === "return_request" && (i.raw as ReturnRequest).status !== "pending")
+  );
 
-  const unreadCount = allItems.filter(i => new Date((i.raw as { createdAt: string }).createdAt).getTime() > lastRead).length;
+  const unreadCount = allItems.filter(i => {
+    const ts = (i.raw as { updatedAt?: string; createdAt: string }).updatedAt || (i.raw as { createdAt: string }).createdAt;
+    return new Date(ts).getTime() > lastRead;
+  }).length;
 
   function markAllRead() {
     setLastRead();
@@ -171,9 +218,10 @@ export default function Notifications() {
   function handleRefresh() {
     refetchOrders();
     refetchReturns();
+    refetchChat();
   }
 
-  const isLoading = ordersLoading || returnsLoading;
+  const isLoading = ordersLoading || returnsLoading || chatLoading;
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
