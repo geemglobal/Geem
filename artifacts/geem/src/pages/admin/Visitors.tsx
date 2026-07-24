@@ -7,9 +7,14 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Monitor, Smartphone, Tablet, Globe, MapPin, Eye, Users, Cpu, Wifi, Battery, Fingerprint, ShoppingBag, User, Clock, ExternalLink, Package } from "lucide-react";
+import {
+  Monitor, Smartphone, Tablet, Globe, MapPin, Eye, Users, Cpu, Wifi,
+  Battery, Fingerprint, ShoppingBag, User, Clock, ExternalLink, Package,
+  Radio, ArrowRight,
+} from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
+/* ─── Types ──────────────────────────────────────────────────────────────── */
 interface VisitorLog {
   id: number; sessionId: string; page: string; referrer: string | null;
   ip: string | null; country: string | null; city: string | null; region: string | null;
@@ -62,6 +67,21 @@ interface VisitorProfile {
   orders: VisitorOrder[];
 }
 
+interface LiveSession {
+  sessionId: string; ip: string | null;
+  country: string | null; city: string | null; region: string | null;
+  lat: string | null; lng: string | null; gpsAccuracy: number | null;
+  device: string | null; os: string | null; browser: string | null;
+  deviceModel: string | null; deviceBrand: string | null;
+  screenResolution: string | null; deviceMemory: string | null; cpuCores: string | null;
+  batteryLevel: string | null; connectionType: string | null;
+  canvasFp: string | null; timezone: string | null; language: string | null;
+  pages: { page: string; time: string }[];
+  firstSeen: string; lastSeen: string; durationMs: number;
+  utmSource: string | null;
+}
+
+/* ─── Helpers ─────────────────────────────────────────────────────────────── */
 const PIE_COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4"];
 
 function DeviceIcon({ device }: { device: string | null }) {
@@ -83,33 +103,235 @@ function Row({ label, value }: { label: string; value: string | null | undefined
 function slugToTitle(slug: string): string {
   return slug.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 }
-
-function productUrl(page: string): string {
-  return `https://geem.pk${page}`;
-}
-
+function productUrl(page: string): string { return `https://geem.pk${page}`; }
 function statusColor(status: string) {
   const map: Record<string, string> = {
-    new: "bg-blue-100 text-blue-700",
-    confirmed: "bg-indigo-100 text-indigo-700",
-    shipped: "bg-amber-100 text-amber-700",
-    delivered: "bg-green-100 text-green-700",
+    new: "bg-blue-100 text-blue-700", confirmed: "bg-indigo-100 text-indigo-700",
+    shipped: "bg-amber-100 text-amber-700", delivered: "bg-green-100 text-green-700",
     cancelled: "bg-red-100 text-red-700",
   };
   return map[status] ?? "bg-muted text-muted-foreground";
 }
 
+function timeAgo(iso: string): string {
+  const sec = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (sec < 60) return `${sec}s ago`;
+  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+  return `${Math.floor(sec / 3600)}h ago`;
+}
+
+function fmtDuration(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return rem ? `${m}m ${rem}s` : `${m}m`;
+}
+
+function pageLabel(page: string): string {
+  if (page === "/") return "Home";
+  if (page === "/shop") return "Shop";
+  if (page === "/shop/products") return "All Products";
+  if (page === "/cart") return "Cart";
+  if (page === "/checkout") return "Checkout";
+  if (page.startsWith("/shop/product/")) return slugToTitle(page.replace("/shop/product/", "")).slice(0, 30);
+  if (page.startsWith("/shop/products/")) return slugToTitle(page.replace("/shop/products/", "")).slice(0, 30);
+  return page.slice(0, 30);
+}
+
+/* ─── Live Session Card ───────────────────────────────────────────────────── */
+function LiveCard({ session, onClick }: { session: LiveSession; onClick: () => void }) {
+  const secAgo = Math.floor((Date.now() - new Date(session.lastSeen).getTime()) / 1000);
+  const isNow = secAgo < 120;       // < 2 min  → green pulse
+  const isRecent = secAgo < 600;    // < 10 min → yellow
+  const currentPage = session.pages[session.pages.length - 1]?.page ?? "/";
+  const deviceLabel = session.deviceModel || session.deviceBrand ||
+    (session.device === "mobile" ? "Mobile" : session.device === "tablet" ? "Tablet" : "Desktop");
+
+  return (
+    <div
+      onClick={onClick}
+      className="rounded-xl border bg-card p-4 cursor-pointer hover:shadow-md transition-shadow space-y-3"
+    >
+      {/* Header: status dot + device + time */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2.5 min-w-0">
+          {/* Status indicator */}
+          <div className="relative flex-shrink-0">
+            <div className={`h-2.5 w-2.5 rounded-full ${isNow ? "bg-green-500" : isRecent ? "bg-amber-400" : "bg-muted-foreground"}`} />
+            {isNow && <div className="absolute inset-0 rounded-full bg-green-500 animate-ping opacity-75" />}
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <DeviceIcon device={session.device} />
+              <p className="font-semibold text-sm truncate">{deviceLabel}</p>
+            </div>
+            <p className="text-xs text-muted-foreground">{session.os} · {session.browser}</p>
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+            isNow ? "bg-green-100 text-green-700" : isRecent ? "bg-amber-100 text-amber-700" : "bg-muted text-muted-foreground"
+          }`}>
+            {isNow ? "🟢 Online" : isRecent ? "🟡 Recent" : "⚫ Left"}
+          </span>
+          <span className="text-[10px] text-muted-foreground">{timeAgo(session.lastSeen)}</span>
+        </div>
+      </div>
+
+      {/* Location */}
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Globe className="h-3.5 w-3.5 flex-shrink-0" />
+        <span>{[session.city, session.country].filter(Boolean).join(", ") || session.ip || "Unknown"}</span>
+        {session.lat && session.lng && (
+          <a
+            href={`https://maps.google.com/?q=${session.lat},${session.lng}`}
+            target="_blank" rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
+            className="ml-auto flex items-center gap-1 text-primary hover:underline"
+          >
+            <MapPin className="h-3 w-3" /> GPS
+          </a>
+        )}
+      </div>
+
+      {/* Current page */}
+      <div className="rounded-lg bg-primary/5 border border-primary/15 px-3 py-2">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-0.5">Current Page</p>
+        <p className="text-xs font-medium text-primary truncate">{pageLabel(currentPage)}</p>
+        <p className="text-[10px] font-mono text-muted-foreground truncate">{currentPage}</p>
+      </div>
+
+      {/* Page journey */}
+      {session.pages.length > 1 && (
+        <div className="flex items-center gap-1 flex-wrap">
+          {session.pages.map((p, i) => (
+            <span key={i} className="flex items-center gap-1">
+              <span className="text-[10px] bg-muted rounded px-1.5 py-0.5 max-w-[100px] truncate inline-block" title={p.page}>
+                {pageLabel(p.page)}
+              </span>
+              {i < session.pages.length - 1 && <ArrowRight className="h-2.5 w-2.5 text-muted-foreground flex-shrink-0" />}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Footer stats */}
+      <div className="flex items-center gap-3 text-[10px] text-muted-foreground pt-0.5 border-t border-border">
+        <span><Eye className="h-3 w-3 inline mr-0.5" />{session.pages.length} page{session.pages.length !== 1 ? "s" : ""}</span>
+        <span><Clock className="h-3 w-3 inline mr-0.5" />{fmtDuration(session.durationMs)}</span>
+        {session.screenResolution && <span>{session.screenResolution}</span>}
+        {session.batteryLevel && <span><Battery className="h-3 w-3 inline mr-0.5" />{session.batteryLevel}</span>}
+        {session.connectionType && <span><Wifi className="h-3 w-3 inline mr-0.5" />{session.connectionType}</span>}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Live Session Detail Modal ───────────────────────────────────────────── */
+function LiveDetail({ session, onClose }: { session: LiveSession; onClose: () => void }) {
+  return (
+    <Dialog open onOpenChange={o => !o && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-base flex items-center gap-2">
+            <Radio className="h-4 w-4 text-green-500" />
+            Live Session — {session.deviceModel || session.device || "Visitor"}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-5 text-sm">
+          {/* Journey */}
+          <section>
+            <p className="font-semibold text-xs uppercase tracking-wide text-muted-foreground mb-3 flex items-center gap-1.5">
+              <Eye className="h-3.5 w-3.5" /> Page Journey ({session.pages.length} pages · {fmtDuration(session.durationMs)})
+            </p>
+            <div className="space-y-1.5">
+              {session.pages.map((p, i) => (
+                <div key={i} className="flex items-center gap-3 rounded-lg border px-3 py-2">
+                  <span className="text-[10px] text-muted-foreground w-5 text-center">{i + 1}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{pageLabel(p.page)}</p>
+                    <p className="text-[10px] font-mono text-muted-foreground truncate">{p.page}</p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-[10px] text-muted-foreground">{timeAgo(p.time)}</span>
+                    {p.page.startsWith("/shop/product") && (
+                      <a href={productUrl(p.page)} target="_blank" rel="noopener noreferrer"
+                        className="text-primary"><ExternalLink className="h-3 w-3" /></a>
+                    )}
+                    {i === session.pages.length - 1 && (
+                      <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-semibold">Now</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Location */}
+          <section>
+            <p className="font-semibold text-xs uppercase tracking-wide text-muted-foreground mb-2">Location</p>
+            <div className="space-y-1">
+              <Row label="IP" value={session.ip} />
+              <Row label="Location" value={[session.city, session.region, session.country].filter(Boolean).join(", ")} />
+              <Row label="Timezone" value={session.timezone} />
+              <Row label="Language" value={session.language} />
+              {session.lat && session.lng && (
+                <div className="flex gap-2 text-xs">
+                  <span className="text-muted-foreground w-32 shrink-0">GPS</span>
+                  <a href={`https://maps.google.com/?q=${session.lat},${session.lng}`} target="_blank" rel="noopener noreferrer"
+                    className="text-primary hover:underline font-mono flex items-center gap-1">
+                    <MapPin className="h-3 w-3" />
+                    {parseFloat(session.lat).toFixed(5)}, {parseFloat(session.lng).toFixed(5)}
+                    {session.gpsAccuracy ? ` (±${session.gpsAccuracy}m)` : ""}
+                  </a>
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Device */}
+          <section>
+            <p className="font-semibold text-xs uppercase tracking-wide text-muted-foreground mb-2">Device</p>
+            <div className="space-y-1">
+              <Row label="Type" value={session.device} />
+              <Row label="Model" value={session.deviceModel} />
+              <Row label="Brand" value={session.deviceBrand} />
+              <Row label="OS" value={session.os} />
+              <Row label="Browser" value={session.browser} />
+              <Row label="Screen" value={session.screenResolution} />
+              <Row label="RAM" value={session.deviceMemory ? `${session.deviceMemory} GB` : null} />
+              <Row label="CPU Cores" value={session.cpuCores} />
+              <Row label="Battery" value={session.batteryLevel} />
+              <Row label="Connection" value={session.connectionType} />
+            </div>
+          </section>
+
+          {/* Session */}
+          <section>
+            <p className="font-semibold text-xs uppercase tracking-wide text-muted-foreground mb-2">Session</p>
+            <div className="space-y-1">
+              <Row label="First seen" value={new Date(session.firstSeen).toLocaleString("en-PK", { timeZone: "Asia/Karachi" })} />
+              <Row label="Last seen" value={new Date(session.lastSeen).toLocaleString("en-PK", { timeZone: "Asia/Karachi" })} />
+              <Row label="Duration" value={fmtDuration(session.durationMs)} />
+              <Row label="Canvas FP" value={session.canvasFp} />
+              <Row label="UTM Source" value={session.utmSource} />
+            </div>
+          </section>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ─── Profile Card ────────────────────────────────────────────────────────── */
 function ProfileCard({ profile, onClick }: { profile: VisitorProfile; onClick: () => void }) {
   const hasOrder = profile.orders.length > 0;
   const customer = profile.orders[0];
   const deviceLabel = profile.deviceModel || profile.deviceBrand || (profile.device === "mobile" ? "Mobile" : profile.device === "tablet" ? "Tablet" : "Desktop");
 
   return (
-    <div
-      onClick={onClick}
-      className={`rounded-xl border p-4 cursor-pointer hover:shadow-md transition-shadow space-y-3 ${hasOrder ? "border-green-300 bg-green-50/30" : "border-border bg-card"}`}
-    >
-      {/* Top row: device + customer match */}
+    <div onClick={onClick} className={`rounded-xl border p-4 cursor-pointer hover:shadow-md transition-shadow space-y-3 ${hasOrder ? "border-green-300 bg-green-50/30" : "border-border bg-card"}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <div className={`p-1.5 rounded-lg ${hasOrder ? "bg-green-100 text-green-700" : "bg-muted text-muted-foreground"}`}>
@@ -130,73 +352,56 @@ function ProfileCard({ profile, onClick }: { profile: VisitorProfile; onClick: (
         </div>
       </div>
 
-      {/* Customer identity (if matched) */}
       {customer && (
         <div className="rounded-lg bg-green-100/50 border border-green-200 px-3 py-2 space-y-0.5">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-green-800">
-            <User className="h-3.5 w-3.5" /> {customer.customerName}
-          </div>
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-green-800"><User className="h-3.5 w-3.5" /> {customer.customerName}</div>
           <div className="text-xs text-green-700">📱 {customer.customerMobile}</div>
           <div className="text-xs text-green-700">📍 {customer.customerCity} — {customer.customerAddress}</div>
           {customer.customerEmail && <div className="text-xs text-green-700">✉️ {customer.customerEmail}</div>}
         </div>
       )}
 
-      {/* Product interests */}
       {profile.productPages.length > 0 && (
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Product Interest</p>
           <div className="flex flex-wrap gap-1">
             {profile.productPages.slice(0, 4).map(pg => {
-              const slug = pg.replace("/shop/product/", "");
+              const slug = pg.replace("/shop/product/", "").replace("/shop/products/", "");
               return (
-                <a
-                  key={pg}
-                  href={productUrl(pg)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={e => e.stopPropagation()}
-                  className="inline-flex items-center gap-1 text-[10px] bg-primary/8 border border-primary/20 text-primary rounded px-1.5 py-0.5 hover:bg-primary/15 transition-colors"
-                >
+                <a key={pg} href={productUrl(pg)} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                  className="inline-flex items-center gap-1 text-[10px] bg-primary/8 border border-primary/20 text-primary rounded px-1.5 py-0.5 hover:bg-primary/15 transition-colors">
                   <Package className="h-2.5 w-2.5" />
                   {slugToTitle(slug).slice(0, 22)}{slugToTitle(slug).length > 22 ? "…" : ""}
                   <ExternalLink className="h-2.5 w-2.5 opacity-60" />
                 </a>
               );
             })}
-            {profile.productPages.length > 4 && (
-              <span className="text-[10px] text-muted-foreground px-1.5 py-0.5">+{profile.productPages.length - 4} more</span>
-            )}
+            {profile.productPages.length > 4 && <span className="text-[10px] text-muted-foreground px-1.5 py-0.5">+{profile.productPages.length - 4} more</span>}
           </div>
         </div>
       )}
 
-      {/* Stats row */}
       <div className="flex items-center gap-3 text-[10px] text-muted-foreground pt-0.5 border-t border-border">
         <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" /> {profile.pageCount} pages</span>
         <span className="flex items-center gap-0.5"><Clock className="h-3 w-3" /> {profile.sessionCount} sessions</span>
-        {(profile.city || profile.country) && (
-          <span className="flex items-center gap-0.5"><Globe className="h-3 w-3" /> {[profile.city, profile.country].filter(Boolean).join(", ")}</span>
-        )}
+        {(profile.city || profile.country) && <span className="flex items-center gap-0.5"><Globe className="h-3 w-3" /> {[profile.city, profile.country].filter(Boolean).join(", ")}</span>}
         <span className="ml-auto">{new Date(profile.lastSeen).toLocaleDateString("en-PK", { timeZone: "Asia/Karachi" })}</span>
       </div>
     </div>
   );
 }
 
+/* ─── Profile Detail Modal ────────────────────────────────────────────────── */
 function ProfileDetail({ profile, onClose }: { profile: VisitorProfile; onClose: () => void }) {
   return (
     <Dialog open onOpenChange={o => !o && onClose()}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-base flex items-center gap-2">
-            <Fingerprint className="h-4 w-4" />
-            Visitor Profile — FP·{profile.fp.slice(-8)}
+            <Fingerprint className="h-4 w-4" /> Visitor Profile — FP·{profile.fp.slice(-8)}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-5 text-sm">
-
-          {/* Orders / Customer */}
           {profile.orders.length > 0 && (
             <section>
               <p className="font-semibold text-xs uppercase tracking-wide text-green-700 mb-2 flex items-center gap-1.5">
@@ -220,7 +425,6 @@ function ProfileDetail({ profile, onClose }: { profile: VisitorProfile; onClose:
             </section>
           )}
 
-          {/* Product pages visited */}
           {profile.productPages.length > 0 && (
             <section>
               <p className="font-semibold text-xs uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
@@ -228,15 +432,10 @@ function ProfileDetail({ profile, onClose }: { profile: VisitorProfile; onClose:
               </p>
               <div className="space-y-1.5">
                 {profile.productPages.map(pg => {
-                  const slug = pg.replace("/shop/product/", "");
+                  const slug = pg.replace("/shop/product/", "").replace("/shop/products/", "");
                   return (
-                    <a
-                      key={pg}
-                      href={productUrl(pg)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 hover:bg-primary/10 transition-colors"
-                    >
+                    <a key={pg} href={productUrl(pg)} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 hover:bg-primary/10 transition-colors">
                       <Package className="h-3.5 w-3.5 text-primary flex-shrink-0" />
                       <span className="text-sm font-medium text-primary flex-1">{slugToTitle(slug)}</span>
                       <ExternalLink className="h-3 w-3 text-primary/60 flex-shrink-0" />
@@ -247,7 +446,6 @@ function ProfileDetail({ profile, onClose }: { profile: VisitorProfile; onClose:
             </section>
           )}
 
-          {/* All pages */}
           <section>
             <p className="font-semibold text-xs uppercase tracking-wide text-muted-foreground mb-2">
               All Pages Visited ({profile.pages.length}) · {profile.sessionCount} sessions
@@ -256,8 +454,7 @@ function ProfileDetail({ profile, onClose }: { profile: VisitorProfile; onClose:
               {profile.pages.map(pg => (
                 <div key={pg} className="flex items-center gap-2 text-xs">
                   <span className="font-mono text-muted-foreground flex-1 truncate">{pg}</span>
-                  <a href={`https://geem.pk${pg}`} target="_blank" rel="noopener noreferrer"
-                    className="text-primary hover:underline flex-shrink-0">
+                  <a href={`https://geem.pk${pg}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex-shrink-0">
                     <ExternalLink className="h-3 w-3" />
                   </a>
                 </div>
@@ -265,7 +462,6 @@ function ProfileDetail({ profile, onClose }: { profile: VisitorProfile; onClose:
             </div>
           </section>
 
-          {/* Device */}
           <section>
             <p className="font-semibold text-xs uppercase tracking-wide text-muted-foreground mb-2">Device</p>
             <div className="space-y-1">
@@ -284,7 +480,6 @@ function ProfileDetail({ profile, onClose }: { profile: VisitorProfile; onClose:
             </div>
           </section>
 
-          {/* Location */}
           <section>
             <p className="font-semibold text-xs uppercase tracking-wide text-muted-foreground mb-2">Location</p>
             <div className="space-y-1">
@@ -295,8 +490,7 @@ function ProfileDetail({ profile, onClose }: { profile: VisitorProfile; onClose:
               {profile.lat && profile.lng && (
                 <div className="flex gap-2 text-xs">
                   <span className="text-muted-foreground w-32 shrink-0">GPS</span>
-                  <a href={`https://maps.google.com/?q=${profile.lat},${profile.lng}`} target="_blank" rel="noopener noreferrer"
-                    className="text-primary hover:underline font-mono">
+                  <a href={`https://maps.google.com/?q=${profile.lat},${profile.lng}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-mono">
                     {parseFloat(profile.lat).toFixed(5)}, {parseFloat(profile.lng).toFixed(5)}
                   </a>
                 </div>
@@ -304,7 +498,6 @@ function ProfileDetail({ profile, onClose }: { profile: VisitorProfile; onClose:
             </div>
           </section>
 
-          {/* Fingerprint */}
           <section>
             <p className="font-semibold text-xs uppercase tracking-wide text-muted-foreground mb-2">Fingerprint</p>
             <div className="space-y-1">
@@ -313,13 +506,13 @@ function ProfileDetail({ profile, onClose }: { profile: VisitorProfile; onClose:
               <Row label="Last seen" value={new Date(profile.lastSeen).toLocaleString("en-PK", { timeZone: "Asia/Karachi" })} />
             </div>
           </section>
-
         </div>
       </DialogContent>
     </Dialog>
   );
 }
 
+/* ─── Log Row Detail Modal ────────────────────────────────────────────────── */
 function VisitorDetail({ log, onClose }: { log: VisitorLog; onClose: () => void }) {
   return (
     <Dialog open onOpenChange={o => !o && onClose()}>
@@ -400,14 +593,25 @@ function VisitorDetail({ log, onClose }: { log: VisitorLog; onClose: () => void 
   );
 }
 
+/* ─── Main Page ───────────────────────────────────────────────────────────── */
 export default function Visitors() {
   const [days, setDays] = useState("7");
   const [profileDays, setProfileDays] = useState("30");
+  const [liveMinutes, setLiveMinutes] = useState("15");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<VisitorLog | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<VisitorProfile | null>(null);
-  const [tab, setTab] = useState<"profiles" | "analytics" | "log">("profiles");
+  const [selectedLive, setSelectedLive] = useState<LiveSession | null>(null);
+  const [tab, setTab] = useState<"live" | "profiles" | "analytics" | "log">("live");
   const [profileSearch, setProfileSearch] = useState("");
+
+  // Live sessions — 10s refresh
+  const { data: liveData, dataUpdatedAt: liveUpdatedAt } = useQuery({
+    queryKey: ["visitor-live", liveMinutes],
+    queryFn: () => axiosInstance.get<{ sessions: LiveSession[]; total: number; since: string }>(`/visitors/live?minutes=${liveMinutes}`).then(r => r.data),
+    refetchInterval: 10000,
+    enabled: tab === "live",
+  });
 
   const { data: stats, isLoading } = useQuery({
     queryKey: ["visitor-stats", days],
@@ -419,6 +623,7 @@ export default function Visitors() {
     queryKey: ["visitor-logs", days, search],
     queryFn: () => axiosInstance.get<{ logs: VisitorLog[]; total: number }>(`/visitors?days=${days}&search=${search}`).then(r => r.data),
     enabled: tab === "log",
+    refetchInterval: tab === "log" ? 15000 : false,
   });
 
   const { data: profilesData, isLoading: profilesLoading } = useQuery({
@@ -427,10 +632,12 @@ export default function Visitors() {
     refetchInterval: 60000,
   });
 
-  if (isLoading) return <div className="p-8 text-center text-muted-foreground">Loading visitor data...</div>;
+  if (isLoading && tab !== "live") return <div className="p-8 text-center text-muted-foreground">Loading visitor data...</div>;
 
   const allLogs = logs?.logs ?? stats?.recentLogs ?? [];
   const profiles = profilesData?.profiles ?? [];
+  const liveSessions = liveData?.sessions ?? [];
+
   const filteredProfiles = profileSearch
     ? profiles.filter(p =>
         p.orders.some(o => o.customerName.toLowerCase().includes(profileSearch.toLowerCase()) || o.customerMobile.includes(profileSearch) || o.customerCity.toLowerCase().includes(profileSearch.toLowerCase())) ||
@@ -443,18 +650,35 @@ export default function Visitors() {
   const withOrders = profiles.filter(p => p.orders.length > 0).length;
   const withProducts = profiles.filter(p => p.productPages.length > 0).length;
 
+  // Live tab counts
+  const onlineNow = liveSessions.filter(s => Date.now() - new Date(s.lastSeen).getTime() < 120000).length;
+  const recentCount = liveSessions.filter(s => Date.now() - new Date(s.lastSeen).getTime() < 600000).length;
+
   return (
     <div className="space-y-5">
       {selected && <VisitorDetail log={selected} onClose={() => setSelected(null)} />}
       {selectedProfile && <ProfileDetail profile={selectedProfile} onClose={() => setSelectedProfile(null)} />}
+      {selectedLive && <LiveDetail session={selectedLive} onClose={() => setSelectedLive(null)} />}
 
+      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold">Visitor Intelligence</h1>
-          <p className="text-muted-foreground text-sm">Device fingerprints, product interests, and customer identity matching</p>
+          <p className="text-muted-foreground text-sm">Live monitoring, device fingerprints, product interests & customer matching</p>
         </div>
         <div className="flex items-center gap-2">
-          {tab !== "profiles" && (
+          {tab === "live" && (
+            <Select value={liveMinutes} onValueChange={setLiveMinutes}>
+              <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="5">Last 5 minutes</SelectItem>
+                <SelectItem value="15">Last 15 minutes</SelectItem>
+                <SelectItem value="30">Last 30 minutes</SelectItem>
+                <SelectItem value="60">Last 60 minutes</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+          {(tab === "analytics" || tab === "log") && (
             <Select value={days} onValueChange={setDays}>
               <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -469,23 +693,28 @@ export default function Visitors() {
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-1 border-b border-border">
+      <div className="flex gap-1 border-b border-border overflow-x-auto">
         {([
-          { id: "profiles", label: "Visitor Profiles", icon: Users },
-          { id: "analytics", label: "Analytics", icon: Eye },
-          { id: "log", label: "Raw Log", icon: Fingerprint },
+          { id: "live",      label: "Live",             icon: Radio },
+          { id: "profiles",  label: "Visitor Profiles", icon: Users },
+          { id: "analytics", label: "Analytics",        icon: Eye },
+          { id: "log",       label: "Raw Log",          icon: Fingerprint },
         ] as const).map(t => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
-              tab === t.id
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap ${
+              tab === t.id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
-            <t.icon className="h-3.5 w-3.5" />
+            <t.icon className={`h-3.5 w-3.5 ${t.id === "live" && onlineNow > 0 ? "text-green-500" : ""}`} />
             {t.label}
+            {t.id === "live" && onlineNow > 0 && (
+              <span className="ml-1 text-[10px] bg-green-500 text-white rounded-full px-1.5 py-0.5 font-bold">{onlineNow}</span>
+            )}
+            {t.id === "live" && onlineNow === 0 && liveSessions.length > 0 && (
+              <span className="ml-1 text-[10px] bg-muted text-muted-foreground rounded-full px-1.5 py-0.5">{liveSessions.length}</span>
+            )}
             {t.id === "profiles" && profiles.length > 0 && (
               <span className="ml-1 text-[10px] bg-primary text-primary-foreground rounded-full px-1.5 py-0.5">{profiles.length}</span>
             )}
@@ -493,10 +722,58 @@ export default function Visitors() {
         ))}
       </div>
 
-      {/* ── PROFILES TAB ─────────────────────────────────────────────────────── */}
+      {/* ── LIVE TAB ──────────────────────────────────────────────────────────── */}
+      {tab === "live" && (
+        <div className="space-y-5">
+          {/* KPI row */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[
+              { label: "Online Now", value: onlineNow, color: "text-green-600", bg: "bg-green-50", icon: Radio },
+              { label: "Recent", value: recentCount, color: "text-amber-600", bg: "bg-amber-50", icon: Users },
+              { label: "Total Sessions", value: liveSessions.length, color: "text-blue-600", bg: "bg-blue-50", icon: Eye },
+              { label: "With GPS", value: liveSessions.filter(s => s.lat).length, color: "text-purple-600", bg: "bg-purple-50", icon: MapPin },
+            ].map(({ label, value, color, bg, icon: Icon }) => (
+              <Card key={label} className={value > 0 && label === "Online Now" ? "border-green-200" : ""}>
+                <CardContent className="pt-5 pb-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase font-medium tracking-wide">{label}</p>
+                      <p className={`text-2xl font-bold mt-1 ${color}`}>{value}</p>
+                    </div>
+                    <div className={`p-2 rounded-lg ${bg} ${color}`}><Icon className="h-4 w-4" /></div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Last updated indicator */}
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+            Auto-refreshes every 10 seconds
+            {liveUpdatedAt > 0 && <span>· Last updated {timeAgo(new Date(liveUpdatedAt).toISOString())}</span>}
+          </div>
+
+          {/* Session cards */}
+          {liveSessions.length === 0 ? (
+            <div className="text-center py-16 text-muted-foreground">
+              <Radio className="h-12 w-12 mx-auto mb-4 opacity-30" />
+              <p className="text-base font-medium">No visitors in the last {liveMinutes} minutes</p>
+              <p className="text-sm mt-1">Sessions appear here as people browse geem.pk</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {liveSessions.map(session => (
+                <LiveCard key={session.sessionId} session={session} onClick={() => setSelectedLive(session)} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── PROFILES TAB ──────────────────────────────────────────────────────── */}
       {tab === "profiles" && (
         <div className="space-y-5">
-          {/* KPIs */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
               { label: "Unique Devices", value: profiles.length, icon: Fingerprint, color: "text-blue-600" },
@@ -516,7 +793,6 @@ export default function Visitors() {
             ))}
           </div>
 
-          {/* Controls */}
           <div className="flex items-center gap-3 flex-wrap">
             <Select value={profileDays} onValueChange={setProfileDays}>
               <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
@@ -527,20 +803,14 @@ export default function Visitors() {
                 <SelectItem value="90">Last 90 days</SelectItem>
               </SelectContent>
             </Select>
-            <Input
-              placeholder="Search name, mobile, city, product, IP..."
-              value={profileSearch}
-              onChange={e => setProfileSearch(e.target.value)}
-              className="max-w-xs"
-            />
+            <Input placeholder="Search name, mobile, city, product, IP..." value={profileSearch} onChange={e => setProfileSearch(e.target.value)} className="max-w-xs" />
             <span className="text-sm text-muted-foreground">{filteredProfiles.length} profiles</span>
           </div>
 
-          {/* Profile grid */}
           {profilesLoading ? (
             <div className="text-center py-12 text-muted-foreground">Loading profiles...</div>
           ) : filteredProfiles.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">No visitor profiles yet — they appear as visitors browse the shop</div>
+            <div className="text-center py-12 text-muted-foreground">No visitor profiles yet</div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {filteredProfiles.map(profile => (
@@ -551,10 +821,9 @@ export default function Visitors() {
         </div>
       )}
 
-      {/* ── ANALYTICS TAB ────────────────────────────────────────────────────── */}
+      {/* ── ANALYTICS TAB ─────────────────────────────────────────────────────── */}
       {tab === "analytics" && (
         <div className="space-y-6">
-          {/* KPIs */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
               { label: "Sessions", value: stats?.totalSessions, icon: Users, color: "text-blue-600" },
@@ -636,17 +905,13 @@ export default function Visitors() {
                 <p className="text-xs text-muted-foreground uppercase font-medium mb-1">Browser</p>
                 <div className="space-y-1 mb-3">
                   {(stats?.byBrowser ?? []).map(b => (
-                    <div key={b.browser} className="flex justify-between text-sm">
-                      <span>{b.browser ?? "Other"}</span><span className="font-medium">{b.count}</span>
-                    </div>
+                    <div key={b.browser} className="flex justify-between text-sm"><span>{b.browser ?? "Other"}</span><span className="font-medium">{b.count}</span></div>
                   ))}
                 </div>
                 <p className="text-xs text-muted-foreground uppercase font-medium mb-1">OS</p>
                 <div className="space-y-1">
                   {(stats?.byOs ?? []).map(o => (
-                    <div key={o.os} className="flex justify-between text-sm">
-                      <span>{o.os ?? "Unknown"}</span><span className="font-medium">{o.count}</span>
-                    </div>
+                    <div key={o.os} className="flex justify-between text-sm"><span>{o.os ?? "Unknown"}</span><span className="font-medium">{o.count}</span></div>
                   ))}
                 </div>
               </CardContent>
@@ -672,9 +937,7 @@ export default function Visitors() {
               <CardContent>
                 <div className="space-y-1.5">
                   {(stats?.topCities ?? []).slice(0, 8).map(c => (
-                    <div key={c.city} className="flex justify-between text-sm">
-                      <span>{c.city ?? "Unknown"}</span><span className="font-medium">{c.count}</span>
-                    </div>
+                    <div key={c.city} className="flex justify-between text-sm"><span>{c.city ?? "Unknown"}</span><span className="font-medium">{c.count}</span></div>
                   ))}
                   {!stats?.topCities?.length && <p className="text-sm text-muted-foreground text-center py-4">No data yet</p>}
                 </div>
@@ -685,9 +948,7 @@ export default function Visitors() {
               <CardContent>
                 <div className="space-y-1.5">
                   {(stats?.topTimezones ?? []).map(t => (
-                    <div key={t.timezone} className="flex justify-between text-sm">
-                      <span>{t.timezone ?? "Unknown"}</span><span className="font-medium">{t.count}</span>
-                    </div>
+                    <div key={t.timezone} className="flex justify-between text-sm"><span>{t.timezone ?? "Unknown"}</span><span className="font-medium">{t.count}</span></div>
                   ))}
                   {!stats?.topTimezones?.length && <p className="text-sm text-muted-foreground text-center py-4">No data yet</p>}
                 </div>
@@ -697,7 +958,7 @@ export default function Visitors() {
         </div>
       )}
 
-      {/* ── RAW LOG TAB ──────────────────────────────────────────────────────── */}
+      {/* ── RAW LOG TAB ───────────────────────────────────────────────────────── */}
       {tab === "log" && (
         <Card>
           <CardHeader>
@@ -706,7 +967,13 @@ export default function Visitors() {
                 <Fingerprint className="h-4 w-4" /> Visitor Log
                 <Badge variant="secondary">{logs?.total ?? allLogs.length}</Badge>
               </CardTitle>
-              <Input placeholder="Filter by IP, page, city, model..." value={search} onChange={e => setSearch(e.target.value)} className="max-w-xs" />
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <div className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+                  Live (15s)
+                </div>
+                <Input placeholder="Filter by IP, page, city, model..." value={search} onChange={e => setSearch(e.target.value)} className="max-w-xs" />
+              </div>
             </div>
           </CardHeader>
           <CardContent className="px-0">
@@ -730,10 +997,10 @@ export default function Visitors() {
                     </TableCell>
                     <TableCell className="text-xs max-w-[140px]">
                       <p className="font-mono text-muted-foreground truncate">{log.page}</p>
-                      {log.page.startsWith("/shop/product/") && (
+                      {(log.page.startsWith("/shop/product/") || log.page.startsWith("/shop/products/")) && (
                         <a href={productUrl(log.page)} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
                           className="text-primary hover:underline text-[10px] flex items-center gap-0.5">
-                          <ExternalLink className="h-2.5 w-2.5" /> {slugToTitle(log.page.replace("/shop/product/", "")).slice(0, 20)}
+                          <ExternalLink className="h-2.5 w-2.5" /> {pageLabel(log.page)}
                         </a>
                       )}
                     </TableCell>

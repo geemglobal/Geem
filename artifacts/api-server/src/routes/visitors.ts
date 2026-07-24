@@ -303,6 +303,72 @@ router.get("/visitors/profiles", async (req: Request, res: Response): Promise<vo
   res.json({ profiles, total: profiles.length });
 });
 
+// Admin: live sessions (last N minutes, grouped by session)
+router.get("/visitors/live", async (req: Request, res: Response): Promise<void> => {
+  const minutes = Math.min(60, Math.max(1, parseInt(String(req.query.minutes ?? "15"), 10)));
+  const since = new Date(Date.now() - minutes * 60 * 1000);
+
+  const rows = await db.select().from(visitorLogsTable)
+    .where(gte(visitorLogsTable.createdAt, since))
+    .orderBy(desc(visitorLogsTable.createdAt));
+
+  // Group by sessionId
+  type Session = {
+    sessionId: string; ip: string | null;
+    country: string | null; city: string | null; region: string | null;
+    lat: string | null; lng: string | null; gpsAccuracy: number | null;
+    device: string | null; os: string | null; browser: string | null;
+    deviceModel: string | null; deviceBrand: string | null;
+    webglRenderer: string | null; screenResolution: string | null;
+    deviceMemory: string | null; cpuCores: string | null;
+    batteryLevel: string | null; connectionType: string | null;
+    canvasFp: string | null; timezone: string | null; language: string | null;
+    pages: { page: string; time: string }[];
+    firstSeen: string; lastSeen: string;
+    utmSource: string | null;
+  };
+
+  const sessionMap = new Map<string, Session>();
+  for (const row of rows) {
+    if (!sessionMap.has(row.sessionId)) {
+      sessionMap.set(row.sessionId, {
+        sessionId: row.sessionId,
+        ip: row.ip, country: row.country, city: row.city, region: row.region,
+        lat: row.lat ? String(row.lat) : null,
+        lng: row.lng ? String(row.lng) : null,
+        gpsAccuracy: row.gpsAccuracy ?? null,
+        device: row.device, os: row.os, browser: row.browser,
+        deviceModel: row.deviceModel, deviceBrand: row.deviceBrand,
+        webglRenderer: row.webglRenderer, screenResolution: row.screenResolution,
+        deviceMemory: row.deviceMemory, cpuCores: row.cpuCores,
+        batteryLevel: row.batteryLevel, connectionType: row.connectionType,
+        canvasFp: row.canvasFp, timezone: row.timezone, language: row.language,
+        pages: [], firstSeen: row.createdAt.toISOString(), lastSeen: row.createdAt.toISOString(),
+        utmSource: row.utmSource ?? null,
+      });
+    }
+    const s = sessionMap.get(row.sessionId)!;
+    s.pages.push({ page: row.page, time: row.createdAt.toISOString() });
+    if (row.createdAt.toISOString() < s.firstSeen) s.firstSeen = row.createdAt.toISOString();
+    if (row.createdAt.toISOString() > s.lastSeen)  s.lastSeen  = row.createdAt.toISOString();
+    // Prefer richer GPS / device data
+    if (!s.lat && row.lat) { s.lat = String(row.lat); s.lng = row.lng ? String(row.lng) : null; s.gpsAccuracy = row.gpsAccuracy ?? null; }
+    if (!s.deviceModel && row.deviceModel) s.deviceModel = row.deviceModel;
+  }
+
+  // Sort by lastSeen desc (most recent first)
+  const sessions = Array.from(sessionMap.values())
+    .sort((a, b) => b.lastSeen.localeCompare(a.lastSeen))
+    .map(s => ({
+      ...s,
+      // pages sorted oldest→newest
+      pages: s.pages.sort((a, b) => a.time.localeCompare(b.time)),
+      durationMs: new Date(s.lastSeen).getTime() - new Date(s.firstSeen).getTime(),
+    }));
+
+  res.json({ sessions, total: sessions.length, since: since.toISOString() });
+});
+
 // Admin: paginated logs
 router.get("/visitors", async (req: Request, res: Response): Promise<void> => {
   const days = parseInt(String(req.query.days ?? "7"), 10);
