@@ -108,7 +108,7 @@ Then add a short, warm message explaining a human agent will be with them shortl
 Keep replies concise (2-4 sentences). Use emojis sparingly but warmly 😊.`;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-5.6-luna",
+      model: "gpt-4o-mini",
       max_completion_tokens: 400,
       messages: [{ role: "system", content: systemPrompt }, ...chatHistory],
     });

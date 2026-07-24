@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { MessageCircle, X, Send, Mic, MicOff, Paperclip, ChevronDown, Loader2, Bot, UserRound, RefreshCw } from "lucide-react";
+import { MessageCircle, X, Send, Mic, MicOff, Paperclip, ChevronDown, Loader2, Bot, UserRound, RefreshCw, XCircle } from "lucide-react";
 import { axiosInstance } from "@/lib/axios";
 
 const SESSION_KEY_STORAGE     = "geem_chat_session_key";
@@ -30,6 +30,8 @@ export default function ShopChatWidget() {
   const [aiTyping, setAiTyping]   = useState(false);
   const [unread, setUnread]       = useState(0);
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
   // Intro form
   const [showForm, setShowForm]   = useState(false);
@@ -169,6 +171,25 @@ export default function ShopChatWidget() {
     }
   }
 
+  async function closeChat() {
+    setClosing(true);
+    try {
+      if (sessionId && sessionKey) {
+        // Post a goodbye message then clear locally — server keeps the record
+        await axiosInstance.post(
+          `/chat/sessions/${sessionId}/messages`,
+          { messageType: "text", content: "Chat ended by customer.", sessionKey },
+          { headers: { "X-Session-Key": sessionKey } }
+        ).catch(() => {});
+      }
+    } finally {
+      clearSession();
+      setClosing(false);
+      setShowCloseConfirm(false);
+      setOpen(false);
+    }
+  }
+
   function handleOpen() {
     setOpen(true);
     setUnread(0);
@@ -292,7 +313,7 @@ export default function ShopChatWidget() {
         <div className="fixed bottom-24 right-4 z-50 w-[340px] max-w-[calc(100vw-2rem)] flex flex-col shadow-2xl rounded-2xl overflow-hidden border border-gray-200 bg-white" style={{ height: "540px" }}>
 
           {/* Header */}
-          <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-3 flex items-center justify-between shrink-0">
+          <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-3 flex items-center justify-between shrink-0 relative">
             <div className="flex items-center gap-2">
               <div className="w-9 h-9 bg-white rounded-full flex items-center justify-center ring-2 ring-white/30 overflow-hidden shrink-0">
                 <img src="/api/shop/app-icon" alt="Geem" className="w-full h-full object-contain" />
@@ -305,9 +326,45 @@ export default function ShopChatWidget() {
                 </div>
               </div>
             </div>
-            <button onClick={() => setOpen(false)} className="p-1.5 rounded-full hover:bg-white/20 transition-colors">
-              <ChevronDown className="h-5 w-5" />
-            </button>
+            <div className="flex items-center gap-1">
+              {sessionId && !sessionExpired && !showForm && (
+                <button
+                  onClick={() => setShowCloseConfirm(true)}
+                  className="p-1.5 rounded-full hover:bg-red-500/30 transition-colors"
+                  title="End chat"
+                >
+                  <XCircle className="h-4.5 w-4.5 opacity-80" />
+                </button>
+              )}
+              <button onClick={() => setOpen(false)} className="p-1.5 rounded-full hover:bg-white/20 transition-colors">
+                <ChevronDown className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Close confirm overlay */}
+            {showCloseConfirm && (
+              <div className="absolute inset-0 bg-blue-800/95 flex flex-col items-center justify-center gap-3 px-5 rounded-t-2xl z-10">
+                <XCircle className="h-7 w-7 text-white/70" />
+                <p className="text-sm font-semibold text-center">End this chat?</p>
+                <p className="text-xs text-blue-200 text-center">Your conversation will be closed.</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowCloseConfirm(false)}
+                    className="px-4 py-1.5 rounded-xl bg-white/20 text-white text-sm hover:bg-white/30 transition-colors"
+                  >
+                    Keep chatting
+                  </button>
+                  <button
+                    onClick={closeChat}
+                    disabled={closing}
+                    className="px-4 py-1.5 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-600 transition-colors flex items-center gap-1.5 disabled:opacity-60"
+                  >
+                    {closing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
+                    End Chat
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Session expired banner */}
