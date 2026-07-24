@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { axiosInstance } from "@/lib/axios";
 
 async function getVapidPublicKey(): Promise<string> {
@@ -15,6 +15,8 @@ function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
   return output.buffer;
 }
 
+export type PushStatus = "unsupported" | "checking" | "not_subscribed" | "subscribed" | "denied" | "error";
+
 export interface PushSubscribeOptions {
   authHeader: () => Record<string, string>;
   userType: "admin" | "shop";
@@ -22,34 +24,33 @@ export interface PushSubscribeOptions {
 }
 
 export function usePushNotifications(opts: PushSubscribeOptions) {
+  const [status, setStatus] = useState<PushStatus>("checking");
   const subscribedRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    // Wait until userId is known — subscribing without it means push can never be routed back
-    if (!opts.userId) return;
-    // Already subscribed for this exact userId — skip
-    if (subscribedRef.current === opts.userId) return;
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+  // Core subscribe logic — call this from a user-gesture handler on mobile
+  const subscribe = useCallback(async (): Promise<boolean> => {
+    if (!opts.userId) return false;
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      setStatus("unsupported");
+      return false;
+    }
 
-    async function subscribe() {
-      try {
-        const permission = await Notification.requestPermission();
-        if (permission !== "granted") return;
+    try {
+      // Request permission — MUST be called from a user gesture on mobile
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setStatus("denied");
+        return false;
+      }
 
-        // Use the EXISTING Vite PWA service worker — do NOT register /push-sw.js
-        // as a separate SW at scope "/".  Two SWs at the same scope race:
-        // each activation fires controllerchange → window.location.reload(),
-        // creating an infinite refresh loop.  Push handlers are now merged
-        // into the Vite SW at build time (see vite.config.ts htmlPatchPlugin).
-        const reg = await navigator.serviceWorker.ready;
+      const reg = await navigator.serviceWorker.ready;
+      const vapidKey = await getVapidPublicKey();
 
-        const vapidKey = await getVapidPublicKey();
-        const sub = await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(vapidKey),
-        });
-
-        const json = sub.toJSON();
+      // Check if already subscribed with same key
+      const existing = await reg.pushManager.getSubscription();
+      if (existing) {
+        // Re-save to DB in case it was lost
+        const json = existing.toJSON();
         await axiosInstance.post(
           "/push/subscribe",
           {
@@ -61,13 +62,87 @@ export function usePushNotifications(opts: PushSubscribeOptions) {
           },
           { headers: opts.authHeader() }
         );
-
-        subscribedRef.current = opts.userId!;
-      } catch {
-        /* silently ignore — push is optional */
+        subscribedRef.current = opts.userId;
+        setStatus("subscribed");
+        return true;
       }
+
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+      });
+
+      const json = sub.toJSON();
+      await axiosInstance.post(
+        "/push/subscribe",
+        {
+          endpoint: json.endpoint,
+          p256dh: (json.keys as Record<string, string>)?.p256dh,
+          auth: (json.keys as Record<string, string>)?.auth,
+          userType: opts.userType,
+          userId: opts.userId,
+        },
+        { headers: opts.authHeader() }
+      );
+
+      subscribedRef.current = opts.userId!;
+      setStatus("subscribed");
+      return true;
+    } catch {
+      setStatus("error");
+      return false;
+    }
+  }, [opts.userType, opts.userId]);
+
+  // On mount: check current permission + try silent subscribe if already granted
+  useEffect(() => {
+    if (!opts.userId) return;
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      setStatus("unsupported");
+      return;
     }
 
-    subscribe();
-  }, [opts.userType, opts.userId]);
+    const perm = Notification.permission;
+    if (perm === "denied") {
+      setStatus("denied");
+      return;
+    }
+
+    // Check if a subscription already exists
+    navigator.serviceWorker.ready.then(reg =>
+      reg.pushManager.getSubscription()
+    ).then(existing => {
+      if (existing) {
+        // Subscription exists — re-register with server in case DB was wiped
+        if (subscribedRef.current !== opts.userId) {
+          const json = existing.toJSON();
+          axiosInstance.post(
+            "/push/subscribe",
+            {
+              endpoint: json.endpoint,
+              p256dh: (json.keys as Record<string, string>)?.p256dh,
+              auth: (json.keys as Record<string, string>)?.auth,
+              userType: opts.userType,
+              userId: opts.userId,
+            },
+            { headers: opts.authHeader() }
+          ).then(() => {
+            subscribedRef.current = opts.userId!;
+            setStatus("subscribed");
+          }).catch(() => setStatus("error"));
+        } else {
+          setStatus("subscribed");
+        }
+      } else if (perm === "granted") {
+        // Permission already granted but no subscription — subscribe silently
+        // Safe without gesture since permission is already granted
+        subscribe().catch(() => {});
+      } else {
+        // Default / not asked yet — show the enable button
+        setStatus("not_subscribed");
+      }
+    }).catch(() => setStatus("error"));
+  }, [opts.userId]);
+
+  return { status, subscribe };
 }

@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Package, ShoppingCart, FileText, Users, Store,
   ClipboardList, Truck, Wrench, MessageSquare, Lock,
   BarChart3, Settings, Database, Globe, LogOut, ChevronDown, ChevronRight, Eye, Shield, History,
-  Hash, Wallet, Menu, WifiOff, X, Receipt, Bell, Upload, RefreshCw,
+  Hash, Wallet, Menu, WifiOff, X, Receipt, Bell, BellOff, BellRing, Upload, RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -299,7 +299,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     } finally { setSyncing(false); }
   }
 
-  usePushNotifications({
+  const { status: pushStatus, subscribe: subscribePush } = usePushNotifications({
     authHeader: () => {
       const token = localStorage.getItem("geem_token");
       return token ? { Authorization: `Bearer ${token}` } : ({} as Record<string, string>);
@@ -307,6 +307,17 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     userType: "admin",
     userId: user?.email ?? undefined,
   });
+
+  async function handleEnableNotifications() {
+    const ok = await subscribePush();
+    if (ok) {
+      toast({ title: "✅ Notifications enabled", description: "You'll receive push alerts for new chats and orders." });
+    } else if (Notification.permission === "denied") {
+      toast({ title: "Notifications blocked", description: "Open your browser settings and allow notifications for this site.", variant: "destructive" });
+    } else {
+      toast({ title: "Could not enable notifications", description: "Please try again or check browser settings.", variant: "destructive" });
+    }
+  }
 
   function toggleGroup(label: string) {
     setCollapsedGroups((prev) => {
@@ -427,6 +438,26 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
               <div className="hidden sm:block flex-1 max-w-xs sm:max-w-sm">
                 <GlobalSearch />
               </div>
+              {/* Enable push notifications button — shown when not yet subscribed */}
+              {(pushStatus === "not_subscribed" || pushStatus === "denied" || pushStatus === "error") && (
+                <button
+                  type="button"
+                  onClick={handleEnableNotifications}
+                  title={
+                    pushStatus === "denied"
+                      ? "Notifications blocked — tap to see instructions"
+                      : "Tap to enable push notifications"
+                  }
+                  className="relative flex items-center justify-center h-8 w-8 rounded-lg hover:bg-accent transition-colors text-amber-500"
+                >
+                  {pushStatus === "denied" ? (
+                    <BellOff className="h-[18px] w-[18px]" />
+                  ) : (
+                    <BellRing className="h-[18px] w-[18px] animate-pulse" />
+                  )}
+                </button>
+              )}
+
               {/* Bell notification icon */}
               <Link href="/notifications">
                 <button
