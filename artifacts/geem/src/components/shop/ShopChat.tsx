@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { MessageCircle, X, Send, Mic, MicOff, Paperclip, ChevronDown, Loader2, Bot, UserRound, Sparkles } from "lucide-react";
+import { MessageCircle, X, Send, Mic, MicOff, Paperclip, ChevronDown, Loader2, Bot, UserRound } from "lucide-react";
 import { axiosInstance } from "@/lib/axios";
 
 const SESSION_KEY_STORAGE    = "geem_chat_session_key";
@@ -275,8 +275,8 @@ export default function ShopChatWidget() {
           {/* Header */}
           <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-3 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 bg-white/15 rounded-full flex items-center justify-center ring-2 ring-white/30">
-                <Sparkles className="h-4 w-4" />
+              <div className="w-9 h-9 bg-white rounded-full flex items-center justify-center ring-2 ring-white/30 overflow-hidden shrink-0">
+                <img src="/api/shop/app-icon" alt="Geem" className="w-full h-full object-contain" />
               </div>
               <div>
                 <p className="font-semibold text-sm">Geem Assistant</p>
