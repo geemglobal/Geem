@@ -162,10 +162,13 @@ async function generateAiReply(session: typeof chatSessionsTable.$inferSelect): 
       }).returning();
       broadcast(session.id, "message", sysMsg);
 
+      // Dedicated SSE event so admin panel can react instantly
+      broadcast(session.id, "human_requested", { sessionId: session.id, customerName: session.customerName });
+
       await sendPushToAdmins({
         title: "🔔 Human Agent Requested",
         body: `${session.customerName || "A customer"} wants to speak with a human agent.`,
-        url: "/admin/chat",
+        url: "/erp/chat",
         tag: `chat-transfer-${session.id}`,
         requireInteraction: true,
       }).catch(() => {});

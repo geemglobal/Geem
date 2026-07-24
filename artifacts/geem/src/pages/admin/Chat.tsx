@@ -17,6 +17,7 @@ interface ChatSession {
   assignedStaffId: number | null; staffName: string | null;
   status: string; unreadCount: number; lastMessage: string | null;
   ticketNumber: string | null; createdAt: string; updatedAt: string;
+  aiMode: boolean;
 }
 interface ChatMessage {
   id: number; sessionId: number; role: string; messageType: string;
@@ -60,26 +61,47 @@ export default function Chat() {
     queryFn: () => axiosInstance.get<StaffMember[]>(API("/chat/staff")).then(r => r.data),
   });
 
-  // ── Audio notification helper ─────────────────────────────────────────────
+  // ── Soft audio ping on any new unread ────────────────────────────────────
   const prevUnreadTotalRef = useRef(0);
   useEffect(() => {
     const total = sessions.reduce((s, x) => s + (x.unreadCount ?? 0), 0);
-    if (total > prevUnreadTotalRef.current) {
-      try {
-        const ctx = new AudioContext();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain); gain.connect(ctx.destination);
-        osc.frequency.value = 880;
-        gain.gain.setValueAtTime(0.3, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
-        osc.start(); osc.stop(ctx.currentTime + 0.4);
-      } catch { /* ignore */ }
-    }
+    if (total > prevUnreadTotalRef.current) playAlert(false);
     prevUnreadTotalRef.current = total;
   }, [sessions]);
 
-  // ── Global SSE (all sessions → triggers list refetch) ────────────────────
+  // ── Browser notification permission ──────────────────────────────────────
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function playAlert(urgent = false) {
+    try {
+      const ctx = new AudioContext();
+      const freqs = urgent ? [880, 1100, 880] : [880];
+      let t = ctx.currentTime;
+      for (const f of freqs) {
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.connect(g); g.connect(ctx.destination);
+        osc.frequency.value = f;
+        g.gain.setValueAtTime(0.4, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+        osc.start(t); osc.stop(t + 0.25);
+        t += 0.3;
+      }
+    } catch { /* ignore */ }
+  }
+
+  function showBrowserNotif(title: string, body: string) {
+    if ("Notification" in window && Notification.permission === "granted") {
+      new Notification(title, { body, icon: "/api/shop/app-icon", requireInteraction: true });
+    }
+  }
+
+  // ── Global SSE (all sessions — triggers list refetch + urgent alerts) ─────
   useEffect(() => {
     let dead = false;
     function connect() {
@@ -88,8 +110,27 @@ export default function Chat() {
       if (!token) return;
       const es = new EventSource(API(`/chat/admin/events?token=${encodeURIComponent(token)}`), { withCredentials: true });
       globalEsRef.current = es;
+
       es.addEventListener("session_updated", () => refetchSessions());
       es.addEventListener("message", () => refetchSessions());
+
+      // Human transfer — immediate alert + auto-select session
+      es.addEventListener("human_requested", (e) => {
+        refetchSessions();
+        try {
+          const d = JSON.parse((e as MessageEvent).data);
+          const name = d.customerName || "A customer";
+          playAlert(true);
+          showBrowserNotif("🔔 Human Agent Needed", `${name} is waiting for a live agent`);
+          toast({ title: "🔔 Human Agent Needed", description: `${name} is waiting`, duration: 10000 });
+          // Auto-open the session
+          setSelectedSession(prev => {
+            if (prev?.id === d.sessionId) return prev;
+            return sessions.find(s => s.id === d.sessionId) ?? prev;
+          });
+        } catch { /* ignore */ }
+      });
+
       es.onerror = () => {
         es.close();
         globalEsRef.current = null;
@@ -102,7 +143,7 @@ export default function Chat() {
       globalEsRef.current?.close();
       if (globalReconnRef.current) clearTimeout(globalReconnRef.current);
     };
-  }, []);
+  }, [sessions]);
 
   // ── SSE for selected session (with reconnect) ─────────────────────────────
   useEffect(() => {
@@ -284,7 +325,13 @@ export default function Chat() {
               <button
                 key={s.id}
                 onClick={() => setSelectedSession(s)}
-                className={`w-full text-left p-3 border-b transition-all hover:bg-accent ${selectedSession?.id === s.id ? "bg-primary/5 border-l-2 border-l-primary" : ""}`}
+                className={`w-full text-left p-3 border-b transition-all hover:bg-accent ${
+                  selectedSession?.id === s.id
+                    ? "bg-primary/5 border-l-2 border-l-primary"
+                    : s.status === "open" && !s.aiMode
+                      ? "bg-orange-50 border-l-2 border-l-orange-500 animate-pulse"
+                      : ""
+                }`}
               >
                 <div className="flex justify-between items-start gap-1">
                   <div className="flex items-center gap-1.5 min-w-0">
@@ -303,6 +350,11 @@ export default function Chat() {
                 )}
                 {s.lastMessage && (
                   <p className="text-xs text-muted-foreground truncate mt-0.5">{s.lastMessage}</p>
+                )}
+                {s.status === "open" && !s.aiMode && (
+                  <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-semibold bg-orange-500 text-white px-2 py-0.5 rounded-full">
+                    🙋 NEEDS HUMAN
+                  </span>
                 )}
                 <div className="flex items-center justify-between mt-1">
                   {s.ticketNumber && (
