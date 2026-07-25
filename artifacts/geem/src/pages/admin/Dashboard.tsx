@@ -246,9 +246,9 @@ function AlertsPanel() {
 }
 
 export default function Dashboard() {
-  const { data: stats } = useGetDashboardStats({ query: { queryKey: ["dashboard-stats"] } });
-  const { data: recentSales } = useGetDashboardRecentSales({ query: { queryKey: ["dashboard-recent-sales"] } });
-  const { data: revenueData } = useGetDashboardRevenue(undefined, { query: { queryKey: ["dashboard-revenue"] } });
+  const { data: stats } = useGetDashboardStats({ query: { queryKey: ["dashboard-stats"], refetchInterval: 30_000, staleTime: 0 } });
+  const { data: recentSales } = useGetDashboardRecentSales({ query: { queryKey: ["dashboard-recent-sales"], refetchInterval: 30_000, staleTime: 0 } });
+  const { data: revenueData } = useGetDashboardRevenue(undefined, { query: { queryKey: ["dashboard-revenue"], refetchInterval: 120_000, staleTime: 0 } });
   const [lowStockLoading, setLowStockLoading] = useState(false);
   const { toast } = useToast();
   const isOnline = useOnlineStatus();
@@ -282,14 +282,20 @@ export default function Dashboard() {
   const { data: byBrand } = useQuery({
     queryKey: ["inventory-by-brand"],
     queryFn: () => axiosInstance.get<{ brand: string; count: number }[]>("/inventory/stats/by-brand").then(r => r.data),
+    refetchInterval: 30_000,
+    staleTime: 0,
   });
   const { data: byStatus } = useQuery({
     queryKey: ["inventory-by-status"],
     queryFn: () => axiosInstance.get<{ status: string; count: number }[]>("/inventory/stats/by-status").then(r => r.data),
+    refetchInterval: 30_000,
+    staleTime: 0,
   });
   const { data: byPta } = useQuery({
     queryKey: ["inventory-by-pta"],
     queryFn: () => axiosInstance.get<{ ptaStatus: string; count: number }[]>("/inventory/stats/by-pta").then(r => r.data),
+    refetchInterval: 30_000,
+    staleTime: 0,
   });
 
   const totalInventory = byStatus?.reduce((s, r) => s + r.count, 0) ?? 0;
