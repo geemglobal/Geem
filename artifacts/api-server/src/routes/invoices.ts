@@ -998,10 +998,47 @@ router.post("/invoices/:id/book-shipment", async (req, res): Promise<void> => {
   const [inv] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, id));
   if (!inv) { res.status(404).json({ error: "Invoice not found" }); return; }
 
+  // Validate booking inputs before any API call
+  const parsedWeight = parseFloat(String(weight));
+  const parsedPieces = parseInt(String(pieces), 10);
+  if (!parsedWeight || parsedWeight <= 0 || isNaN(parsedWeight)) {
+    res.status(400).json({ error: "weight must be a positive number (e.g. 0.5)" }); return;
+  }
+  if (!parsedPieces || parsedPieces < 1 || isNaN(parsedPieces)) {
+    res.status(400).json({ error: "pieces must be a positive integer" }); return;
+  }
+  if (!String(originCity).trim()) {
+    res.status(400).json({ error: "originCity is required" }); return;
+  }
+
+  // Resolve recipient: mirror buildInvoice's web-order override logic so the
+  // booking API always receives the same address the staff sees on the invoice.
   const [customer] = await db.select({
     name: customersTable.name, mobile: customersTable.mobile,
     email: customersTable.email, city: customersTable.city, address: customersTable.address,
   }).from(customersTable).where(eq(customersTable.id, inv.customerId));
+
+  // Web-order invoices ship to the order address, not the CRM profile address
+  let recipientName    = customer?.name    ?? "";
+  let recipientPhone   = customer?.mobile  ?? "";
+  let recipientEmail   = customer?.email   ?? "";
+  let recipientCity    = customer?.city    ?? "";
+  let recipientAddress = customer?.address ?? "";
+
+  if (inv.webOrderId) {
+    const [wo] = await db.select({
+      customerName:    webOrdersTable.customerName,
+      customerMobile:  webOrdersTable.customerMobile,
+      customerAddress: webOrdersTable.customerAddress,
+      customerCity:    webOrdersTable.customerCity,
+    }).from(webOrdersTable).where(eq(webOrdersTable.id, inv.webOrderId));
+    if (wo) {
+      if (wo.customerName)    recipientName    = wo.customerName;
+      if (wo.customerMobile)  recipientPhone   = wo.customerMobile;
+      if (wo.customerAddress) recipientAddress = wo.customerAddress;
+      if (wo.customerCity)    recipientCity    = wo.customerCity;
+    }
+  }
 
   const [courier] = await db.select().from(couriersTable).where(eq(couriersTable.id, courierId));
   if (!courier) { res.status(404).json({ error: "Courier not found" }); return; }
@@ -1014,9 +1051,9 @@ router.post("/invoices/:id/book-shipment", async (req, res): Promise<void> => {
     return;
   }
 
-  // COD amount: use provided value or fall back to invoice balance
+  // COD amount: use provided value (already validated) or fall back to invoice balance
   const codAmount = collectAmount !== undefined
-    ? parseFloat(String(collectAmount))
+    ? Math.max(0, parseFloat(String(collectAmount)))
     : Math.max(0, parseFloat(String(inv.total)) - parseFloat(String(inv.paid)));
 
   let cn: string | null = null;
@@ -1026,16 +1063,16 @@ router.post("/invoices/:id/book-shipment", async (req, res): Promise<void> => {
     const payload = {
       api_key:                       courier.apiKey,
       api_password:                  courier.apiPassword,
-      booked_packet_weight:          String(weight),
-      booked_packet_no_piece:        String(pieces),
+      booked_packet_weight:          String(parsedWeight),
+      booked_packet_no_piece:        String(parsedPieces),
       booked_packet_collect_amount:  String(codAmount),
       booked_packet_order_id:        inv.invoiceNumber,
-      origin_city:                   String(originCity),
-      destination_city:              customer?.city || "Lahore",
-      shipment_name_eng:             customer?.name ?? "",
-      shipment_email:                customer?.email ?? "",
-      shipment_phone:                customer?.mobile ?? "",
-      shipment_address:              customer?.address ?? "—",
+      origin_city:                   String(originCity).trim(),
+      destination_city:              recipientCity || "Lahore",
+      shipment_name_eng:             recipientName || "—",
+      shipment_email:                recipientEmail,
+      shipment_phone:                recipientPhone,
+      shipment_address:              recipientAddress || "—",
       shipment_country:              "Pakistan",
       shipment_currency:             inv.currency ?? "PKR",
     };
@@ -1089,14 +1126,14 @@ router.post("/invoices/:id/book-shipment", async (req, res): Promise<void> => {
         headers: { "Content-Type": "application/json", "Token": token },
         body: JSON.stringify({
           ShipperName: "Geem Global Services",
-          ReceiverName: customer?.name ?? "",
-          ReceiverAddress: customer?.address ?? "—",
-          ReceiverCity: customer?.city ?? "",
-          ReceiverPhone: customer?.mobile ?? "",
-          Weight: String(weight),
-          CODAmount: String(codAmount),
+          ReceiverName:    recipientName    || "—",
+          ReceiverAddress: recipientAddress || "—",
+          ReceiverCity:    recipientCity    || "",
+          ReceiverPhone:   recipientPhone,
+          Weight:     String(parsedWeight),
+          CODAmount:  String(codAmount),
           ReferenceNo: inv.invoiceNumber,
-          Pieces: String(pieces),
+          Pieces:     String(parsedPieces),
         }),
         signal: AbortSignal.timeout(15_000),
       });
