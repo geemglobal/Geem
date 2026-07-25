@@ -393,7 +393,7 @@ export default function InvoiceDetail() {
   const [showBookDialog, setShowBookDialog] = useState(false);
   const [bookWeight, setBookWeight] = useState("0.5");
   const [bookCod, setBookCod] = useState("0");
-  const [bookOriginCity, setBookOriginCity] = useState("Bahawalpur");
+  const [bookOriginCity, setBookOriginCity] = useState("AHMAD PUR EAST");
 
   // ── Queries (declared before any useEffect that reads their data) ────────────
   const { data: invoice, isLoading } = useQuery({
@@ -518,6 +518,9 @@ export default function InvoiceDetail() {
       setShowBookDialog(false);
       setTrackingCn(data.cn);
       toast({ title: `✅ Shipment booked! CN: ${data.cn}` });
+      // Navigate to printable airway bill page
+      const params = new URLSearchParams({ weight: bookWeight, origin: bookOriginCity });
+      navigate(`/invoices/${id}/airway-bill?${params}`);
     },
     onError: (e: unknown) => {
       const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Booking failed";

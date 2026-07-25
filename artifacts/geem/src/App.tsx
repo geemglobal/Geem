@@ -25,6 +25,7 @@ const Inventory         = lazy(() => import("./pages/admin/Inventory"));
 const Customers         = lazy(() => import("./pages/admin/Customers"));
 const Invoices          = lazy(() => import("./pages/admin/Invoices"));
 const InvoiceDetail     = lazy(() => import("./pages/admin/InvoiceDetail"));
+const AirwayBill        = lazy(() => import("./pages/admin/AirwayBill"));
 const NewInvoice        = lazy(() => import("./pages/admin/NewInvoice"));
 const POS               = lazy(() => import("./pages/admin/POS"));
 const Products          = lazy(() => import("./pages/admin/Products"));
@@ -220,6 +221,7 @@ function Router() {
         <Route path="/customers/:id"><A component={CustomerDetail} /></Route>
         <Route path="/invoices/new"><A component={NewInvoice} /></Route>
         <Route path="/invoices/:id/edit"><A component={NewInvoice} /></Route>
+        <Route path="/invoices/:id/airway-bill"><A component={AirwayBill} /></Route>
         <Route path="/invoices/:id"><A component={InvoiceDetail} /></Route>
         <Route path="/invoices"><A component={Invoices} /></Route>
         <Route path="/pos"><A component={POS} /></Route>

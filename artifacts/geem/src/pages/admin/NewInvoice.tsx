@@ -770,7 +770,8 @@ export default function NewInvoice() {
       axiosInstance.post<{ ok: boolean; cn: string }>(`/invoices/${savedInvoiceRef!.id}/book-shipment`, payload).then(r => r.data),
     onSuccess: (data) => {
       toast({ title: `✅ Airway bill booked! CN: ${data.cn}` });
-      navigate(`/invoices/${savedInvoiceRef!.id}`);
+      const params = new URLSearchParams({ weight: bookWeight, origin: bookOriginCity });
+      navigate(`/invoices/${savedInvoiceRef!.id}/airway-bill?${params}`);
     },
     onError: (e: unknown) => {
       const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Booking failed";
