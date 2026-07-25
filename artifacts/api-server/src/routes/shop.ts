@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, ilike, and, count, sql, or, gt, inArray } from "drizzle-orm";
-import { db, productsTable, webOrdersTable, webOrderItemsTable, brandsTable, categoriesTable, integrationSettingsTable, companySettingsTable, shopCustomersTable, shopSessionsTable, customersTable, walletTransactionsTable, webOrderReturnsTable, invoicesTable } from "@workspace/db";
+import { eq, ilike, and, count, sql, or, gt, inArray, desc } from "drizzle-orm";
+import { db, productsTable, webOrdersTable, webOrderItemsTable, brandsTable, categoriesTable, integrationSettingsTable, companySettingsTable, shopCustomersTable, shopSessionsTable, customersTable, walletTransactionsTable, webOrderReturnsTable, invoicesTable, couriersTable } from "@workspace/db";
 import { hashPassword, verifyPassword, generateToken } from "../lib/auth.js";
 import { getAuth, clerkClient } from "@clerk/express";
 import { sendPushToAdmins, sendPushToUser } from "../lib/push";
@@ -897,6 +897,71 @@ router.get("/shop/auth/orders", async (req, res): Promise<void> => {
     };
   }));
   res.json(result.reverse());
+});
+
+// POS invoices for logged-in shop customer matched by email
+router.get("/shop/auth/my-invoices", async (req, res): Promise<void> => {
+  const session = await getShopSession(req);
+  if (!session) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  if (!session.email) { res.json([]); return; }
+
+  // Find the matching CRM customer by email
+  const [crmCustomer] = await db
+    .select({ id: customersTable.id })
+    .from(customersTable)
+    .where(eq(customersTable.email, session.email));
+
+  if (!crmCustomer) { res.json([]); return; }
+
+  // Fetch invoices with courier join — only invoices NOT linked to a web order
+  // (web order invoices already appear in the Orders tab)
+  const rows = await db
+    .select({
+      id:            invoicesTable.id,
+      invoiceNumber: invoicesTable.invoiceNumber,
+      date:          invoicesTable.date,
+      status:        invoicesTable.status,
+      total:         invoicesTable.total,
+      paid:          invoicesTable.paid,
+      courierCn:     invoicesTable.courierCn,
+      courierName:   couriersTable.name,
+      trackingUrl:   couriersTable.trackingUrl,
+    })
+    .from(invoicesTable)
+    .leftJoin(couriersTable, eq(couriersTable.id, invoicesTable.courierId))
+    .where(and(
+      eq(invoicesTable.customerId, crmCustomer.id),
+      sql`${invoicesTable.webOrderId} IS NULL`,
+    ))
+    .orderBy(desc(invoicesTable.createdAt))
+    .limit(20);
+
+  res.json(rows.map(r => {
+    const total = parseFloat(String(r.total));
+    const paid  = parseFloat(String(r.paid));
+    const balance = Math.max(0, total - paid);
+    const payStatus = balance <= 0 ? "paid" : paid > 0 ? "partial" : "unpaid";
+
+    // Build tracking link from template URL
+    const trackingLink = r.trackingUrl && r.courierCn
+      ? r.trackingUrl.replace(/\{cn\}/gi, encodeURIComponent(r.courierCn))
+      : null;
+
+    return {
+      id:           r.id,
+      invoiceNumber: r.invoiceNumber,
+      date:         r.date,
+      status:       r.status,
+      payStatus,
+      total,
+      paid,
+      balance,
+      courierCn:    r.courierCn ?? null,
+      courierName:  r.courierName ?? null,
+      trackingLink,
+    };
+  }));
 });
 
 export default router;

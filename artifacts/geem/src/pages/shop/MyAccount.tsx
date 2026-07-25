@@ -55,6 +55,13 @@ interface ReturnRequest {
   status: string; adminNotes: string | null; createdAt: string;
 }
 
+interface PosInvoice {
+  id: number; invoiceNumber: string; date: string; status: string;
+  payStatus: "paid" | "partial" | "unpaid";
+  total: number; paid: number; balance: number;
+  courierCn: string | null; courierName: string | null; trackingLink: string | null;
+}
+
 const RETURN_REASONS = [
   { value: "defective",        label: "Defective / Not working" },
   { value: "wrong_item",       label: "Wrong item received" },
@@ -218,6 +225,47 @@ function OrderCard({ order, onReturn, existingReturn }: {
   );
 }
 
+const PAY_STATUS_META: Record<string, { label: string; color: string }> = {
+  paid:    { label: "Paid",         color: "bg-green-100 text-green-800 border-green-200" },
+  partial: { label: "Partially Paid", color: "bg-amber-100 text-amber-800 border-amber-200" },
+  unpaid:  { label: "Unpaid",       color: "bg-red-100 text-red-800 border-red-200" },
+};
+
+function PosInvoiceCard({ invoice }: { invoice: PosInvoice }) {
+  const fmt = (n: number) => "Rs " + Number(n).toLocaleString();
+  const date = new Date(invoice.date).toLocaleDateString("en-PK", { year: "numeric", month: "short", day: "numeric" });
+  const pm = PAY_STATUS_META[invoice.payStatus] ?? { label: invoice.payStatus, color: "bg-slate-100 text-slate-700 border-slate-200" };
+
+  return (
+    <div className="rounded-xl border bg-white overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+      <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="font-mono font-bold text-sm text-slate-800">{invoice.invoiceNumber}</span>
+          <span className="text-xs text-slate-400">{date}</span>
+          <span className={cn("inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full border capitalize", pm.color)}>
+            {pm.label}
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-bold text-slate-900">{fmt(invoice.total)}</span>
+          {invoice.trackingLink ? (
+            <a href={invoice.trackingLink} target="_blank" rel="noopener noreferrer">
+              <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100">
+                <Truck className="h-3 w-3" /> Track
+              </Button>
+            </a>
+          ) : invoice.courierCn ? (
+            <span className="text-xs text-slate-500 flex items-center gap-1">
+              <Truck className="h-3 w-3 text-green-600" />
+              <span className="font-mono text-green-700 font-semibold">{invoice.courierCn}</span>
+            </span>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ChangePasswordTab({ getToken }: { getToken: () => string | null }) {
   const { toast } = useToast();
   const [form, setForm] = useState({ current: "", next: "", confirm: "" });
@@ -365,6 +413,13 @@ function SignedInAccount() {
   const { data: returnRequests = [] } = useQuery<ReturnRequest[]>({
     queryKey: ["shop-returns", customer?.id],
     queryFn: () => axiosInstance.get<ReturnRequest[]>("/shop/auth/return-requests", { headers: authHeader() }).then(r => r.data),
+    enabled: !!customer,
+    staleTime: 60_000,
+  });
+
+  const { data: posInvoices = [], isLoading: posLoading } = useQuery<PosInvoice[]>({
+    queryKey: ["shop-pos-invoices", customer?.id],
+    queryFn: () => axiosInstance.get<PosInvoice[]>("/shop/auth/my-invoices", { headers: authHeader() }).then(r => r.data),
     enabled: !!customer,
     staleTime: 60_000,
   });
@@ -538,6 +593,27 @@ function SignedInAccount() {
               </div>
             )}
           </div>
+          {/* POS / In-store Purchases */}
+          {(posLoading || posInvoices.length > 0) && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-semibold text-base text-slate-800 flex items-center gap-2">
+                  <Package className="h-4 w-4 text-slate-500" /> In-Store Purchases
+                </h2>
+              </div>
+              {posLoading ? (
+                <div className="space-y-2">{[1,2].map(i => <div key={i} className="h-16 bg-slate-100 rounded-xl animate-pulse" />)}</div>
+              ) : (
+                <div className="space-y-2">
+                  {posInvoices.slice(0, 3).map(inv => <PosInvoiceCard key={inv.id} invoice={inv} />)}
+                  {posInvoices.length > 3 && (
+                    <p className="text-center text-xs text-slate-400 pt-1">+ {posInvoices.length - 3} more purchases not shown</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
               { icon: <Truck className="h-5 w-5 text-violet-600" />,        label: "Track an Order",    sub: "Enter order # to track", href: "/shop/track",   bg: "bg-violet-50" },
