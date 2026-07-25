@@ -1438,6 +1438,52 @@ router.post("/invoices/:id/email", async (req, res): Promise<void> => {
 });
 
 /**
+ * POST /invoices/:id/send-tracking
+ * Send a short tracking link message to the customer via WhatsApp or SMS.
+ * Body: { channel: "whatsapp" | "sms" }
+ */
+router.post("/invoices/:id/send-tracking", async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const channel = (req.body.channel as string) || "whatsapp";
+
+  const [raw] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, id));
+  if (!raw) { res.status(404).json({ error: "Not found" }); return; }
+
+  const inv = await buildInvoice(raw);
+  const phone = inv.customerPhone;
+  if (!phone) { res.status(400).json({ error: "Customer has no phone number" }); return; }
+
+  const intl = toWaPhone(phone);
+  if (!intl) { res.status(400).json({ error: "Could not parse customer phone number" }); return; }
+
+  const baseUrl = (process.env.PUBLIC_URL ?? "https://geem.pk").replace(/\/$/, "");
+  const trackingUrl = `${baseUrl}/shop/invoice-track?inv=${encodeURIComponent(inv.invoiceNumber)}`;
+
+  const msg = [
+    `Assalam-o-Alaikum *${inv.customerName}*!`,
+    ``,
+    `Here is your shipment tracking link for order *${inv.invoiceNumber}*:`,
+    ``,
+    trackingUrl,
+    ``,
+    `_Geem.pk_`,
+  ].join("\n");
+
+  if (channel === "sms") {
+    const plain = msg.replace(/\*/g, "").replace(/_/g, "");
+    const sent = await sendSms(intl, plain);
+    if (sent) { res.json({ ok: true, sentTo: intl, channel: "sms" }); }
+    else { res.status(500).json({ error: "SMS send failed — check integration settings" }); }
+    return;
+  }
+
+  // Default: WhatsApp
+  const sent = await sendWhatsApp(intl, msg);
+  if (sent) { res.json({ ok: true, sentTo: intl, channel: "whatsapp" }); }
+  else { res.status(500).json({ error: "WhatsApp send failed — check integration settings" }); }
+});
+
+/**
  * POST /invoices/sync-ledger
  * Backfill ledger entries for ALL existing invoices that don't yet have them.
  * Safe to call multiple times — skips invoices/payments already in the ledger.

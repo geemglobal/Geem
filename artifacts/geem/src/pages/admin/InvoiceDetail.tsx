@@ -705,8 +705,8 @@ export default function InvoiceDetail() {
             </div>
           )}
 
-          {/* Copy / preview tracking page — always visible so staff can pre-share */}
-          <div className="flex items-center gap-2">
+          {/* Copy / preview / send tracking page — always visible so staff can pre-share */}
+          <div className="flex items-center gap-2 flex-wrap">
             <Button
               size="sm"
               variant="outline"
@@ -728,7 +728,66 @@ export default function InvoiceDetail() {
               <ExternalLink className="h-3.5 w-3.5 mr-1" />
               Open
             </Button>
+            {/* Send Tracking Link dropdown */}
+            {invoice.customerPhone ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="secondary" disabled={!!sendingChannel}>
+                    <Send className="h-3.5 w-3.5 mr-1" />
+                    {sendingChannel === "track-wa" || sendingChannel === "track-sms" ? "Sending…" : "Send Tracking Link"}
+                    <ChevronDown className="h-3 w-3 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-52">
+                  <DropdownMenuItem onClick={async () => {
+                    setSendingChannel("track-wa");
+                    try {
+                      const r = await axiosInstance.post(`/invoices/${invoice.id}/send-tracking`, { channel: "whatsapp" });
+                      toast({ title: `✅ Tracking link sent via WhatsApp to ${r.data.sentTo}` });
+                    } catch (e: unknown) {
+                      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Failed to send WhatsApp";
+                      toast({ title: msg, variant: "destructive" });
+                    } finally { setSendingChannel(null); }
+                  }}>
+                    <MessageCircle className="h-4 w-4 mr-2 text-green-600" /> WhatsApp (API)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={async () => {
+                    setSendingChannel("track-sms");
+                    try {
+                      const r = await axiosInstance.post(`/invoices/${invoice.id}/send-tracking`, { channel: "sms" });
+                      toast({ title: `✅ Tracking link sent via SMS to ${r.data.sentTo}` });
+                    } catch (e: unknown) {
+                      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Failed to send SMS";
+                      toast({ title: msg, variant: "destructive" });
+                    } finally { setSendingChannel(null); }
+                  }}>
+                    <Phone className="h-4 w-4 mr-2 text-violet-600" /> SMS
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => {
+                    const trackingUrl = `https://geem.pk/shop/invoice-track?inv=${encodeURIComponent(invoice.invoiceNumber)}`;
+                    const msg = `Here is your shipment tracking link for order ${invoice.invoiceNumber}:\n\n${trackingUrl}\n\n_Geem.pk_`;
+                    window.open(`https://wa.me/${toWaPhone(invoice.customerPhone)}?text=${encodeURIComponent(msg)}`, "_blank");
+                  }}>
+                    <MessageCircle className="h-4 w-4 mr-2 text-emerald-500" /> WhatsApp App (Mobile)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => {
+                    const trackingUrl = `https://geem.pk/shop/invoice-track?inv=${encodeURIComponent(invoice.invoiceNumber)}`;
+                    const msg = `Here is your shipment tracking link for order ${invoice.invoiceNumber}:\n\n${trackingUrl}\n\n_Geem.pk_`;
+                    window.open(`https://web.whatsapp.com/send?phone=${toWaPhone(invoice.customerPhone)}&text=${encodeURIComponent(msg)}`, "_blank");
+                  }}>
+                    <MessageCircle className="h-4 w-4 mr-2 text-cyan-600" /> WhatsApp Web (Browser)
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Button size="sm" variant="secondary" disabled title="No phone number on file">
+                <Send className="h-3.5 w-3.5 mr-1" /> Send Tracking Link
+              </Button>
+            )}
           </div>
+          {!invoice.customerPhone && (
+            <p className="text-xs text-amber-600">⚠️ No phone number on file — add one to the customer to enable sending the tracking link.</p>
+          )}
 
           {/* Tracking input form */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -845,9 +904,6 @@ export default function InvoiceDetail() {
               </Button>
             </div>
           </div>
-          {!invoice.customerPhone && (
-            <p className="text-xs text-amber-600">⚠️ No phone number on file — add one to the customer to enable notifications.</p>
-          )}
         </CardContent>
       </Card>
 
