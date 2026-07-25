@@ -58,3 +58,4 @@ geem-project/
 
 # User-uploaded debugging screenshots (Replit conversation assets)
 attached_assets/
+.env.local
