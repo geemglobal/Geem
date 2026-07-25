@@ -5,7 +5,8 @@ import { z } from "zod/v4";
 export const couriersTable = pgTable("couriers", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
-  apiProvider: text("api_provider"),
+  /** Stable provider key, e.g. "leopards", "tcs", "mnp", "trax". Unique — used as ON CONFLICT target for seeding. */
+  apiProvider: text("api_provider").unique("couriers_api_provider_unique"),
   apiKey: text("api_key"),
   apiPassword: text("api_password"),
   trackingUrl: text("tracking_url"),

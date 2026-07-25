@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { scheduleExpiryAlerts } from "./lib/sim-expiry-alerts";
+import { seedCouriers } from "./lib/seed-couriers";
 
 const rawPort = process.env["PORT"];
 
@@ -24,4 +25,5 @@ app.listen(port, (err) => {
 
   logger.info({ port }, "Server listening");
   scheduleExpiryAlerts();
+  seedCouriers();
 });

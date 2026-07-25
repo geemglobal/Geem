@@ -11,6 +11,7 @@
     "migrate-sim": "tsx ./src/migrate-sim.ts",
     "migrate-users": "tsx ./src/migrate-users-permissions.ts",
     "migrate-returns-refund": "tsx ./src/migrate-returns-refund.ts",
+    "seed-couriers": "tsx ./src/seed-couriers.ts",
     "migrate-shop-sessions": "tsx ./src/migrate-shop-sessions.ts",
     "fill-gps-catalog": "tsx ./src/fill-gps-catalog.ts",
     "fill-missing-images": "tsx ./src/fill-missing-images.ts",
