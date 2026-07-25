@@ -948,17 +948,30 @@ router.get("/shop/auth/my-invoices", async (req, res): Promise<void> => {
       ? r.trackingUrl.replace(/\{cn\}/gi, encodeURIComponent(r.courierCn))
       : null;
 
+    // Customer-facing shipment status — derived from courier CN + invoice status
+    let shipmentStatus: string;
+    if (r.courierCn) {
+      shipmentStatus = "shipped";         // CN assigned → handed to courier
+    } else if (r.status === "paid" || payStatus === "paid") {
+      shipmentStatus = "processing";      // Paid but not yet dispatched
+    } else if (r.status === "draft") {
+      shipmentStatus = "pending";         // Just created / not confirmed yet
+    } else {
+      shipmentStatus = "processing";      // confirmed/sent — being prepared
+    }
+
     return {
-      id:           r.id,
-      invoiceNumber: r.invoiceNumber,
-      date:         r.date,
-      status:       r.status,
+      id:             r.id,
+      invoiceNumber:  r.invoiceNumber,
+      date:           r.date,
+      status:         r.status,
+      shipmentStatus,
       payStatus,
       total,
       paid,
       balance,
-      courierCn:    r.courierCn ?? null,
-      courierName:  r.courierName ?? null,
+      courierCn:      r.courierCn ?? null,
+      courierName:    r.courierName ?? null,
       trackingLink,
     };
   }));

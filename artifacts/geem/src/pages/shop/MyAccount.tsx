@@ -57,6 +57,7 @@ interface ReturnRequest {
 
 interface PosInvoice {
   id: number; invoiceNumber: string; date: string; status: string;
+  shipmentStatus: "pending" | "processing" | "shipped" | string;
   payStatus: "paid" | "partial" | "unpaid";
   total: number; paid: number; balance: number;
   courierCn: string | null; courierName: string | null; trackingLink: string | null;
@@ -225,42 +226,61 @@ function OrderCard({ order, onReturn, existingReturn }: {
   );
 }
 
+const SHIPMENT_STATUS_META: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
+  pending:    { label: "Pending",     color: "bg-slate-100 text-slate-700 border-slate-200",     icon: <Clock className="h-3.5 w-3.5" /> },
+  processing: { label: "Processing",  color: "bg-blue-100 text-blue-800 border-blue-200",         icon: <Package className="h-3.5 w-3.5" /> },
+  shipped:    { label: "Shipped",     color: "bg-violet-100 text-violet-800 border-violet-200",   icon: <Truck className="h-3.5 w-3.5" /> },
+  delivered:  { label: "Delivered",   color: "bg-green-100 text-green-800 border-green-200",      icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
+  cancelled:  { label: "Cancelled",   color: "bg-red-100 text-red-800 border-red-200",            icon: <XCircle className="h-3.5 w-3.5" /> },
+};
+
 const PAY_STATUS_META: Record<string, { label: string; color: string }> = {
-  paid:    { label: "Paid",         color: "bg-green-100 text-green-800 border-green-200" },
-  partial: { label: "Partially Paid", color: "bg-amber-100 text-amber-800 border-amber-200" },
-  unpaid:  { label: "Unpaid",       color: "bg-red-100 text-red-800 border-red-200" },
+  paid:    { label: "Paid",           color: "bg-green-50 text-green-700" },
+  partial: { label: "Partial",        color: "bg-amber-50 text-amber-700" },
+  unpaid:  { label: "Unpaid",         color: "bg-red-50 text-red-700" },
 };
 
 function PosInvoiceCard({ invoice }: { invoice: PosInvoice }) {
   const fmt = (n: number) => "Rs " + Number(n).toLocaleString();
   const date = new Date(invoice.date).toLocaleDateString("en-PK", { year: "numeric", month: "short", day: "numeric" });
-  const pm = PAY_STATUS_META[invoice.payStatus] ?? { label: invoice.payStatus, color: "bg-slate-100 text-slate-700 border-slate-200" };
+  const sm = SHIPMENT_STATUS_META[invoice.shipmentStatus] ?? { label: invoice.shipmentStatus, color: "bg-slate-100 text-slate-700 border-slate-200", icon: null };
+  const pm = PAY_STATUS_META[invoice.payStatus] ?? { label: invoice.payStatus, color: "bg-slate-100 text-slate-600" };
 
   return (
     <div className="rounded-xl border bg-white overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-      <div className="flex items-center justify-between px-4 py-3">
+      <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-b">
         <div className="flex items-center gap-3 flex-wrap">
           <span className="font-mono font-bold text-sm text-slate-800">{invoice.invoiceNumber}</span>
           <span className="text-xs text-slate-400">{date}</span>
-          <span className={cn("inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full border capitalize", pm.color)}>
-            {pm.label}
+          {/* Shipment status — primary badge */}
+          <span className={cn("inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border capitalize", sm.color)}>
+            {sm.icon}{sm.label}
           </span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <span className="text-sm font-bold text-slate-900">{fmt(invoice.total)}</span>
-          {invoice.trackingLink ? (
-            <a href={invoice.trackingLink} target="_blank" rel="noopener noreferrer">
-              <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100">
-                <Truck className="h-3 w-3" /> Track
-              </Button>
-            </a>
-          ) : invoice.courierCn ? (
-            <span className="text-xs text-slate-500 flex items-center gap-1">
-              <Truck className="h-3 w-3 text-green-600" />
-              <span className="font-mono text-green-700 font-semibold">{invoice.courierCn}</span>
-            </span>
-          ) : null}
+          {/* Payment status — secondary pill */}
+          <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full", pm.color)}>{pm.label}</span>
         </div>
+      </div>
+      <div className="px-4 py-2.5 flex items-center justify-between flex-wrap gap-2">
+        {invoice.courierCn && (
+          <span className="text-xs text-slate-500 flex items-center gap-1.5">
+            <Truck className="h-3.5 w-3.5 text-violet-500" />
+            {invoice.courierName ? <span className="font-medium text-slate-700">{invoice.courierName}</span> : null}
+            <span className="font-mono text-violet-700 font-semibold">{invoice.courierCn}</span>
+          </span>
+        )}
+        {!invoice.courierCn && (
+          <span className="text-xs text-slate-400 italic">No shipment info yet</span>
+        )}
+        {invoice.trackingLink && (
+          <a href={invoice.trackingLink} target="_blank" rel="noopener noreferrer">
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100">
+              <Truck className="h-3 w-3" /> Track Shipment
+            </Button>
+          </a>
+        )}
       </div>
     </div>
   );
