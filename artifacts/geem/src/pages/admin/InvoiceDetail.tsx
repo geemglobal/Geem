@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, DollarSign, Printer, MessageCircle, Share2, FileDown, Link2, Eye, Pencil, Mail, Phone, Send, ChevronDown, Trash2 } from "lucide-react";
+import { ArrowLeft, DollarSign, Printer, MessageCircle, Share2, FileDown, Link2, Eye, Pencil, Mail, Phone, Send, ChevronDown, Trash2, Truck, ExternalLink } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 interface InvoiceItem {
@@ -38,7 +38,11 @@ interface Invoice {
   currency: string; currencySymbol: string;
   notes: string | null; items: InvoiceItem[]; payments: Payment[];
   orderPaymentMethod?: string | null;
+  courierId: number | null; courierCn: string | null;
+  courierName: string | null; courierTrackingUrl: string | null;
 }
+
+interface Courier { id: number; name: string; trackingUrl: string | null; active: boolean; }
 
 const statusColors: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   paid: "default", partial: "secondary", draft: "outline", overdue: "destructive",
@@ -350,9 +354,12 @@ export default function InvoiceDetail() {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [showPaymentSlip, setShowPaymentSlip] = useState<Payment | null>(null);
   const [sendingChannel, setSendingChannel] = useState<string | null>(null);
-  // Optimistic totals to show correct values in slip before re-fetch arrives
   const [slipTotals, setSlipTotals] = useState<{ paid: number; balanceDue: number } | null>(null);
   const [payForm, setPayForm] = useState({ date: new Date().toISOString().split("T")[0], method: "cash", amount: "", transactionId: "", memo: "" });
+  // Courier tracking state
+  const [trackingCourierId, setTrackingCourierId] = useState<string>("");
+  const [trackingCn, setTrackingCn] = useState("");
+  const [notifyChannel, setNotifyChannel] = useState<"whatsapp" | "sms">("whatsapp");
 
   // Reset payment form (pre-fill balance) when record dialog opens
   useEffect(() => {
@@ -366,6 +373,14 @@ export default function InvoiceDetail() {
       });
     }
   }, [showPayment]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync courier tracking form state from loaded invoice
+  useEffect(() => {
+    if (invoice) {
+      setTrackingCourierId(invoice.courierId ? String(invoice.courierId) : "");
+      setTrackingCn(invoice.courierCn ?? "");
+    }
+  }, [invoice?.courierId, invoice?.courierCn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pre-fill form when edit dialog opens
   useEffect(() => {
@@ -384,6 +399,12 @@ export default function InvoiceDetail() {
     queryKey: ["invoice", id],
     queryFn: () => axiosInstance.get<Invoice>(`/invoices/${id}`).then(r => r.data),
     enabled: !!id,
+  });
+
+  const { data: couriers } = useQuery({
+    queryKey: ["couriers-list"],
+    queryFn: () => axiosInstance.get<Courier[]>("/couriers").then(r => r.data),
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: companyCfg } = useQuery({
@@ -434,6 +455,22 @@ export default function InvoiceDetail() {
   const deleteMutation = useMutation({
     mutationFn: () => axiosInstance.delete(`/invoices/${id}`),
     onSuccess: () => { toast({ title: "Invoice deleted" }); window.location.href = "/invoices"; },
+  });
+
+  const shippingMutation = useMutation({
+    mutationFn: (payload: { courierId: number | null; courierCn: string; notify: boolean; channel: string }) =>
+      axiosInstance.patch<{ ok: boolean; notified: boolean; sentTo?: string; invoice: Invoice }>(`/invoices/${id}/shipping`, payload).then(r => r.data),
+    onSuccess: (data, vars) => {
+      qc.invalidateQueries({ queryKey: ["invoice", id] });
+      if (vars.notify && data.notified) {
+        toast({ title: `✅ Tracking saved & sent via ${vars.channel === "sms" ? "SMS" : "WhatsApp"} to ${data.sentTo}` });
+      } else if (vars.notify && !data.notified) {
+        toast({ title: "Tracking saved — no phone number on file", variant: "destructive" });
+      } else {
+        toast({ title: "Courier tracking saved" });
+      }
+    },
+    onError: () => toast({ title: "Failed to save tracking", variant: "destructive" }),
   });
 
   const deletePaymentMutation = useMutation({
@@ -586,6 +623,107 @@ export default function InvoiceDetail() {
           {invoice.customerPhone && <p><strong>Phone:</strong> {invoice.customerPhone}</p>}
           {invoice.customerCity && <p><strong>City:</strong> {invoice.customerCity}</p>}
           {invoice.customerAddress && <p><strong>Address:</strong> {invoice.customerAddress}</p>}
+        </CardContent>
+      </Card>
+
+      {/* Courier Tracking */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Truck className="h-4 w-4 text-blue-600" />
+            Courier Tracking
+            {invoice.courierCn && (
+              <span className="ml-auto text-xs font-normal text-green-600 flex items-center gap-1">
+                ✅ Tracking added
+              </span>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Current tracking display */}
+          {invoice.courierCn && (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 space-y-1.5">
+              {invoice.courierName && (
+                <p className="text-sm font-semibold text-blue-800">📦 {invoice.courierName}</p>
+              )}
+              <p className="text-sm text-blue-700">🔢 Tracking No: <span className="font-mono font-bold">{invoice.courierCn}</span></p>
+              {invoice.courierTrackingUrl && (
+                <a href={invoice.courierTrackingUrl} target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline font-medium">
+                  <ExternalLink className="h-3.5 w-3.5" /> Track Shipment
+                </a>
+              )}
+            </div>
+          )}
+
+          {/* Tracking input form */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>Courier Company</Label>
+              <Select value={trackingCourierId} onValueChange={setTrackingCourierId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select courier…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(couriers ?? []).filter(c => c.active).map(c => (
+                    <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Tracking / Consignment Number (CN)</Label>
+              <Input
+                placeholder="e.g. LCS-1234567890"
+                value={trackingCn}
+                onChange={e => setTrackingCn(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 flex-wrap">
+            <Button
+              size="sm" variant="outline"
+              disabled={shippingMutation.isPending || (!trackingCourierId && !trackingCn)}
+              onClick={() => shippingMutation.mutate({
+                courierId: trackingCourierId ? parseInt(trackingCourierId, 10) : null,
+                courierCn: trackingCn,
+                notify: false,
+                channel: notifyChannel,
+              })}
+            >
+              <Truck className="h-3.5 w-3.5 mr-1" />
+              {shippingMutation.isPending ? "Saving…" : "Save Tracking"}
+            </Button>
+
+            <div className="flex items-center gap-2 flex-1">
+              <Select value={notifyChannel} onValueChange={v => setNotifyChannel(v as "whatsapp" | "sms")}>
+                <SelectTrigger className="w-36">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                  <SelectItem value="sms">SMS</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                size="sm"
+                disabled={shippingMutation.isPending || !invoice.customerPhone || (!trackingCourierId && !trackingCn)}
+                onClick={() => shippingMutation.mutate({
+                  courierId: trackingCourierId ? parseInt(trackingCourierId, 10) : null,
+                  courierCn: trackingCn,
+                  notify: true,
+                  channel: notifyChannel,
+                })}
+              >
+                <Send className="h-3.5 w-3.5 mr-1" />
+                {shippingMutation.isPending ? "Sending…" : "Save & Notify Customer"}
+              </Button>
+            </div>
+          </div>
+          {!invoice.customerPhone && (
+            <p className="text-xs text-amber-600">⚠️ No phone number on file — add one to the customer to enable notifications.</p>
+          )}
         </CardContent>
       </Card>
 

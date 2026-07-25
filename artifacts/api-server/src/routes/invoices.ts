@@ -4,7 +4,7 @@ import {
   db, invoicesTable, invoiceItemsTable, paymentsTable, posDraftsTable,
   customersTable, inventoryItemsTable, invoiceSettingsTable, companySettingsTable,
   brandsTable, deviceModelsTable, ledgerEntriesTable, walletTransactionsTable,
-  webOrdersTable,
+  webOrdersTable, couriersTable,
 } from "@workspace/db";
 import { sendInvoiceEmail } from "../lib/mailer";
 import { sendSms, sendWhatsApp } from "../lib/sms";
@@ -112,6 +112,20 @@ async function buildInvoice(inv: typeof invoicesTable.$inferSelect) {
     };
   }));
 
+  // Resolve courier info if set
+  let courierName: string | null = null;
+  let courierTrackingUrl: string | null = null;
+  if (inv.courierId) {
+    const [courier] = await db.select({ name: couriersTable.name, trackingUrl: couriersTable.trackingUrl })
+      .from(couriersTable).where(eq(couriersTable.id, inv.courierId));
+    if (courier) {
+      courierName = courier.name;
+      courierTrackingUrl = courier.trackingUrl && inv.courierCn
+        ? courier.trackingUrl.replace("{cn}", inv.courierCn)
+        : null;
+    }
+  }
+
   return {
     ...inv,
     customerName: shippingOverride.name ?? customer?.name ?? "",
@@ -130,6 +144,10 @@ async function buildInvoice(inv: typeof invoicesTable.$inferSelect) {
     date: String(inv.date),
     createdAt: inv.createdAt.toISOString(),
     orderPaymentMethod,
+    courierId: inv.courierId ?? null,
+    courierCn: inv.courierCn ?? null,
+    courierName,
+    courierTrackingUrl,
     items,
     payments: payments.map(p => ({
       ...p,
@@ -901,6 +919,76 @@ router.patch("/invoices/:id", async (req, res): Promise<void> => {
   const [inv] = await db.update(invoicesTable).set(updates).where(eq(invoicesTable.id, id)).returning();
   if (!inv) { res.status(404).json({ error: "Not found" }); return; }
   res.json(await buildInvoice(inv));
+});
+
+/**
+ * PATCH /invoices/:id/shipping
+ * Save courier tracking info and optionally notify the customer.
+ * Body: { courierId, courierCn, notify?, channel? }
+ */
+router.patch("/invoices/:id/shipping", async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const { courierId, courierCn, notify, channel = "whatsapp" } = req.body as {
+    courierId?: number; courierCn?: string; notify?: boolean; channel?: string;
+  };
+
+  const [existing] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, id));
+  if (!existing) { res.status(404).json({ error: "Not found" }); return; }
+
+  // Save tracking info
+  const [updated] = await db.update(invoicesTable)
+    .set({
+      courierId: courierId ?? null,
+      courierCn: courierCn?.trim() || null,
+    })
+    .where(eq(invoicesTable.id, id))
+    .returning();
+
+  const inv = await buildInvoice(updated);
+
+  // Optionally send notification
+  if (notify && inv.customerPhone) {
+    const intl = toWaPhone(inv.customerPhone);
+    const sym = inv.currencySymbol ?? "Rs";
+    const invoiceUrl = `${(process.env.PUBLIC_URL ?? "https://geem.pk").replace(/\/$/, "")}/api/invoices/${id}/print`;
+    const itemLines = inv.items.map(i =>
+      `  • ${i.description}${i.imei ? ` (IMEI: ${i.imei})` : i.deviceId ? ` (Device ID: ${i.deviceId})` : ""}`
+    ).join("\n");
+
+    const trackingLines: string[] = [];
+    if (inv.courierName) trackingLines.push(`📦 Courier: *${inv.courierName}*`);
+    if (inv.courierCn)   trackingLines.push(`🔢 Tracking No: *${inv.courierCn}*`);
+    if (inv.courierTrackingUrl) trackingLines.push(`🔗 Track here: ${inv.courierTrackingUrl}`);
+
+    const msg = [
+      `Assalam-o-Alaikum *${inv.customerName}*! 🎉`,
+      ``,
+      `Your order has been shipped! 🚚`,
+      ``,
+      `*Invoice: ${inv.invoiceNumber}*`,
+      `*Total: ${sym} ${inv.total.toLocaleString()}*`,
+      ``,
+      `*Items:*`,
+      itemLines,
+      ``,
+      ...trackingLines,
+      ``,
+      `📄 View Invoice: ${invoiceUrl}`,
+      ``,
+      `Questions? WhatsApp: +92 307-8680005`,
+      `_Geem Global Services — geem.pk_`,
+    ].join("\n");
+
+    if (channel === "sms") {
+      sendSms(intl, msg.replace(/\*/g, "").replace(/_/g, "")).catch(() => {});
+    } else {
+      sendWhatsApp(intl, msg).catch(() => {});
+    }
+
+    res.json({ ok: true, notified: true, sentTo: intl, invoice: inv });
+  } else {
+    res.json({ ok: true, notified: false, invoice: inv });
+  }
 });
 
 router.put("/invoices/:id", async (req, res): Promise<void> => {

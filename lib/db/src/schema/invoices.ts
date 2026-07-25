@@ -21,6 +21,8 @@ export const invoicesTable = pgTable("invoices", {
   currencySymbol: text("currency_symbol").notNull().default("Rs"),
   notes: text("notes"),
   webOrderId: integer("web_order_id"),
+  courierId: integer("courier_id"),
+  courierCn: text("courier_cn"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
