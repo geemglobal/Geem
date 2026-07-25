@@ -189,16 +189,43 @@ router.delete("/vendors/:id", async (req, res): Promise<void> => {
 });
 
 // --- COURIERS ---
+/** Parse stored JSON city list; returns [] when absent/invalid (no restriction). */
+function parseCoveredCities(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try { const arr = JSON.parse(raw); return Array.isArray(arr) ? arr.map(String) : []; }
+  catch { return []; }
+}
+
+/** Normalise an array of city strings to a stored JSON value, or null when empty. */
+function serialiseCoveredCities(cities: unknown): string | null {
+  if (!Array.isArray(cities) || cities.length === 0) return null;
+  return JSON.stringify(cities.map(String).map(c => c.trim()).filter(Boolean));
+}
+
+function formatCourier(c: typeof couriersTable.$inferSelect) {
+  return {
+    ...c,
+    ledgerBalance: parseFloat(String(c.ledgerBalance)),
+    apiProvider: c.apiProvider ?? null,
+    createdAt: c.createdAt.toISOString(),
+    coveredCities: parseCoveredCities(c.coveredCities),
+  };
+}
+
 router.get("/couriers", async (req, res): Promise<void> => {
   const couriers = await db.select().from(couriersTable).orderBy(couriersTable.name);
-  res.json(couriers.map(c => ({ ...c, ledgerBalance: parseFloat(String(c.ledgerBalance)), apiProvider: c.apiProvider ?? null, createdAt: c.createdAt.toISOString() })));
+  res.json(couriers.map(formatCourier));
 });
 
 router.post("/couriers", async (req, res): Promise<void> => {
-  const { name, apiProvider, apiKey, apiPassword, trackingUrl, active } = req.body;
+  const { name, apiProvider, apiKey, apiPassword, trackingUrl, active, coveredCities } = req.body;
   if (!name) { res.status(400).json({ error: "Name required" }); return; }
-  const [courier] = await db.insert(couriersTable).values({ name, apiProvider, apiKey, apiPassword, trackingUrl, active: active !== false }).returning();
-  res.status(201).json({ ...courier, ledgerBalance: 0, createdAt: courier.createdAt.toISOString() });
+  const [courier] = await db.insert(couriersTable).values({
+    name, apiProvider, apiKey, apiPassword, trackingUrl,
+    active: active !== false,
+    coveredCities: serialiseCoveredCities(coveredCities),
+  }).returning();
+  res.status(201).json(formatCourier(courier));
 });
 
 router.patch("/couriers/:id", async (req, res): Promise<void> => {
@@ -210,9 +237,10 @@ router.patch("/couriers/:id", async (req, res): Promise<void> => {
   if (req.body.apiKey !== undefined) updates.apiKey = req.body.apiKey;
   if (req.body.apiPassword !== undefined) updates.apiPassword = req.body.apiPassword;
   if (req.body.trackingUrl !== undefined) updates.trackingUrl = req.body.trackingUrl;
+  if (req.body.coveredCities !== undefined) updates.coveredCities = serialiseCoveredCities(req.body.coveredCities);
   const [courier] = await db.update(couriersTable).set(updates).where(eq(couriersTable.id, id)).returning();
   if (!courier) { res.status(404).json({ error: "Not found" }); return; }
-  res.json({ ...courier, ledgerBalance: parseFloat(String(courier.ledgerBalance)), createdAt: courier.createdAt.toISOString() });
+  res.json(formatCourier(courier));
 });
 
 router.delete("/couriers/:id", async (req, res): Promise<void> => {

@@ -141,6 +141,18 @@ export default function MasterData() {
       {f("trackingUrl", "Tracking URL template (use {cn} as placeholder, e.g. https://leopardscourier.com/track?id={cn})")}
       {f("apiKey", "API Key / Username (for direct booking via API)")}
       {f("apiPassword", "API Password (for direct booking via API)")}
+      <div className="space-y-1">
+        <Label>Covered Cities <span className="text-xs text-muted-foreground font-normal">(one per line — leave blank if this courier covers everywhere)</span></Label>
+        <textarea
+          className="w-full min-h-[96px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-y"
+          placeholder={"Karachi\nLahore\nIslamabad\nRawalpindi\nFaisalabad"}
+          value={Array.isArray(form.coveredCities) ? (form.coveredCities as string[]).join("\n") : (form.coveredCities as string | undefined) ?? ""}
+          onChange={e => {
+            const lines = e.target.value.split("\n").map((l: string) => l.trim()).filter(Boolean);
+            setForm((p: Record<string, unknown>) => ({ ...p, coveredCities: lines }));
+          }}
+        />
+      </div>
     </>;
     if (tab === "payment-methods") return <>{f("name", "Name *")}{f("type", "Type *", "select", ["cash", "mobile_wallet", "bank", "card", "cheque"])}{f("accountDetails", "Account Details")}</>;
     return null;

@@ -10,6 +10,8 @@ export const couriersTable = pgTable("couriers", {
   apiKey: text("api_key"),
   apiPassword: text("api_password"),
   trackingUrl: text("tracking_url"),
+  /** JSON array of city names this courier covers, e.g. '["Karachi","Lahore","Islamabad"]'. NULL means unknown / no restriction. */
+  coveredCities: text("covered_cities"),
   ledgerBalance: numeric("ledger_balance", { precision: 12, scale: 2 }).notNull().default("0"),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

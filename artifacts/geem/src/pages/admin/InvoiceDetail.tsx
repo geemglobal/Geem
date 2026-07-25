@@ -42,7 +42,7 @@ interface Invoice {
   courierName: string | null; courierTrackingUrl: string | null;
 }
 
-interface Courier { id: number; name: string; trackingUrl: string | null; apiProvider: string | null; active: boolean; }
+interface Courier { id: number; name: string; trackingUrl: string | null; apiProvider: string | null; active: boolean; coveredCities: string[]; }
 
 const statusColors: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   paid: "default", partial: "secondary", draft: "outline", overdue: "destructive",
@@ -754,6 +754,32 @@ export default function InvoiceDetail() {
               />
             </div>
           </div>
+
+          {/* Coverage warning — shown when courier has coverage data and customer city is not covered */}
+          {(() => {
+            if (!trackingCourierId) return null;
+            const selectedCourier = (couriers ?? []).find(c => String(c.id) === trackingCourierId);
+            if (!selectedCourier || !selectedCourier.coveredCities?.length) return null;
+            const customerCity = invoice.customerCity?.trim().toLowerCase() ?? "";
+            if (!customerCity) return null;
+            const covered = selectedCourier.coveredCities.some(
+              city => city.trim().toLowerCase() === customerCity,
+            );
+            if (covered) return null;
+            return (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 flex items-start gap-3">
+                <span className="text-amber-500 text-lg leading-none mt-0.5">⚠️</span>
+                <div>
+                  <p className="text-sm font-semibold text-amber-800">
+                    {selectedCourier.name} may not deliver to <span className="font-bold">{invoice.customerCity}</span>
+                  </p>
+                  <p className="text-xs text-amber-700 mt-0.5">
+                    This courier's coverage list does not include {invoice.customerCity}. You can still proceed — this is advisory only.
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Book via API — shown when selected courier has an apiProvider */}
           {(() => {
