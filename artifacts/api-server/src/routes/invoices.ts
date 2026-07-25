@@ -982,6 +982,157 @@ router.patch("/invoices/:id", async (req, res): Promise<void> => {
 });
 
 /**
+ * POST /invoices/:id/book-shipment
+ * Call the courier's booking API, get a CN back, and auto-save it to the invoice.
+ * Body: { courierId, weight?, pieces?, collectAmount?, originCity? }
+ */
+router.post("/invoices/:id/book-shipment", async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const { courierId, weight = "0.5", pieces = "1", collectAmount, originCity = "Bahawalpur" } = req.body as {
+    courierId?: number; weight?: string; pieces?: string;
+    collectAmount?: string | number; originCity?: string;
+  };
+
+  if (!courierId) { res.status(400).json({ error: "courierId required" }); return; }
+
+  const [inv] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, id));
+  if (!inv) { res.status(404).json({ error: "Invoice not found" }); return; }
+
+  const [customer] = await db.select({
+    name: customersTable.name, mobile: customersTable.mobile,
+    email: customersTable.email, city: customersTable.city, address: customersTable.address,
+  }).from(customersTable).where(eq(customersTable.id, inv.customerId));
+
+  const [courier] = await db.select().from(couriersTable).where(eq(couriersTable.id, courierId));
+  if (!courier) { res.status(404).json({ error: "Courier not found" }); return; }
+  if (!courier.apiKey || !courier.apiPassword) {
+    res.status(400).json({ error: "Courier API credentials not set — go to Master Data → Couriers and add the API Key and API Password." });
+    return;
+  }
+  if (!courier.apiProvider) {
+    res.status(400).json({ error: "Courier API provider not set — add a provider key (e.g. \"leopards\" or \"tcs\") in Master Data → Couriers." });
+    return;
+  }
+
+  // COD amount: use provided value or fall back to invoice balance
+  const codAmount = collectAmount !== undefined
+    ? parseFloat(String(collectAmount))
+    : Math.max(0, parseFloat(String(inv.total)) - parseFloat(String(inv.paid)));
+
+  let cn: string | null = null;
+
+  // ── Leopard Courier ─────────────────────────────────────────────────────────
+  if (courier.apiProvider === "leopards") {
+    const payload = {
+      api_key:                       courier.apiKey,
+      api_password:                  courier.apiPassword,
+      booked_packet_weight:          String(weight),
+      booked_packet_no_piece:        String(pieces),
+      booked_packet_collect_amount:  String(codAmount),
+      booked_packet_order_id:        inv.invoiceNumber,
+      origin_city:                   String(originCity),
+      destination_city:              customer?.city || "Lahore",
+      shipment_name_eng:             customer?.name ?? "",
+      shipment_email:                customer?.email ?? "",
+      shipment_phone:                customer?.mobile ?? "",
+      shipment_address:              customer?.address ?? "—",
+      shipment_country:              "Pakistan",
+      shipment_currency:             inv.currency ?? "PKR",
+    };
+
+    let raw: Record<string, unknown>;
+    try {
+      const resp = await fetch("https://merchantapi.leopardscourier.com/api/bookPacket/format/json/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(15_000),
+      });
+      raw = await resp.json() as Record<string, unknown>;
+    } catch (e) {
+      res.status(502).json({ error: `Cannot reach Leopard API: ${e instanceof Error ? e.message : String(e)}` });
+      return;
+    }
+
+    // Leopard returns packet_cn on success; status "1" means OK
+    if (raw.packet_cn) {
+      cn = String(raw.packet_cn);
+    } else {
+      const errMsg = String(raw.error_description ?? raw.error ?? JSON.stringify(raw));
+      res.status(502).json({ error: `Leopard booking failed: ${errMsg}`, raw });
+      return;
+    }
+  }
+
+  // ── TCS Courier ─────────────────────────────────────────────────────────────
+  else if (courier.apiProvider === "tcs") {
+    // TCS eXpress API — requires a registered business account from TCS
+    // Endpoint: POST https://webapi.tcscourier.com/shippingapi.svc/BookShipment
+    // Auth: username/password from courier record
+    let raw: Record<string, unknown>;
+    try {
+      const authResp = await fetch("https://webapi.tcscourier.com/shippingapi.svc/Login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ UserName: courier.apiKey, Password: courier.apiPassword }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      const auth = await authResp.json() as Record<string, unknown>;
+      const token = String(auth.LoginResult ?? auth.token ?? "");
+      if (!token) {
+        res.status(502).json({ error: "TCS authentication failed — check your API credentials in Master Data → Couriers.", raw: auth });
+        return;
+      }
+
+      const bookResp = await fetch("https://webapi.tcscourier.com/shippingapi.svc/BookShipment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Token": token },
+        body: JSON.stringify({
+          ShipperName: "Geem Global Services",
+          ReceiverName: customer?.name ?? "",
+          ReceiverAddress: customer?.address ?? "—",
+          ReceiverCity: customer?.city ?? "",
+          ReceiverPhone: customer?.mobile ?? "",
+          Weight: String(weight),
+          CODAmount: String(codAmount),
+          ReferenceNo: inv.invoiceNumber,
+          Pieces: String(pieces),
+        }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      raw = await bookResp.json() as Record<string, unknown>;
+    } catch (e) {
+      res.status(502).json({ error: `Cannot reach TCS API: ${e instanceof Error ? e.message : String(e)}` });
+      return;
+    }
+
+    const trackingNo = String(raw.TrackingNo ?? raw.ConsignmentNo ?? raw.CN ?? "");
+    if (trackingNo) {
+      cn = trackingNo;
+    } else {
+      res.status(502).json({ error: `TCS booking failed: ${String(raw.Message ?? raw.Error ?? JSON.stringify(raw))}`, raw });
+      return;
+    }
+  }
+
+  // ── Unknown provider ─────────────────────────────────────────────────────────
+  else {
+    res.status(400).json({
+      error: `API booking not supported for provider "${courier.apiProvider}". Only "leopards" and "tcs" are supported. You can enter the tracking number manually.`,
+    });
+    return;
+  }
+
+  // Save the CN + courier to the invoice
+  const [updated] = await db.update(invoicesTable)
+    .set({ courierId, courierCn: cn })
+    .where(eq(invoicesTable.id, id))
+    .returning();
+
+  res.json({ ok: true, cn, invoice: await buildInvoice(updated) });
+});
+
+/**
  * PATCH /invoices/:id/shipping
  * Save courier tracking info and optionally notify the customer.
  * Body: { courierId, courierCn, notify?, channel? }

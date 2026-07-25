@@ -42,7 +42,7 @@ interface Invoice {
   courierName: string | null; courierTrackingUrl: string | null;
 }
 
-interface Courier { id: number; name: string; trackingUrl: string | null; active: boolean; }
+interface Courier { id: number; name: string; trackingUrl: string | null; apiProvider: string | null; active: boolean; }
 
 const statusColors: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   paid: "default", partial: "secondary", draft: "outline", overdue: "destructive",
@@ -389,6 +389,11 @@ export default function InvoiceDetail() {
   const [trackingCourierId, setTrackingCourierId] = useState<string>("");
   const [trackingCn, setTrackingCn] = useState("");
   const [notifyChannel, setNotifyChannel] = useState<"whatsapp" | "sms">("whatsapp");
+  // Booking dialog state
+  const [showBookDialog, setShowBookDialog] = useState(false);
+  const [bookWeight, setBookWeight] = useState("0.5");
+  const [bookCod, setBookCod] = useState("0");
+  const [bookOriginCity, setBookOriginCity] = useState("Bahawalpur");
 
   // Reset payment form (pre-fill balance) when record dialog opens
   useEffect(() => {
@@ -500,6 +505,21 @@ export default function InvoiceDetail() {
       }
     },
     onError: () => toast({ title: "Failed to save tracking", variant: "destructive" }),
+  });
+
+  const bookMutation = useMutation({
+    mutationFn: (payload: { courierId: number; weight: string; pieces: string; collectAmount: string; originCity: string }) =>
+      axiosInstance.post<{ ok: boolean; cn: string; invoice: Invoice }>(`/invoices/${id}/book-shipment`, payload).then(r => r.data),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["invoice", id] });
+      setShowBookDialog(false);
+      setTrackingCn(data.cn);
+      toast({ title: `✅ Shipment booked! CN: ${data.cn}` });
+    },
+    onError: (e: unknown) => {
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Booking failed";
+      toast({ title: msg, variant: "destructive" });
+    },
   });
 
   const deletePaymentMutation = useMutation({
@@ -706,6 +726,30 @@ export default function InvoiceDetail() {
               />
             </div>
           </div>
+
+          {/* Book via API — shown when selected courier has an apiProvider */}
+          {(() => {
+            const selectedCourier = (couriers ?? []).find(c => String(c.id) === trackingCourierId);
+            if (!selectedCourier?.apiProvider) return null;
+            return (
+              <div className="rounded-lg border border-violet-200 bg-violet-50 px-4 py-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-violet-800">🚀 Book via {selectedCourier.name} API</p>
+                  <p className="text-xs text-violet-600 mt-0.5">Auto-fill the CN directly from {selectedCourier.name}'s system — no manual copy-paste needed.</p>
+                </div>
+                <Button
+                  size="sm"
+                  className="bg-violet-600 hover:bg-violet-700 text-white shrink-0"
+                  onClick={() => {
+                    setBookCod(String(Math.max(0, invoice.balanceDue)));
+                    setShowBookDialog(true);
+                  }}
+                >
+                  <Truck className="h-3.5 w-3.5 mr-1" /> Book Shipment
+                </Button>
+              </div>
+            );
+          })()}
 
           <div className="flex items-center gap-3 flex-wrap">
             <Button
@@ -1010,6 +1054,71 @@ export default function InvoiceDetail() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+      {/* Book Shipment Dialog */}
+      <Dialog open={showBookDialog} onOpenChange={v => { if (!v) setShowBookDialog(false); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Truck className="h-5 w-5 text-violet-600" /> Book Shipment
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-lg bg-violet-50 border border-violet-200 px-3 py-2 text-sm text-violet-700">
+              Booking via <strong>{(couriers ?? []).find(c => String(c.id) === trackingCourierId)?.name ?? "courier"} API</strong> for <strong>{invoice.customerName}</strong> in <strong>{invoice.customerCity || "—"}</strong>.
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Weight (kg)</Label>
+                <Input
+                  type="number" min="0.1" step="0.1"
+                  value={bookWeight}
+                  onChange={e => setBookWeight(e.target.value)}
+                  placeholder="0.5"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>COD Amount (Rs)</Label>
+                <Input
+                  type="number" min="0"
+                  value={bookCod}
+                  onChange={e => setBookCod(e.target.value)}
+                  placeholder="0 for prepaid"
+                />
+                <p className="text-xs text-muted-foreground">0 = prepaid, balance = COD</p>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Origin City</Label>
+              <Input
+                value={bookOriginCity}
+                onChange={e => setBookOriginCity(e.target.value)}
+                placeholder="Bahawalpur"
+              />
+            </div>
+            {bookMutation.isError && (
+              <p className="text-xs text-destructive bg-destructive/10 rounded p-2">
+                {(bookMutation.error as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Booking failed"}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBookDialog(false)}>Cancel</Button>
+            <Button
+              className="bg-violet-600 hover:bg-violet-700 text-white"
+              disabled={bookMutation.isPending || !trackingCourierId}
+              onClick={() => bookMutation.mutate({
+                courierId: parseInt(trackingCourierId, 10),
+                weight: bookWeight,
+                pieces: "1",
+                collectAmount: bookCod,
+                originCity: bookOriginCity,
+              })}
+            >
+              {bookMutation.isPending ? "Booking…" : "🚀 Book & Get CN"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
