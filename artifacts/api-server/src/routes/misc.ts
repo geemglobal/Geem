@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, sql, sum, count, and, ilike } from "drizzle-orm";
+import { eq, sql, sum, count, and, ilike, gte, lte } from "drizzle-orm";
 import fs from "fs";
 import path from "path";
 import {
@@ -366,17 +366,53 @@ router.patch("/settings/invoice", async (req, res): Promise<void> => {
 // --- REPORTS ---
 router.get("/reports/sales", async (req, res): Promise<void> => {
   const from = String(req.query.from ?? "");
-  const to = String(req.query.to ?? "");
-  const invoices = await db.select().from(invoicesTable).where(eq(invoicesTable.status, "paid")).limit(100);
-  const totalAmount = invoices.reduce((s, i) => s + parseFloat(String(i.total)), 0);
+  const to   = String(req.query.to   ?? "");
+
+  // Build date filter conditions
+  const dateFilters: ReturnType<typeof and>[] = [eq(invoicesTable.status, "paid")];
+  if (from) dateFilters.push(gte(invoicesTable.date, from));
+  if (to)   dateFilters.push(lte(invoicesTable.date, to));
+  const where = and(...dateFilters);
+
+  // Stats via SQL aggregates — no row limit
+  const [stats] = await db
+    .select({
+      totalAmount:   sql<string>`COALESCE(SUM(${invoicesTable.total}), 0)`,
+      totalInvoices: sql<string>`COUNT(*)`,
+    })
+    .from(invoicesTable)
+    .where(where);
+
+  const totalAmount   = parseFloat(String(stats?.totalAmount ?? "0"));
+  const totalInvoices = parseInt(String(stats?.totalInvoices ?? "0"), 10);
+
+  // Full invoice list for the period (ordered newest-first, capped at 1000 for display)
+  const invoices = await db
+    .select()
+    .from(invoicesTable)
+    .where(where)
+    .orderBy(sql`${invoicesTable.date} desc, ${invoicesTable.id} desc`)
+    .limit(1000);
+
+  const items = await Promise.all(invoices.map(async i => {
+    const [c] = await db.select({ name: customersTable.name }).from(customersTable).where(eq(customersTable.id, i.customerId));
+    return {
+      id: i.id,
+      invoiceNumber: i.invoiceNumber,
+      customerName: c?.name ?? "",
+      amount: parseFloat(String(i.total)),
+      paid: parseFloat(String(i.paid)),
+      balanceDue: parseFloat(String(i.total)) - parseFloat(String(i.paid)),
+      status: i.status,
+      date: String(i.date),
+    };
+  }));
+
   res.json({
     totalAmount,
-    totalInvoices: invoices.length,
-    averageInvoiceValue: invoices.length ? totalAmount / invoices.length : 0,
-    items: await Promise.all(invoices.slice(0, 20).map(async i => {
-      const [c] = await db.select({ name: customersTable.name }).from(customersTable).where(eq(customersTable.id, i.customerId));
-      return { id: i.id, invoiceNumber: i.invoiceNumber, customerName: c?.name ?? "", amount: parseFloat(String(i.total)), status: i.status, date: String(i.date) };
-    })),
+    totalInvoices,
+    averageInvoiceValue: totalInvoices ? totalAmount / totalInvoices : 0,
+    items,
   });
 });
 
@@ -394,25 +430,49 @@ router.get("/reports/stock", async (req, res): Promise<void> => {
 });
 
 router.get("/reports/profit-loss", async (req, res): Promise<void> => {
-  const allPaid = await db.select().from(invoicesTable).where(eq(invoicesTable.status, "paid"));
-  const revenue = allPaid.reduce((s, i) => s + parseFloat(String(i.total)), 0);
+  const from = String(req.query.from ?? "");
+  const to   = String(req.query.to   ?? "");
 
-  // Real COGS: sum landed_cost of all sold inventory items
+  const invFilters: ReturnType<typeof and>[] = [eq(invoicesTable.status, "paid")];
+  if (from) invFilters.push(gte(invoicesTable.date, from));
+  if (to)   invFilters.push(lte(invoicesTable.date, to));
+
+  // Revenue via SQL aggregate (respects date range)
+  const [revRow] = await db
+    .select({ total: sql<string>`COALESCE(SUM(${invoicesTable.total}), 0)` })
+    .from(invoicesTable).where(and(...invFilters));
+  const revenue = parseFloat(String(revRow?.total ?? "0"));
+
+  // COGS: landed_cost of inventory items sold on invoices within the date range
+  // Join invoice_items → invoices to get sale date
   const [cogsRow] = await db
     .select({ total: sql<string>`COALESCE(SUM(${inventoryItemsTable.landedCost}), 0)` })
-    .from(inventoryItemsTable).where(eq(inventoryItemsTable.status, "sold"));
+    .from(inventoryItemsTable)
+    .innerJoin(invoiceItemsTable, eq(invoiceItemsTable.inventoryItemId, inventoryItemsTable.id))
+    .innerJoin(invoicesTable, and(
+      eq(invoicesTable.id, invoiceItemsTable.invoiceId),
+      eq(invoicesTable.status, "paid"),
+      ...(from ? [gte(invoicesTable.date, from)] : []),
+      ...(to   ? [lte(invoicesTable.date, to)]   : []),
+    ))
+    .where(eq(inventoryItemsTable.status, "sold"));
   const cogs = parseFloat(String(cogsRow?.total ?? "0"));
 
-  // COD invoices still in "draft" = pending collection
-  const codDraft = await db.select({ total: invoicesTable.total })
+  // COD invoices still in "draft" = pending collection (all-time, not date-filtered)
+  const [codRow] = await db
+    .select({
+      total: sql<string>`COALESCE(SUM(${invoicesTable.total}), 0)`,
+      cnt:   sql<string>`COUNT(*)`,
+    })
     .from(invoicesTable)
     .where(and(eq(invoicesTable.status, "draft"), ilike(invoicesTable.notes, "%paid via cod%")));
-  const codPendingAmount = codDraft.reduce((s, i) => s + parseFloat(String(i.total)), 0);
+  const codPendingAmount = parseFloat(String(codRow?.total ?? "0"));
+  const codPendingCount  = parseInt(String(codRow?.cnt ?? "0"), 10);
 
   const grossProfit = revenue - cogs;
   res.json({
     revenue, cogs, grossProfit, expenses: 0, courierCharges: 0, netProfit: grossProfit,
-    codPendingAmount, codPendingCount: codDraft.length,
+    codPendingAmount, codPendingCount,
     chartData: [],
   });
 });

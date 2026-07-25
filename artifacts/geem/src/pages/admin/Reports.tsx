@@ -20,17 +20,32 @@ const REPORT_TYPES = [
 
 const PIE_COLORS = ["#22c55e", "#3b82f6", "#f59e0b", "#ef4444"];
 
+const ALL_TIME_FROM = "2020-01-01";
+
 export default function Reports() {
   const [active, setActive] = useState("sales");
-  const [dateFrom, setDateFrom] = useState(() => {
-    const d = new Date(); d.setMonth(d.getMonth() - 1);
-    return d.toISOString().split("T")[0];
-  });
+  const [dateFrom, setDateFrom] = useState(ALL_TIME_FROM);
   const [dateTo, setDateTo] = useState(new Date().toISOString().split("T")[0]);
+
+  const isAllTime = dateFrom === ALL_TIME_FROM && dateTo === new Date().toISOString().split("T")[0];
+  function setAllTime() {
+    setDateFrom(ALL_TIME_FROM);
+    setDateTo(new Date().toISOString().split("T")[0]);
+  }
+  function setThisMonth() {
+    const d = new Date();
+    setDateFrom(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`);
+    setDateTo(new Date().toISOString().split("T")[0]);
+  }
+  function setLast30() {
+    const d = new Date(); d.setDate(d.getDate() - 30);
+    setDateFrom(d.toISOString().split("T")[0]);
+    setDateTo(new Date().toISOString().split("T")[0]);
+  }
 
   const { data: salesData } = useQuery({
     queryKey: ["report-sales", dateFrom, dateTo],
-    queryFn: () => axiosInstance.get<{ totalAmount: number; totalInvoices: number; averageInvoiceValue: number; items: Array<{ id: number; invoiceNumber: string; customerName: string; amount: number; status: string; date: string }> }>(`/reports/sales?from=${dateFrom}&to=${dateTo}`).then(r => r.data),
+    queryFn: () => axiosInstance.get<{ totalAmount: number; totalInvoices: number; averageInvoiceValue: number; items: Array<{ id: number; invoiceNumber: string; customerName: string; amount: number; paid: number; balanceDue: number; status: string; date: string }> }>(`/reports/sales?from=${dateFrom}&to=${dateTo}`).then(r => r.data),
     enabled: active === "sales",
   });
 
@@ -79,9 +94,16 @@ export default function Reports() {
       </div>
 
       {(active === "sales" || active === "profit-loss") && (
-        <div className="flex gap-4 items-end">
-          <div><Label className="text-xs">From</Label><Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-40" /></div>
-          <div><Label className="text-xs">To</Label><Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-40" /></div>
+        <div className="space-y-2">
+          <div className="flex gap-2 flex-wrap">
+            <Button size="sm" variant={isAllTime ? "default" : "outline"} onClick={setAllTime}>All Time</Button>
+            <Button size="sm" variant="outline" onClick={setThisMonth}>This Month</Button>
+            <Button size="sm" variant="outline" onClick={setLast30}>Last 30 Days</Button>
+          </div>
+          <div className="flex gap-4 items-end">
+            <div><Label className="text-xs">From</Label><Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-40" /></div>
+            <div><Label className="text-xs">To</Label><Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-40" /></div>
+          </div>
         </div>
       )}
 
@@ -93,17 +115,36 @@ export default function Reports() {
             <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Avg Invoice Value</p><p className="text-2xl font-bold">Rs {salesData.averageInvoiceValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p></CardContent></Card>
           </div>
           <Card>
-            <CardHeader><CardTitle>Recent Invoices</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <span>All Invoices ({salesData.items.length})</span>
+                <span className="text-sm font-normal text-muted-foreground">
+                  {dateFrom === ALL_TIME_FROM ? "All Time" : `${dateFrom} → ${dateTo}`}
+                </span>
+              </CardTitle>
+            </CardHeader>
             <CardContent>
               <Table>
-                <TableHeader><TableRow><TableHead>Invoice #</TableHead><TableHead>Customer</TableHead><TableHead>Date</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Invoice #</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="text-right">Paid</TableHead>
+                    <TableHead className="text-right">Balance</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
                 <TableBody>
                   {salesData.items.map(i => (
-                    <TableRow key={i.id}>
-                      <TableCell className="font-mono">{i.invoiceNumber}</TableCell>
+                    <TableRow key={i.id} className="cursor-pointer hover:bg-muted/50" onClick={() => window.location.href = `/invoices/${i.id}`}>
+                      <TableCell className="font-mono text-blue-600">{i.invoiceNumber}</TableCell>
                       <TableCell>{i.customerName}</TableCell>
                       <TableCell>{i.date}</TableCell>
-                      <TableCell className="text-right font-bold">Rs {i.amount.toLocaleString()}</TableCell>
+                      <TableCell className="text-right font-semibold">Rs {i.amount.toLocaleString()}</TableCell>
+                      <TableCell className="text-right text-green-700">Rs {i.paid.toLocaleString()}</TableCell>
+                      <TableCell className="text-right text-red-600">{i.balanceDue > 0 ? `Rs ${i.balanceDue.toLocaleString()}` : "—"}</TableCell>
                       <TableCell><Badge variant={i.status === "paid" ? "default" : "secondary"}>{i.status}</Badge></TableCell>
                     </TableRow>
                   ))}

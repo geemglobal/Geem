@@ -217,12 +217,23 @@ export default function MasterData() {
     );
     if (tab === "couriers") return (
       <Table>
-        <TableHeader><TableRow><TableHead>Courier</TableHead><TableHead>API Provider</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+        <TableHeader><TableRow><TableHead>Courier</TableHead><TableHead>Tracking URL</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
         <TableBody>
           {couriers?.map(c => (
             <TableRow key={c.id}>
               <TableCell className="font-medium">{c.name}</TableCell>
-              <TableCell>{c.apiProvider ?? "—"}</TableCell>
+              <TableCell>
+                {c.trackingUrl ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-600 text-xs">✅</span>
+                    <span className="text-xs font-mono text-muted-foreground truncate max-w-[220px]" title={c.trackingUrl}>{c.trackingUrl}</span>
+                    <a href={c.trackingUrl.replace("{cn}", "TEST123")} target="_blank" rel="noopener noreferrer"
+                      className="text-xs text-blue-600 hover:underline shrink-0">Test</a>
+                  </div>
+                ) : (
+                  <span className="text-xs text-amber-600 flex items-center gap-1">⚠️ Not set — tracking links won't work</span>
+                )}
+              </TableCell>
               <TableCell><Badge variant={c.active ? "default" : "secondary"}>{c.active ? "Active" : "Inactive"}</Badge></TableCell>
               <TableCell className="text-right space-x-1">
                 <Button size="sm" variant="outline" onClick={() => openEdit(c as unknown as Record<string, unknown>)}><Pencil className="h-3 w-3" /></Button>
