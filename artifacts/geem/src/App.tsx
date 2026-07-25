@@ -56,6 +56,7 @@ const ShopProducts       = lazy(() => import("./pages/shop/ShopProducts"));
 const ShopProduct        = lazy(() => import("./pages/shop/ShopProduct"));
 const ShopCategory       = lazy(() => import("./pages/shop/ShopCategory"));
 const TrackOrder         = lazy(() => import("./pages/shop/TrackOrder"));
+const TrackInvoice       = lazy(() => import("./pages/shop/TrackInvoice"));
 const Cart               = lazy(() => import("./pages/shop/Cart"));
 const Checkout           = lazy(() => import("./pages/shop/Checkout"));
 const OrderConfirmed     = lazy(() => import("./pages/shop/OrderConfirmed"));
@@ -197,6 +198,7 @@ function Router() {
         <Route path="/shop/products/:slug" component={ShopProduct as React.ComponentType} />
         <Route path="/shop/category/:id" component={ShopCategory as React.ComponentType} />
         <Route path="/shop/track" component={TrackOrder as React.ComponentType} />
+        <Route path="/shop/invoice-track" component={TrackInvoice as React.ComponentType} />
         <Route path="/shop/cart" component={Cart as React.ComponentType} />
         <Route path="/shop/checkout" component={Checkout as React.ComponentType} />
         <Route path="/shop/order-confirmed" component={OrderConfirmed as React.ComponentType} />

@@ -764,6 +764,66 @@ router.patch("/invoices/:id/payments/:paymentId", async (req, res): Promise<void
   res.json(await buildInvoice(updated));
 });
 
+// ── Public customer tracking endpoint (no auth, safe subset) ─────────────────
+// Lookup by invoice number string (e.g. INV-1234) — used by the customer tracking page
+router.get("/invoices/by-number/:number/track", async (req, res): Promise<void> => {
+  const number = Array.isArray(req.params.number) ? req.params.number[0] : req.params.number;
+  if (!number) { res.status(400).json({ error: "Invoice number required" }); return; }
+
+  const [rawInv] = await db.select().from(invoicesTable).where(eq(invoicesTable.invoiceNumber, number));
+  if (!rawInv) { res.status(404).json({ error: "Not found" }); return; }
+
+  const inv = await buildInvoice(rawInv);
+  res.json({
+    invoiceNumber: inv.invoiceNumber,
+    date: inv.date,
+    status: inv.status,
+    customerName: inv.customerName,
+    total: inv.total,
+    paid: inv.paid,
+    balanceDue: inv.balanceDue,
+    currency: inv.currency,
+    currencySymbol: inv.currencySymbol,
+    courierName: inv.courierName,
+    courierCn: inv.courierCn,
+    courierTrackingUrl: inv.courierTrackingUrl,
+    items: inv.items.map(i => ({ description: i.description, qty: i.qty })),
+  });
+});
+
+// Lookup by numeric id — kept for potential direct use
+router.get("/invoices/:id/track", async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  if (!id || isNaN(id)) { res.status(400).json({ error: "Invalid invoice id" }); return; }
+
+  const [rawInv] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, id));
+  if (!rawInv) { res.status(404).json({ error: "Not found" }); return; }
+
+  const inv = await buildInvoice(rawInv);
+
+  // Return only a safe public subset — no sensitive financial detail, no customer address
+  res.json({
+    invoiceNumber: inv.invoiceNumber,
+    date: inv.date,
+    status: inv.status,
+    customerName: inv.customerName,
+    total: inv.total,
+    paid: inv.paid,
+    balanceDue: inv.balanceDue,
+    currency: inv.currency,
+    currencySymbol: inv.currencySymbol,
+    // Courier / shipment
+    courierName: inv.courierName,
+    courierCn: inv.courierCn,
+    courierTrackingUrl: inv.courierTrackingUrl,
+    // Items (description + qty only — no price breakdown)
+    items: inv.items.map(i => ({
+      description: i.description,
+      qty: i.qty,
+    })),
+  });
+});
+
 // ── Printable / PDF invoice ─────────────────────────────────────────────────
 router.get("/invoices/:id/print", async (req, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
@@ -950,7 +1010,9 @@ router.patch("/invoices/:id/shipping", async (req, res): Promise<void> => {
   if (notify && inv.customerPhone) {
     const intl = toWaPhone(inv.customerPhone);
     const sym = inv.currencySymbol ?? "Rs";
-    const invoiceUrl = `${(process.env.PUBLIC_URL ?? "https://geem.pk").replace(/\/$/, "")}/api/invoices/${id}/print`;
+    const baseUrl = (process.env.PUBLIC_URL ?? "https://geem.pk").replace(/\/$/, "");
+    const trackingPageUrl = `${baseUrl}/shop/invoice-track?inv=${encodeURIComponent(inv.invoiceNumber)}`;
+    const invoiceUrl = `${baseUrl}/api/invoices/${id}/print`;
     const itemLines = inv.items.map(i =>
       `  • ${i.description}${i.imei ? ` (IMEI: ${i.imei})` : i.deviceId ? ` (Device ID: ${i.deviceId})` : ""}`
     ).join("\n");
@@ -958,7 +1020,7 @@ router.patch("/invoices/:id/shipping", async (req, res): Promise<void> => {
     const trackingLines: string[] = [];
     if (inv.courierName) trackingLines.push(`📦 Courier: *${inv.courierName}*`);
     if (inv.courierCn)   trackingLines.push(`🔢 Tracking No: *${inv.courierCn}*`);
-    if (inv.courierTrackingUrl) trackingLines.push(`🔗 Track here: ${inv.courierTrackingUrl}`);
+    if (inv.courierTrackingUrl) trackingLines.push(`🔗 Track on courier site: ${inv.courierTrackingUrl}`);
 
     const msg = [
       `Assalam-o-Alaikum *${inv.customerName}*! 🎉`,
@@ -972,6 +1034,9 @@ router.patch("/invoices/:id/shipping", async (req, res): Promise<void> => {
       itemLines,
       ``,
       ...trackingLines,
+      ``,
+      `📍 *Track your shipment:*`,
+      trackingPageUrl,
       ``,
       `📄 View Invoice: ${invoiceUrl}`,
       ``,

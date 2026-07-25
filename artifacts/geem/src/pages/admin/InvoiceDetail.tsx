@@ -299,11 +299,40 @@ function fmtItemLine(sym: string, i: { description: string; imei: string | null;
   return `• ${i.description}${ids.length ? ` (${ids.join(" | ")})` : ""} — ${sym} ${i.amount.toLocaleString()}`;
 }
 
-function handleWhatsAppWeb(invoice: Invoice) {
+function buildInvoiceShareMsg(invoice: Invoice): string {
   const sym = invoice.currencySymbol;
   const items = invoice.items.map(i => fmtItemLine(sym, i)).join("\n");
   const invoiceUrl = `https://geem.pk/api/invoices/${invoice.id}/print`;
-  const msg = `*Invoice ${invoice.invoiceNumber}*\nDate: ${invoice.date}\n\n*Items:*\n${items}\n\n*Total: ${sym} ${invoice.total.toLocaleString()}*\n${invoice.balanceDue > 0 ? `Balance Due: ${sym} ${invoice.balanceDue.toLocaleString()}` : "✅ Fully Paid"}\n\nView/Download Invoice:\n${invoiceUrl}\n\n_Geem.pk_`;
+
+  const trackingLines: string[] = [];
+  if (invoice.courierName) trackingLines.push(`📦 Courier: *${invoice.courierName}*`);
+  if (invoice.courierCn)   trackingLines.push(`🔢 Tracking No: *${invoice.courierCn}*`);
+  if (invoice.courierTrackingUrl) trackingLines.push(`🔗 Track on courier site: ${invoice.courierTrackingUrl}`);
+  const trackingPageLine = invoice.courierCn
+    ? `📍 *Track your shipment:*\nhttps://geem.pk/shop/invoice-track?inv=${encodeURIComponent(invoice.invoiceNumber)}`
+    : "";
+
+  return [
+    `*Invoice ${invoice.invoiceNumber}*`,
+    `Date: ${invoice.date}`,
+    ``,
+    `*Items:*`,
+    items,
+    ``,
+    `*Total: ${sym} ${invoice.total.toLocaleString()}*`,
+    invoice.balanceDue > 0 ? `Balance Due: ${sym} ${invoice.balanceDue.toLocaleString()}` : "✅ Fully Paid",
+    ...(trackingLines.length ? [``, ...trackingLines] : []),
+    ...(trackingPageLine ? [``, trackingPageLine] : []),
+    ``,
+    `View/Download Invoice:`,
+    invoiceUrl,
+    ``,
+    `_Geem.pk_`,
+  ].join("\n");
+}
+
+function handleWhatsAppWeb(invoice: Invoice) {
+  const msg = buildInvoiceShareMsg(invoice);
   const url = `https://wa.me/${toWaPhone(invoice.customerPhone)}?text=${encodeURIComponent(msg)}`;
   window.open(url, "_blank");
 }
@@ -562,29 +591,26 @@ export default function InvoiceDetail() {
                 <MessageCircle className="h-4 w-4 mr-2 text-emerald-500" /> WhatsApp App (Mobile)
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => {
-                const sym = invoice.currencySymbol;
-                const items = invoice.items.map(i => fmtItemLine(sym, i)).join("\n");
-                const invoiceUrl = `https://geem.pk/api/invoices/${invoice.id}/print`;
-                const msg = `*Invoice ${invoice.invoiceNumber}*\nDate: ${invoice.date}\n\n*Items:*\n${items}\n\n*Total: ${sym} ${invoice.total.toLocaleString()}*\n${invoice.balanceDue > 0 ? `Balance Due: ${sym} ${invoice.balanceDue.toLocaleString()}` : "✅ Fully Paid"}\n\nView/Download Invoice:\n${invoiceUrl}\n\n_Geem.pk_`;
+                const msg = buildInvoiceShareMsg(invoice);
                 const intl = toWaPhone(invoice.customerPhone);
                 window.location.href = `whatsapp://send?phone=${intl}&text=${encodeURIComponent(msg)}`;
               }}>
                 <MessageCircle className="h-4 w-4 mr-2 text-teal-600" /> WhatsApp Desktop App (PC)
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => {
-                const sym = invoice.currencySymbol;
-                const items = invoice.items.map(i => fmtItemLine(sym, i)).join("\n");
-                const invoiceUrl = `https://geem.pk/api/invoices/${invoice.id}/print`;
-                const msg = `*Invoice ${invoice.invoiceNumber}*\nDate: ${invoice.date}\n\n*Items:*\n${items}\n\n*Total: ${sym} ${invoice.total.toLocaleString()}*\n${invoice.balanceDue > 0 ? `Balance Due: ${sym} ${invoice.balanceDue.toLocaleString()}` : "✅ Fully Paid"}\n\nView/Download Invoice:\n${invoiceUrl}\n\n_Geem.pk_`;
+                const msg = buildInvoiceShareMsg(invoice);
                 window.open(`https://web.whatsapp.com/send?phone=${toWaPhone(invoice.customerPhone)}&text=${encodeURIComponent(msg)}`, "_blank");
               }}>
                 <MessageCircle className="h-4 w-4 mr-2 text-cyan-600" /> WhatsApp Web (Browser)
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => {
-                navigator.clipboard.writeText(`https://geem.pk/api/invoices/${invoice.id}/print`);
-                toast({ title: "Invoice link copied to clipboard" });
+                const trackingUrl = invoice.courierCn
+                  ? `https://geem.pk/shop/invoice-track?inv=${encodeURIComponent(invoice.invoiceNumber)}`
+                  : `https://geem.pk/api/invoices/${invoice.id}/print`;
+                navigator.clipboard.writeText(trackingUrl);
+                toast({ title: invoice.courierCn ? "Tracking page link copied" : "Invoice link copied to clipboard" });
               }}>
-                <Link2 className="h-4 w-4 mr-2 text-slate-500" /> Copy Invoice Link
+                <Link2 className="h-4 w-4 mr-2 text-slate-500" /> {invoice.courierCn ? "Copy Tracking Link" : "Copy Invoice Link"}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
