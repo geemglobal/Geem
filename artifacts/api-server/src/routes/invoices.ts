@@ -968,6 +968,20 @@ router.delete("/invoices/:id", async (req, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
   const [inv] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, id));
 
+  // Restore sold inventory items back to in_stock
+  const items = await db
+    .select({ inventoryItemId: invoiceItemsTable.inventoryItemId })
+    .from(invoiceItemsTable)
+    .where(eq(invoiceItemsTable.invoiceId, id));
+
+  const itemIds = items.map(i => i.inventoryItemId).filter((i): i is number => i != null);
+  if (itemIds.length > 0) {
+    await db
+      .update(inventoryItemsTable)
+      .set({ status: "in_stock" })
+      .where(and(inArray(inventoryItemsTable.id, itemIds), eq(inventoryItemsTable.status, "sold")));
+  }
+
   // Remove ledger entries linked to this invoice, then recalculate
   if (inv?.customerId && inv.invoiceNumber) {
     await db.delete(ledgerEntriesTable)
