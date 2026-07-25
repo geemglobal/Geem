@@ -705,6 +705,31 @@ export default function InvoiceDetail() {
             </div>
           )}
 
+          {/* Copy / preview tracking page — always visible so staff can pre-share */}
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                const url = `https://geem.pk/shop/invoice-track?inv=${encodeURIComponent(invoice.invoiceNumber)}`;
+                navigator.clipboard.writeText(url);
+                toast({ title: "Tracking link copied to clipboard" });
+              }}
+            >
+              <Link2 className="h-3.5 w-3.5 mr-1" />
+              Copy Tracking Link
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              title="Open tracking page in new tab"
+              onClick={() => window.open(`https://geem.pk/shop/invoice-track?inv=${encodeURIComponent(invoice.invoiceNumber)}`, "_blank")}
+            >
+              <ExternalLink className="h-3.5 w-3.5 mr-1" />
+              Open
+            </Button>
+          </div>
+
           {/* Tracking input form */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
