@@ -302,7 +302,7 @@ export default function POS() {
   const [bookCourierId, setBookCourierId] = useState("");
   const [bookWeight, setBookWeight] = useState("0.5");
   const [bookCod, setBookCod] = useState("0");
-  const [bookOriginCity, setBookOriginCity] = useState("Bahawalpur");
+  const [bookOriginCity, setBookOriginCity] = useState("AHMAD PUR EAST");
 
   useEffect(() => {
     if (selectedCurrency.code === "PKR") { setExchangeRate(1); return; }

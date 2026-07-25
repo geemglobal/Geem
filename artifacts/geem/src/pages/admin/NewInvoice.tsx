@@ -756,7 +756,7 @@ export default function NewInvoice() {
   const [bookCourierId, setBookCourierId] = useState("");
   const [bookWeight, setBookWeight] = useState("0.5");
   const [bookCod, setBookCod] = useState("0");
-  const [bookOriginCity, setBookOriginCity] = useState("Bahawalpur");
+  const [bookOriginCity, setBookOriginCity] = useState("AHMAD PUR EAST");
 
   const { data: couriers } = useQuery<BookableCourier[]>({
     queryKey: ["couriers-list"],
