@@ -395,6 +395,27 @@ export default function InvoiceDetail() {
   const [bookCod, setBookCod] = useState("0");
   const [bookOriginCity, setBookOriginCity] = useState("Bahawalpur");
 
+  // ── Queries (declared before any useEffect that reads their data) ────────────
+  const { data: invoice, isLoading } = useQuery({
+    queryKey: ["invoice", id],
+    queryFn: () => axiosInstance.get<Invoice>(`/invoices/${id}`).then(r => r.data),
+    enabled: !!id,
+  });
+
+  const { data: couriers } = useQuery({
+    queryKey: ["couriers-list"],
+    queryFn: () => axiosInstance.get<Courier[]>("/couriers").then(r => r.data),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: companyCfg } = useQuery({
+    queryKey: ["company-settings"],
+    queryFn: () => axiosInstance.get<CompanySettings>("/settings/company").then(r => r.data),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // ── Effects ───────────────────────────────────────────────────────────────
+
   // Reset payment form (pre-fill balance) when record dialog opens
   useEffect(() => {
     if (showPayment) {
@@ -428,24 +449,6 @@ export default function InvoiceDetail() {
       });
     }
   }, [editPayment]);
-
-  const { data: invoice, isLoading } = useQuery({
-    queryKey: ["invoice", id],
-    queryFn: () => axiosInstance.get<Invoice>(`/invoices/${id}`).then(r => r.data),
-    enabled: !!id,
-  });
-
-  const { data: couriers } = useQuery({
-    queryKey: ["couriers-list"],
-    queryFn: () => axiosInstance.get<Courier[]>("/couriers").then(r => r.data),
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const { data: companyCfg } = useQuery({
-    queryKey: ["company-settings"],
-    queryFn: () => axiosInstance.get<CompanySettings>("/settings/company").then(r => r.data),
-    staleTime: 5 * 60 * 1000,
-  });
 
   const company: CompanySettings = companyCfg ?? {
     companyName: "Geem",
