@@ -135,7 +135,13 @@ export default function MasterData() {
     </>;
     if (tab === "categories") return <>{f("name", "Category Name *")}</>;
     if (tab === "vendors") return <>{f("name", "Vendor Name *")}{f("contactPerson", "Contact Person")}{f("phone", "Phone")}{f("email", "Email")}</>;
-    if (tab === "couriers") return <>{f("name", "Courier Name *")}{f("apiProvider", "API Provider (e.g. leopards, tcs, mnp)")}{f("trackingUrl", "Tracking URL (use {cn} placeholder, e.g. https://leopardscourier.com/track?id={cn})")}</>;
+    if (tab === "couriers") return <>
+      {f("name", "Courier Name *")}
+      {f("apiProvider", "API Provider key (e.g. leopards, tcs — needed for API booking)")}
+      {f("trackingUrl", "Tracking URL template (use {cn} as placeholder, e.g. https://leopardscourier.com/track?id={cn})")}
+      {f("apiKey", "API Key / Username (for direct booking via API)")}
+      {f("apiPassword", "API Password (for direct booking via API)")}
+    </>;
     if (tab === "payment-methods") return <>{f("name", "Name *")}{f("type", "Type *", "select", ["cash", "mobile_wallet", "bank", "card", "cheque"])}{f("accountDetails", "Account Details")}</>;
     return null;
   }
