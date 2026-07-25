@@ -7,8 +7,11 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import {
   ChevronLeft, GripVertical, Trash2, PlusCircle, Search,
-  User, Pencil, X, ChevronDown, RefreshCw, CreditCard, Wallet,
+  User, Pencil, X, ChevronDown, RefreshCw, CreditCard, Wallet, Truck,
 } from "lucide-react";
+
+interface BookableCourier { id: number; name: string; apiProvider: string | null; }
+interface SavedInvoiceRef { id: number; invoiceNumber: string; balanceDue: number; }
 
 interface Currency { code: string; symbol: string; name: string; flag: string; }
 
@@ -293,6 +296,14 @@ export default function POS() {
   const [payMethod, setPayMethod] = useState<"cash" | "card" | "bank" | "other" | "wallet">("cash");
   const [useWallet, setUseWallet] = useState(false);
 
+  // ── Book airway bill state ────────────────────────────────────────────────
+  const [savedInvoiceRef, setSavedInvoiceRef] = useState<SavedInvoiceRef | null>(null);
+  const [showBookDialog, setShowBookDialog] = useState(false);
+  const [bookCourierId, setBookCourierId] = useState("");
+  const [bookWeight, setBookWeight] = useState("0.5");
+  const [bookCod, setBookCod] = useState("0");
+  const [bookOriginCity, setBookOriginCity] = useState("Bahawalpur");
+
   useEffect(() => {
     if (selectedCurrency.code === "PKR") { setExchangeRate(1); return; }
     if (ratesCache.current[selectedCurrency.code] !== undefined) { setExchangeRate(ratesCache.current[selectedCurrency.code]); return; }
@@ -368,6 +379,26 @@ export default function POS() {
     onError: () => toast({ title: "Error creating customer", variant: "destructive" }),
   });
 
+  const { data: couriers } = useQuery<BookableCourier[]>({
+    queryKey: ["couriers-list"],
+    queryFn: () => axiosInstance.get<BookableCourier[]>("/couriers").then(r => r.data),
+    staleTime: 5 * 60_000,
+  });
+  const bookableCouriers = (couriers ?? []).filter(c => c.apiProvider);
+
+  const bookMutation = useMutation({
+    mutationFn: (payload: { courierId: number; weight: string; pieces: string; collectAmount: string; originCity: string }) =>
+      axiosInstance.post<{ ok: boolean; cn: string }>(`/invoices/${savedInvoiceRef!.id}/book-shipment`, payload).then(r => r.data),
+    onSuccess: (data) => {
+      toast({ title: `✅ Airway bill booked! CN: ${data.cn}` });
+      navigate(`/invoices/${savedInvoiceRef!.id}`);
+    },
+    onError: (e: unknown) => {
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Booking failed";
+      toast({ title: msg, variant: "destructive" });
+    },
+  });
+
   const saveMutation = useMutation({
     mutationFn: (b: object) => axiosInstance.post("/invoices", b).then(r => r.data),
     onSuccess: (data) => {
@@ -378,7 +409,15 @@ export default function POS() {
       }
       qc.invalidateQueries({ queryKey: ["invoices"] });
       toast({ title: "Sale processed!", description: data.invoiceNumber });
-      navigate(`/invoices/${data.id}`);
+      const balanceDue = Math.max(0, (data.total ?? 0) - (data.paid ?? 0));
+      setSavedInvoiceRef({ id: data.id, invoiceNumber: data.invoiceNumber, balanceDue });
+      setBookCod(String(balanceDue));
+      if (bookableCouriers.length > 0) {
+        setBookCourierId(String(bookableCouriers[0].id));
+        setShowBookDialog(true);
+      } else {
+        navigate(`/invoices/${data.id}`);
+      }
     },
     onError: () => toast({ title: "Error processing sale", variant: "destructive" }),
   });
@@ -659,6 +698,86 @@ export default function POS() {
           <CreditCard className="h-4 w-4" />{isBusy ? "Processing…" : "Process Sale"}
         </Button>
       </div>
+
+      {/* ── Book Airway Bill dialog ── */}
+      {showBookDialog && savedInvoiceRef && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center gap-2">
+              <div className="w-9 h-9 bg-violet-100 rounded-full flex items-center justify-center shrink-0">
+                <Truck className="h-5 w-5 text-violet-600" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold">Book Airway Bill</h2>
+                <p className="text-xs text-muted-foreground">{savedInvoiceRef.invoiceNumber} — saved ✅</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Courier</label>
+                <select
+                  className="w-full border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-400"
+                  value={bookCourierId}
+                  onChange={e => setBookCourierId(e.target.value)}
+                >
+                  {bookableCouriers.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Weight (kg)</label>
+                  <input
+                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                    type="number" min="0.1" step="0.1"
+                    value={bookWeight} onChange={e => setBookWeight(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">COD Amount</label>
+                  <input
+                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                    type="number" min="0" step="1"
+                    value={bookCod} onChange={e => setBookCod(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Origin City</label>
+                <input
+                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                  placeholder="e.g. Bahawalpur"
+                  value={bookOriginCity} onChange={e => setBookOriginCity(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-1">
+              <Button
+                variant="outline" className="flex-1"
+                onClick={() => { setShowBookDialog(false); navigate(`/invoices/${savedInvoiceRef.id}`); }}
+              >
+                Skip
+              </Button>
+              <Button
+                className="flex-1 bg-violet-600 hover:bg-violet-700 text-white"
+                disabled={bookMutation.isPending || !bookCourierId}
+                onClick={() => bookMutation.mutate({
+                  courierId: parseInt(bookCourierId, 10),
+                  weight: bookWeight,
+                  pieces: "1",
+                  collectAmount: bookCod,
+                  originCity: bookOriginCity,
+                })}
+              >
+                {bookMutation.isPending ? "Booking…" : <><Truck className="h-4 w-4 mr-1" /> Book</>}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Payment dialog ── */}
       {showPayDialog && (
