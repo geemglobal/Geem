@@ -7,7 +7,7 @@ set -e
 REPO="/var/www/geempk/Inventory-Commerce-Hub"
 ENV_FILE="/var/www/geem/.env"
 SHOP_PUBLIC="/var/www/geem/shop/public"
-ERP_PUBLIC="/var/www/geem/erp/public"
+ERP_PUBLIC="/var/www/geem/erp"
 
 cd "$REPO"
 echo ">>> [1/6] Git pull"
