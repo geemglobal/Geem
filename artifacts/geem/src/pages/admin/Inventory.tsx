@@ -714,7 +714,7 @@ export default function Inventory() {
                           <MessageSquarePlus className="h-3.5 w-3.5" />
                         </Button>
                       )}
-                      {(item.status === "pta_blocked" || item.ptaStatus === "blocked") && (
+                      {(item.status === "pta_blocked" || item.ptaStatus === "blocked" || item.ptaStatus === "pta_blocked") && (
                         <>
                           <Button
                             variant="ghost"
