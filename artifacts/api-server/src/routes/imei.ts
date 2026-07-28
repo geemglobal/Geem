@@ -103,7 +103,7 @@ router.get("/imei-pool/next-free", async (req, res): Promise<void> => {
     .select()
     .from(imeiPoolTable)
     .where(and(...conditions))
-    .orderBy(imeiPoolTable.createdAt)
+    .orderBy(imeiPoolTable.serialNumber)
     .limit(1);
 
   if (!row) {
@@ -160,13 +160,17 @@ router.post("/imei-pool/:id/assign", async (req, res): Promise<void> => {
   if (!inv) { res.status(404).json({ error: "Inventory item not found" }); return; }
 
   // Log IMEI change to history
+  const assignReason =
+    typeof req.body.reason === "string" && req.body.reason.trim()
+      ? req.body.reason.trim()
+      : "Auto-assigned from IMEI pool (PTA Blocked)";
   await db.insert(imeiHistoryTable).values({
     inventoryItemId: inventoryItemId,
     oldImei: current.imei,
     newImei: poolEntry.imei15,
     previousStatus: current.status === "pta_blocked" ? current.status : null,
     restoredStatus: restoreStatus,
-    reason: "Auto-assigned from IMEI pool",
+    reason: assignReason,
     source: "pool",
   });
 

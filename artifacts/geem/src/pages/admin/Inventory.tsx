@@ -145,6 +145,9 @@ export default function Inventory() {
   const [manualImeiReason, setManualImeiReason] = useState("");
   const [manualImeeSaving, setManualImeeSaving] = useState(false);
   const [historyItem, setHistoryItem] = useState<InventoryItem | null>(null);
+  const [assignPreview, setAssignPreview] = useState<{ item: InventoryItem; pool: { id: number; imei15: string } } | null>(null);
+  const [assignReason, setAssignReason] = useState("");
+  const [assignSaving, setAssignSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -172,18 +175,14 @@ export default function Inventory() {
   async function assignNewImei(item: InventoryItem) {
     setImeiAssigning(prev => new Set(prev).add(item.id));
     try {
-      const freeRes = await axiosInstance.get<{ id: number; imei15: string }>("/imei-pool/next-free");
+      const freeRes = await axiosInstance.get<{ id: number; imei15: string; serialNumber: number }>("/imei-pool/next-free");
       const poolEntry = freeRes.data;
-      await axiosInstance.post(`/imei-pool/${poolEntry.id}/assign`, { inventoryItemId: item.id });
-      qc.invalidateQueries({ queryKey: ["inventory"] });
-      toast({
-        title: "IMEI Updated",
-        description: `New IMEI assigned: ${poolEntry.imei15}`,
-      });
+      setAssignPreview({ item, pool: poolEntry });
+      setAssignReason("");
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
       toast({
-        title: "IMEI Update Failed",
+        title: "No Free IMEI Found",
         description: msg === "No free IMEIs in pool"
           ? "No free IMEIs available in the pool. Please generate IMEIs first from the IMEI Pool page."
           : (msg ?? "Something went wrong"),
@@ -191,6 +190,34 @@ export default function Inventory() {
       });
     } finally {
       setImeiAssigning(prev => { const s = new Set(prev); s.delete(item.id); return s; });
+    }
+  }
+
+  async function confirmAssignImei() {
+    if (!assignPreview) return;
+    setAssignSaving(true);
+    try {
+      await axiosInstance.post(`/imei-pool/${assignPreview.pool.id}/assign`, {
+        inventoryItemId: assignPreview.item.id,
+        reason: assignReason.trim() || "PTA Blocked — replaced with free IMEI from pool",
+      });
+      qc.invalidateQueries({ queryKey: ["inventory"] });
+      qc.invalidateQueries({ queryKey: ["imei-history", assignPreview.item.id] });
+      toast({
+        title: "IMEI Assigned",
+        description: `New IMEI: ${assignPreview.pool.imei15}`,
+      });
+      setAssignPreview(null);
+      setAssignReason("");
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      toast({
+        title: "Assignment Failed",
+        description: msg ?? "Something went wrong",
+        variant: "destructive",
+      });
+    } finally {
+      setAssignSaving(false);
     }
   }
 
@@ -1214,6 +1241,57 @@ export default function Inventory() {
         </DialogContent>
       </Dialog>
 
+      {/* ── Assign Free IMEI Confirmation Dialog ── */}
+      <Dialog open={assignPreview !== null} onOpenChange={v => { if (!v) { setAssignPreview(null); setAssignReason(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RefreshCw className="h-4 w-4 text-amber-600" />
+              Assign Free IMEI from Pool
+            </DialogTitle>
+          </DialogHeader>
+          {assignPreview && (
+            <div className="space-y-4 py-1">
+              <div className="rounded-md border bg-muted/50 divide-y text-sm">
+                <div className="flex items-center justify-between px-3 py-2">
+                  <span className="text-muted-foreground text-xs font-medium uppercase tracking-wide">Device</span>
+                  <span className="font-medium">{assignPreview.item.brandName} {assignPreview.item.modelName}</span>
+                </div>
+                <div className="flex items-center justify-between px-3 py-2">
+                  <span className="text-muted-foreground text-xs font-medium uppercase tracking-wide">Current IMEI</span>
+                  <span className="font-mono text-red-600 line-through">{assignPreview.item.imei}</span>
+                </div>
+                <div className="flex items-center justify-between px-3 py-2">
+                  <span className="text-muted-foreground text-xs font-medium uppercase tracking-wide">New IMEI (from pool)</span>
+                  <span className="font-mono text-green-700 font-semibold">{assignPreview.pool.imei15}</span>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="assign-reason">Reason <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                <Input
+                  id="assign-reason"
+                  placeholder="e.g. PTA blocked — IMEI replaced, customer claim…"
+                  value={assignReason}
+                  onChange={e => setAssignReason(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && !assignSaving) confirmAssignImei(); }}
+                  autoFocus
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                This will mark the pool IMEI as used and log the change in history.
+                The item status will be restored to its previous value.
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setAssignPreview(null); setAssignReason(""); }}>Cancel</Button>
+            <Button onClick={confirmAssignImei} disabled={assignSaving} className="bg-amber-600 hover:bg-amber-700 text-white">
+              {assignSaving ? "Assigning…" : "Confirm & Assign"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* ── IMEI History Dialog ── */}
       <ImeiHistoryDialog item={historyItem} onClose={() => setHistoryItem(null)} />
 
@@ -1300,52 +1378,59 @@ function ImeiHistoryDialog({ item, onClose }: { item: InventoryItem | null; onCl
 
   return (
     <Dialog open={item !== null} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <History className="h-4 w-4" />
-            IMEI History — {item?.imei}
+            IMEI Change History
+            <span className="font-mono text-sm text-muted-foreground font-normal">— {item?.imei}</span>
           </DialogTitle>
         </DialogHeader>
-        <div className="max-h-80 overflow-y-auto">
+        <div className="max-h-96 overflow-y-auto">
           {isLoading && <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>}
           {!isLoading && (!data || data.length === 0) && (
             <p className="py-6 text-center text-sm text-muted-foreground">No IMEI changes recorded yet.</p>
           )}
           {data && data.length > 0 && (
             <table className="w-full text-xs">
-              <thead>
+              <thead className="sticky top-0 bg-background z-10">
                 <tr className="border-b text-muted-foreground">
-                  <th className="py-2 pr-3 text-left font-medium">Date & Time</th>
+                  <th className="py-2 pr-3 text-left font-medium whitespace-nowrap">Date &amp; Time</th>
+                  <th className="py-2 pr-3 text-left font-medium">Source</th>
                   <th className="py-2 pr-3 text-left font-medium">Old IMEI</th>
                   <th className="py-2 pr-3 text-left font-medium">New IMEI</th>
-                  <th className="py-2 pr-3 text-left font-medium">Status Restored</th>
+                  <th className="py-2 pr-3 text-left font-medium whitespace-nowrap">Status Restored</th>
                   <th className="py-2 text-left font-medium">Reason</th>
                 </tr>
               </thead>
               <tbody>
                 {data.map(h => (
-                  <tr key={h.id} className="border-b last:border-0">
-                    <td className="py-2 pr-3 text-nowrap">
+                  <tr key={h.id} className="border-b last:border-0 hover:bg-muted/30">
+                    <td className="py-2 pr-3 whitespace-nowrap text-muted-foreground">
                       {new Date(h.changedAt).toLocaleString("en-PK", { dateStyle: "medium", timeStyle: "short" })}
                     </td>
+                    <td className="py-2 pr-3">
+                      {h.source === "pool"
+                        ? <span className="rounded-full px-2 py-0.5 bg-amber-100 text-amber-700 text-[11px] font-medium border border-amber-200">Pool</span>
+                        : <span className="rounded-full px-2 py-0.5 bg-blue-100 text-blue-700 text-[11px] font-medium border border-blue-200">Manual</span>
+                      }
+                    </td>
                     <td className="py-2 pr-3 font-mono text-muted-foreground">{h.oldImei}</td>
-                    <td className="py-2 pr-3 font-mono font-medium">{h.newImei}</td>
+                    <td className="py-2 pr-3 font-mono font-medium text-green-700">{h.newImei}</td>
                     <td className="py-2 pr-3">
                       {h.restoredStatus
                         ? <span className="rounded px-1.5 py-0.5 bg-green-100 text-green-700 text-[11px]">{STATUS_LABEL[h.restoredStatus] ?? h.restoredStatus}</span>
                         : <span className="text-muted-foreground">—</span>}
                     </td>
-                    <td className="py-2">
-                      <span className={h.source === "pool" ? "text-amber-700" : ""}>{h.reason ?? "—"}</span>
-                    </td>
+                    <td className="py-2 text-muted-foreground">{h.reason ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
         </div>
-        <DialogFooter>
+        <DialogFooter className="flex items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground">{data?.length ?? 0} change{(data?.length ?? 0) !== 1 ? "s" : ""} recorded</p>
           <Button variant="outline" onClick={onClose}>Close</Button>
         </DialogFooter>
       </DialogContent>
