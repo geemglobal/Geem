@@ -79,7 +79,7 @@ const ShopResetPassword  = lazy(() => import("./pages/shop/ShopResetPassword"));
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 30_000,
+      staleTime: 0,         // always refetch on mount — no 30s delay
       gcTime: 24 * 60 * 60 * 1000,   // keep cache for 24 h
       retry: 1,
       // 'offlineFirst': queries fire even without a network connection so the
