@@ -5,9 +5,9 @@ import { inventoryItemsTable } from "./inventory";
 
 export const imeiPoolTable = pgTable("imei_pool", {
   id: serial("id").primaryKey(),
-  prefix12: text("prefix12").notNull(),
+  prefix13: text("prefix13").notNull(),   // first 13 digits of IMEI (was prefix12)
   imei15: text("imei15").notNull().unique(),
-  serialNumber: integer("serial_number").notNull(),
+  serialNumber: integer("serial_number").notNull(),  // 0–9 (1-digit serial, position 14)
   isUsed: boolean("is_used").notNull().default(false),
   assignedInventoryItemId: integer("assigned_inventory_item_id").references(() => inventoryItemsTable.id),
   usedAt: timestamp("used_at", { withTimezone: true }),

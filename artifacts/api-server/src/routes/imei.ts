@@ -19,22 +19,22 @@ function luhnDigit(digits14: string): number {
   return (10 - (sum % 10)) % 10;
 }
 
-/** Generate 15-digit IMEI from 12-digit prefix + 2-digit serial (14 digits total → luhn) */
-function makeImei(prefix12: string, serial: number): string {
-  const serialStr = String(serial).padStart(2, "0");
-  const digits14 = prefix12 + serialStr;
+/** Generate 15-digit IMEI from 13-digit prefix + 1-digit serial (14 digits total → luhn) */
+function makeImei(prefix13: string, serial: number): string {
+  const serialStr = String(serial); // single digit: 0-9
+  const digits14 = prefix13 + serialStr;
   return digits14 + luhnDigit(digits14);
 }
 
 // GET /imei-pool — list generated IMEIs
 router.get("/imei-pool", async (req, res): Promise<void> => {
-  const prefix = req.query.prefix ? String(req.query.prefix).slice(0, 12) : undefined;
+  const prefix = req.query.prefix ? String(req.query.prefix).slice(0, 13) : undefined;
   const used = req.query.used;
   const limit  = Math.min(500, Math.max(1, parseInt(String(req.query.limit ?? "100"), 10) || 100));
   const offset = Math.max(0, parseInt(String(req.query.offset ?? "0"), 10) || 0);
 
   const conditions = [];
-  if (prefix) conditions.push(eq(imeiPoolTable.prefix12, prefix));
+  if (prefix) conditions.push(eq(imeiPoolTable.prefix13, prefix));
   if (used === "true") conditions.push(eq(imeiPoolTable.isUsed, true));
   if (used === "false") conditions.push(eq(imeiPoolTable.isUsed, false));
 
@@ -54,16 +54,32 @@ router.get("/imei-pool", async (req, res): Promise<void> => {
   res.json({ total, rows });
 });
 
+// GET /imei-pool/prefix-summary — unique prefixes with stats (for "Generate Next 10" UI)
+router.get("/imei-pool/prefix-summary", async (req, res): Promise<void> => {
+  const rows = await db
+    .select({
+      prefix13: imeiPoolTable.prefix13,
+      total:    sql<number>`count(*)`,
+      used:     sql<number>`sum(case when ${imeiPoolTable.isUsed} then 1 else 0 end)`,
+      free:     sql<number>`sum(case when not ${imeiPoolTable.isUsed} then 1 else 0 end)`,
+      maxSerial: sql<number>`max(${imeiPoolTable.serialNumber})`,
+    })
+    .from(imeiPoolTable)
+    .groupBy(imeiPoolTable.prefix13)
+    .orderBy(imeiPoolTable.prefix13);
+  res.json(rows);
+});
+
 // POST /imei-pool/generate — generate batch of IMEIs
 router.post("/imei-pool/generate", async (req, res): Promise<void> => {
-  const { prefix12, quantity } = req.body;
-  if (!prefix12 || typeof prefix12 !== "string" || prefix12.length !== 12 || !/^\d{12}$/.test(prefix12)) {
-    res.status(400).json({ error: "prefix12 must be exactly 12 digits" });
+  const { prefix13, quantity } = req.body;
+  if (!prefix13 || typeof prefix13 !== "string" || prefix13.length !== 13 || !/^\d{13}$/.test(prefix13)) {
+    res.status(400).json({ error: "prefix13 must be exactly 13 digits" });
     return;
   }
   const qty = parseInt(String(quantity ?? 1), 10);
-  if (qty < 1 || qty > 99) {
-    res.status(400).json({ error: "quantity must be 1-99 (serial 01-99)" });
+  if (qty < 1 || qty > 10) {
+    res.status(400).json({ error: "quantity must be 1–10 (serial digits 0–9)" });
     return;
   }
 
@@ -71,17 +87,35 @@ router.post("/imei-pool/generate", async (req, res): Promise<void> => {
   const existing = await db
     .select({ maxSerial: sql<number>`max(${imeiPoolTable.serialNumber})` })
     .from(imeiPoolTable)
-    .where(eq(imeiPoolTable.prefix12, prefix12));
-  const startSerial = (existing[0]?.maxSerial ?? 0) + 1;
+    .where(eq(imeiPoolTable.prefix13, prefix13));
+  const startSerial = existing[0]?.maxSerial != null ? existing[0].maxSerial + 1 : 0;
+
+  // Gather existing IMEIs in inventory so we skip duplicates
+  const inventoryImeis = await db
+    .select({ imei: inventoryItemsTable.imei })
+    .from(inventoryItemsTable)
+    .where(sql`${inventoryItemsTable.imei} IS NOT NULL`);
+  const inventorySet = new Set(inventoryImeis.map(r => r.imei).filter(Boolean));
+
+  // Also get existing pool IMEIs for this prefix
+  const poolExisting = await db
+    .select({ imei15: imeiPoolTable.imei15 })
+    .from(imeiPoolTable)
+    .where(eq(imeiPoolTable.prefix13, prefix13));
+  const poolSet = new Set(poolExisting.map(r => r.imei15));
 
   const inserts = [];
   for (let i = 0; i < qty; i++) {
     const serial = startSerial + i;
-    if (serial > 99) break; // cap at 99 per prefix
-    inserts.push({ prefix12, imei15: makeImei(prefix12, serial), serialNumber: serial });
+    if (serial > 9) break; // cap at 9 (single digit 0-9)
+    const imei15 = makeImei(prefix13, serial);
+    // Skip duplicates in both pool and inventory
+    if (poolSet.has(imei15) || inventorySet.has(imei15)) continue;
+    inserts.push({ prefix13, imei15, serialNumber: serial });
   }
+
   if (!inserts.length) {
-    res.status(400).json({ error: "All serials 01-99 already used for this prefix" });
+    res.status(400).json({ error: "All serials (0–9) already used for this prefix, or all generated IMEIs already exist." });
     return;
   }
 
@@ -90,14 +124,13 @@ router.post("/imei-pool/generate", async (req, res): Promise<void> => {
 });
 
 // GET /imei-pool/next-free — get one free IMEI from pool (optionally for a prefix)
-// Skips any pool IMEI that already exists in inventory_items (handles data inconsistencies)
 router.get("/imei-pool/next-free", async (req, res): Promise<void> => {
   const prefix = req.query.prefix ? String(req.query.prefix) : undefined;
   const conditions = [
     eq(imeiPoolTable.isUsed, false),
     sql`${imeiPoolTable.imei15} NOT IN (SELECT imei FROM inventory_items WHERE imei IS NOT NULL)`,
   ];
-  if (prefix) conditions.push(eq(imeiPoolTable.prefix12, prefix));
+  if (prefix) conditions.push(eq(imeiPoolTable.prefix13, prefix));
 
   const [row] = await db
     .select()
@@ -118,40 +151,31 @@ router.post("/imei-pool/:id/assign", async (req, res): Promise<void> => {
   const poolId = parseInt(String(req.params.id), 10);
   if (isNaN(poolId) || poolId <= 0) { res.status(400).json({ error: "Invalid pool entry id" }); return; }
   const inventoryItemId = parseInt(String(req.body.inventoryItemId), 10);
-  if (isNaN(inventoryItemId) || inventoryItemId <= 0) {
-    res.status(400).json({ error: "inventoryItemId must be a positive integer" });
-    return;
-  }
+  if (isNaN(inventoryItemId) || inventoryItemId <= 0) { res.status(400).json({ error: "Invalid inventoryItemId" }); return; }
 
+  // Get the pool entry
   const [poolEntry] = await db.select().from(imeiPoolTable).where(eq(imeiPoolTable.id, poolId));
   if (!poolEntry) { res.status(404).json({ error: "Pool entry not found" }); return; }
-  if (poolEntry.isUsed) { res.status(409).json({ error: "IMEI already used" }); return; }
+  if (poolEntry.isUsed) { res.status(409).json({ error: "This IMEI is already used" }); return; }
 
-  // Fetch current inventory item to capture old IMEI and previousStatus
+  // Get the current inventory item
   const [current] = await db.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.id, inventoryItemId));
   if (!current) { res.status(404).json({ error: "Inventory item not found" }); return; }
 
-  // Auto-restore previous status when IMEI is assigned to a pta_blocked item
-  // Always set ptaStatus to blocked — new IMEI needs PTA clearance
-  const restoreStatus = current.status === "pta_blocked" ? (current.previousStatus ?? "in_stock") : null;
-  const itemUpdate: Record<string, unknown> = { imei: poolEntry.imei15, ptaStatus: "unpaid" };
-  if (restoreStatus) {
-    itemUpdate.status = restoreStatus;
-    itemUpdate.previousStatus = null;
-  }
+  // Determine status to restore
+  const restoreStatus = current.status === "pta_blocked" ? "available" : current.status;
 
-  // Update inventory item IMEI (and optionally status)
+  // Assign the IMEI
   let inv;
   try {
     [inv] = await db
       .update(inventoryItemsTable)
-      .set(itemUpdate)
+      .set({ imei: poolEntry.imei15, ptaStatus: "approved", status: restoreStatus })
       .where(eq(inventoryItemsTable.id, inventoryItemId))
       .returning();
   } catch (e: unknown) {
     const msg = (e as { message?: string })?.message ?? "";
     if (msg.includes("unique") || msg.includes("duplicate")) {
-      // Mark pool entry as used anyway (it already exists in inventory)
       await db.update(imeiPoolTable).set({ isUsed: true, usedAt: new Date() }).where(eq(imeiPoolTable.id, poolId));
       res.status(409).json({ error: "This IMEI already exists in inventory — it has been marked as used. Please try again to get the next free IMEI." });
       return;
