@@ -1,4 +1,3 @@
-- [Geem bug fixes](geem-bug-fixes.md) — key constraints from the bug-fix session: SQL injection rule, double-sell guard, Clerk v6 type workaround.
-- [VPS Deployment](vps-deployment.md) — Contabo VPS setup: systemd services, env file path, nginx dirs, frontend build commands, deploy script.
-- [PWA Icon pipeline](pwa-icon-pipeline.md) — how PWA icons are generated and deployed; misc.ts gLogo handler; why raw copy caused red blob.
-- [Nginx geem.pk config](nginx-geem-config.md) — sites-enabled/geem.pk.conf is a direct file (not symlink); add_header inheritance pitfall; security headers must be in each location block explicitly.
+- [Inventory N+1 fix](inventory-perf.md) — enrichItem had 5 queries/item; replaced with enrichItems batch (8 queries total for any page size)
+- [Deploy path fix](deploy-path.md) — ERP nginx root is /var/www/geem/erp (not erp/public); deploy.sh must set ERP_PUBLIC=/var/www/geem/erp
+- [VPS access](vps-access.md) — SSH password in VPS_SSH_PRIVATE_KEY secret; use sshpass; DB is geemdb, postgres user via su -s /bin/bash postgres
