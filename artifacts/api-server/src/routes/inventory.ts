@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, sql, count, ilike, desc, isNotNull } from "drizzle-orm";
+import { eq, and, sql, count, ilike, desc, isNotNull, inArray } from "drizzle-orm";
 import {
   db, inventoryItemsTable, brandsTable, deviceModelsTable, categoriesTable, productsTable,
   invoicesTable, invoiceItemsTable, paymentsTable, customersTable, vendorsTable, invoiceSettingsTable,
@@ -505,12 +505,12 @@ async function upsertProductFromInventory(brandId: number, modelId: number, sell
   }
 }
 
+/** Single-item enrichment — used for POST/PATCH/GET-by-id responses (5 queries, fine for 1 item) */
 async function enrichItem(item: typeof inventoryItemsTable.$inferSelect) {
   const [brand] = await db.select({ name: brandsTable.name }).from(brandsTable).where(eq(brandsTable.id, item.brandId));
   const [model] = await db.select({ name: deviceModelsTable.name }).from(deviceModelsTable).where(eq(deviceModelsTable.id, item.modelId));
   const [cat] = item.categoryId ? await db.select({ name: categoriesTable.name }).from(categoriesTable).where(eq(categoriesTable.id, item.categoryId)) : [null];
 
-  // Link to sales invoice (INV-*) and pull customer details
   const [salesInv] = await db
     .select({
       id: invoicesTable.id,
@@ -525,12 +525,7 @@ async function enrichItem(item: typeof inventoryItemsTable.$inferSelect) {
     .from(invoiceItemsTable)
     .innerJoin(invoicesTable, eq(invoiceItemsTable.invoiceId, invoicesTable.id))
     .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
-    .where(
-      and(
-        eq(invoiceItemsTable.inventoryItemId, item.id),
-        sql`${invoicesTable.invoiceNumber} like 'INV-%'`
-      )
-    )
+    .where(and(eq(invoiceItemsTable.inventoryItemId, item.id), sql`${invoicesTable.invoiceNumber} like 'INV-%'`))
     .limit(1);
 
   const [{ imeiChangeCount }] = await db
@@ -538,43 +533,132 @@ async function enrichItem(item: typeof inventoryItemsTable.$inferSelect) {
     .from(imeiHistoryTable)
     .where(eq(imeiHistoryTable.inventoryItemId, item.id));
 
-  return {
-    ...item,
+  return buildEnrichedItem(item, {
     brandName: brand?.name ?? "",
     modelName: model?.name ?? "",
     categoryName: cat?.name ?? null,
-    productName: `${brand?.name ?? ""} ${model?.name ?? ""}`.trim(),
-    landedCost: parseFloat(String(item.landedCost)),
+    salesInv: salesInv ?? null,
+    imeiChangeCount: Number(imeiChangeCount),
+  });
+}
+
+/** Batch enrichment — replaces N+1 enrichItem calls for list queries.
+ *  Fires 5 queries total regardless of how many items are in the list. */
+async function enrichItems(items: (typeof inventoryItemsTable.$inferSelect)[]) {
+  if (items.length === 0) return [];
+
+  const ids        = items.map(i => i.id);
+  const brandIds   = [...new Set(items.map(i => i.brandId))];
+  const modelIds   = [...new Set(items.map(i => i.modelId))];
+  const categoryIds = [...new Set(items.map(i => i.categoryId).filter((x): x is number => x != null))];
+
+  const [brands, models, cats, salesInvRows, imeiCounts] = await Promise.all([
+    db.select({ id: brandsTable.id, name: brandsTable.name })
+      .from(brandsTable).where(inArray(brandsTable.id, brandIds)),
+
+    db.select({ id: deviceModelsTable.id, name: deviceModelsTable.name })
+      .from(deviceModelsTable).where(inArray(deviceModelsTable.id, modelIds)),
+
+    categoryIds.length > 0
+      ? db.select({ id: categoriesTable.id, name: categoriesTable.name })
+          .from(categoriesTable).where(inArray(categoriesTable.id, categoryIds))
+      : Promise.resolve([] as { id: number; name: string }[]),
+
+    // One join query to fetch sales invoices + customers for ALL items
+    db.select({
+        inventoryItemId: invoiceItemsTable.inventoryItemId,
+        id:              invoicesTable.id,
+        invoiceNumber:   invoicesTable.invoiceNumber,
+        paymentStatus:   invoicesTable.status,
+        saleDate:        invoicesTable.date,
+        customerName:    customersTable.name,
+        customerMobile:  customersTable.mobile,
+        customerCity:    customersTable.city,
+        customerId:      invoicesTable.customerId,
+      })
+      .from(invoiceItemsTable)
+      .innerJoin(invoicesTable, eq(invoiceItemsTable.invoiceId, invoicesTable.id))
+      .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+      .where(and(
+        inArray(invoiceItemsTable.inventoryItemId, ids),
+        sql`${invoicesTable.invoiceNumber} like 'INV-%'`
+      )),
+
+    // One GROUP BY query to count IMEI changes for ALL items
+    db.select({ inventoryItemId: imeiHistoryTable.inventoryItemId, cnt: count() })
+      .from(imeiHistoryTable)
+      .where(inArray(imeiHistoryTable.inventoryItemId, ids))
+      .groupBy(imeiHistoryTable.inventoryItemId),
+  ]);
+
+  const brandMap    = new Map(brands.map(b => [b.id, b.name]));
+  const modelMap    = new Map(models.map(m => [m.id, m.name]));
+  const catMap      = new Map(cats.map(c => [c.id, c.name]));
+  // Keep only the first INV- invoice per inventory item (DISTINCT ON emulation in JS)
+  const salesInvMap = new Map<number, typeof salesInvRows[0]>();
+  for (const row of salesInvRows) {
+    if (row.inventoryItemId != null && !salesInvMap.has(row.inventoryItemId)) {
+      salesInvMap.set(row.inventoryItemId, row);
+    }
+  }
+  const imeiCountMap = new Map(imeiCounts.map(r => [r.inventoryItemId, Number(r.cnt)]));
+
+  return items.map(item => buildEnrichedItem(item, {
+    brandName:      brandMap.get(item.brandId) ?? "",
+    modelName:      modelMap.get(item.modelId) ?? "",
+    categoryName:   item.categoryId ? catMap.get(item.categoryId) ?? null : null,
+    salesInv:       salesInvMap.get(item.id) ?? null,
+    imeiChangeCount: imeiCountMap.get(item.id) ?? 0,
+  }));
+}
+
+/** Pure data-shaping helper — no DB calls */
+function buildEnrichedItem(
+  item: typeof inventoryItemsTable.$inferSelect,
+  extra: {
+    brandName: string; modelName: string; categoryName: string | null;
+    salesInv: { id: number; invoiceNumber: string; paymentStatus: string; saleDate: unknown; customerName: string | null; customerMobile: string | null; customerCity: string | null; customerId: number; } | null;
+    imeiChangeCount: number;
+  },
+) {
+  const { brandName, modelName, categoryName, salesInv, imeiChangeCount } = extra;
+  return {
+    ...item,
+    brandName,
+    modelName,
+    categoryName,
+    productName: `${brandName} ${modelName}`.trim(),
+    landedCost:  parseFloat(String(item.landedCost)),
     sellingPrice: parseFloat(String(item.sellingPrice)),
-    deviceId: item.deviceId ?? null,
-    iccid: item.iccid ?? null,
-    msisdn: item.msisdn ?? null,
-    psid: item.psid ?? null,
-    notes: item.notes ?? null,
+    deviceId:    item.deviceId ?? null,
+    iccid:       item.iccid ?? null,
+    msisdn:      item.msisdn ?? null,
+    psid:        item.psid ?? null,
+    notes:       item.notes ?? null,
     trackerSimNo: item.trackerSimNo ?? null,
     supplierInvoiceNumber: item.supplierInvoiceNumber ?? null,
-    grnNumber: item.grnNumber ?? null,
+    grnNumber:   item.grnNumber ?? null,
     warrantyExpiry: item.warrantyExpiry ?? null,
-    categoryId: item.categoryId ?? null,
-    vendorId: item.vendorId ?? null,
+    categoryId:  item.categoryId ?? null,
+    vendorId:    item.vendorId ?? null,
     purchaseDate: String(item.purchaseDate),
-    createdAt: item.createdAt.toISOString(),
-    salesInvoiceId: salesInv?.id ?? null,
+    createdAt:   item.createdAt.toISOString(),
+    salesInvoiceId:     salesInv?.id ?? null,
     salesInvoiceNumber: salesInv?.invoiceNumber ?? null,
-    salePaymentStatus: salesInv?.paymentStatus ?? null,
-    saleDate: salesInv?.saleDate ? String(salesInv.saleDate) : null,
-    saleCustomerName: salesInv?.customerName ?? null,
+    salePaymentStatus:  salesInv?.paymentStatus ?? null,
+    saleDate:           salesInv?.saleDate ? String(salesInv.saleDate) : null,
+    saleCustomerName:   salesInv?.customerName ?? null,
     saleCustomerMobile: salesInv?.customerMobile ?? null,
-    saleCustomerCity: salesInv?.customerCity ?? null,
-    saleCustomerId: salesInv?.customerId ?? null,
-    imeiChangeCount: Number(imeiChangeCount),
+    saleCustomerCity:   salesInv?.customerCity ?? null,
+    saleCustomerId:     salesInv?.customerId ?? null,
+    imeiChangeCount,
   };
 }
 
 router.get("/inventory", async (req, res): Promise<void> => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-  const page = parseInt(String(req.query.page ?? "1"), 10);
-  const limit = parseInt(String(req.query.limit ?? "50"), 10);
+  const page  = Math.max(1, parseInt(String(req.query.page ?? "1"), 10) || 1);
+  const limit = Math.min(200, Math.max(1, parseInt(String(req.query.limit ?? "50"), 10) || 50));
   const offset = (page - 1) * limit;
   const search = String(req.query.search ?? "");
   const status = String(req.query.status ?? "");
@@ -613,33 +697,42 @@ router.get("/inventory", async (req, res): Promise<void> => {
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-  const [{ total }] = await db.select({ total: count() }).from(inventoryItemsTable).where(whereClause);
-  const items = await db.select().from(inventoryItemsTable).where(whereClause).limit(limit).offset(offset).orderBy(sql`${inventoryItemsTable.createdAt} desc`);
+  // Run count, page items, and full summary in parallel — 3 DB round-trips instead of 9
+  const [countResult, items, [summary]] = await Promise.all([
+    db.select({ total: count() }).from(inventoryItemsTable).where(whereClause),
+    db.select().from(inventoryItemsTable)
+      .where(whereClause)
+      .limit(limit)
+      .offset(offset)
+      .orderBy(desc(inventoryItemsTable.createdAt)),
+    // One aggregation query replaces 7 separate COUNT queries
+    db.select({
+      inStock:    sql<number>`count(*) filter (where ${inventoryItemsTable.status} = 'in_stock')`,
+      sold:       sql<number>`count(*) filter (where ${inventoryItemsTable.status} = 'sold')`,
+      damaged:    sql<number>`count(*) filter (where ${inventoryItemsTable.status} = 'damaged')`,
+      missing:    sql<number>`count(*) filter (where ${inventoryItemsTable.status} in ('missing','lost'))`,
+      notForUse:  sql<number>`count(*) filter (where ${inventoryItemsTable.status} in ('not_for_use','pta_blocked'))`,
+      ptaUnpaid:  sql<number>`count(*) filter (where ${inventoryItemsTable.ptaStatus} = 'unpaid')`,
+      ptaPending: sql<number>`count(*) filter (where ${inventoryItemsTable.ptaStatus} = 'unpaid' and ${inventoryItemsTable.status} = 'sold')`,
+    }).from(inventoryItemsTable),
+  ]);
 
-  const [inStock] = await db.select({ c: count() }).from(inventoryItemsTable).where(eq(inventoryItemsTable.status, "in_stock"));
-  const [sold] = await db.select({ c: count() }).from(inventoryItemsTable).where(eq(inventoryItemsTable.status, "sold"));
-  const [damaged] = await db.select({ c: count() }).from(inventoryItemsTable).where(eq(inventoryItemsTable.status, "damaged"));
-  const [missing] = await db.select({ c: count() }).from(inventoryItemsTable).where(
-    sql`${inventoryItemsTable.status} in ('missing','lost')`
-  );
-  const [notForUse] = await db.select({ c: count() }).from(inventoryItemsTable).where(
-    sql`${inventoryItemsTable.status} in ('not_for_use','pta_blocked')`
-  );
-  const [ptaPending] = await db.select({ c: count() }).from(inventoryItemsTable).where(
-    and(eq(inventoryItemsTable.ptaStatus, "unpaid"), eq(inventoryItemsTable.status, "sold"))
-  );
-  const [ptaUnpaid] = await db.select({ c: count() }).from(inventoryItemsTable).where(eq(inventoryItemsTable.ptaStatus, "unpaid"));
+  // Batch-enrich all page items: 5 parallel queries total regardless of page size
+  const enriched = await enrichItems(items);
 
-  const enriched = await Promise.all(items.map(enrichItem));
   res.json({
     items: enriched,
-    total,
+    total: countResult[0].total,
     page,
     limit,
     summary: {
-      inStock: inStock.c, sold: sold.c,
-      damaged: damaged.c, missing: missing.c, notForUse: notForUse.c,
-      ptaPending: ptaPending.c, ptaUnpaid: ptaUnpaid.c,
+      inStock:    Number(summary.inStock),
+      sold:       Number(summary.sold),
+      damaged:    Number(summary.damaged),
+      missing:    Number(summary.missing),
+      notForUse:  Number(summary.notForUse),
+      ptaUnpaid:  Number(summary.ptaUnpaid),
+      ptaPending: Number(summary.ptaPending),
     },
   });
 });

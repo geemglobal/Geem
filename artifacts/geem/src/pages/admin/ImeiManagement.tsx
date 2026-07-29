@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Cpu, Check, Clock, Trash2 } from "lucide-react";
 
 interface ImeiRow {
-  id: number; prefix13: string; imei15: string; serialNumber: number;
+  id: number; prefix12: string; imei15: string; serialNumber: number;
   isUsed: boolean; assignedInventoryItemId: number | null; usedAt: string | null; createdAt: string;
 }
 
@@ -75,7 +75,7 @@ export default function ImeiManagement() {
       <Card>
         <CardContent className="pt-6">
           <div className="flex gap-3 mb-4 flex-wrap">
-            <Input placeholder="Filter by prefix (13 digits)" value={filterPrefix} onChange={e => setFilterPrefix(e.target.value)} className="max-w-xs" />
+            <Input placeholder="Filter by prefix (12 digits)" value={filterPrefix} onChange={e => setFilterPrefix(e.target.value)} className="max-w-xs" />
             <div className="flex gap-1">
               {[["all", "All"], ["false", "Free"], ["true", "Used"]].map(([v, l]) => (
                 <Button key={v} size="sm" variant={filterUsed === v ? "default" : "outline"} onClick={() => setFilterUsed(v)}>{l}</Button>
@@ -88,7 +88,7 @@ export default function ImeiManagement() {
               <TableHeader>
                 <TableRow>
                   <TableHead>IMEI (15 digits)</TableHead>
-                  <TableHead>Prefix (13)</TableHead>
+                  <TableHead>Prefix (12)</TableHead>
                   <TableHead>Serial #</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Created</TableHead>
@@ -99,7 +99,7 @@ export default function ImeiManagement() {
                 {data?.rows.map(row => (
                   <TableRow key={row.id}>
                     <TableCell className="font-mono font-medium">{row.imei15}</TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{row.prefix13}</TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">{row.prefix12}</TableCell>
                     <TableCell>{String(row.serialNumber).padStart(2, "0")}</TableCell>
                     <TableCell>
                       {row.isUsed

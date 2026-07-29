@@ -28,10 +28,10 @@ function makeImei(prefix12: string, serial: number): string {
 
 // GET /imei-pool — list generated IMEIs
 router.get("/imei-pool", async (req, res): Promise<void> => {
-  const prefix = req.query.prefix ? String(req.query.prefix) : undefined;
+  const prefix = req.query.prefix ? String(req.query.prefix).slice(0, 12) : undefined;
   const used = req.query.used;
-  const limit = parseInt(String(req.query.limit ?? "100"), 10);
-  const offset = parseInt(String(req.query.offset ?? "0"), 10);
+  const limit  = Math.min(500, Math.max(1, parseInt(String(req.query.limit ?? "100"), 10) || 100));
+  const offset = Math.max(0, parseInt(String(req.query.offset ?? "0"), 10) || 0);
 
   const conditions = [];
   if (prefix) conditions.push(eq(imeiPoolTable.prefix12, prefix));
@@ -116,9 +116,10 @@ router.get("/imei-pool/next-free", async (req, res): Promise<void> => {
 // POST /imei-pool/:id/assign — assign a pool IMEI to an inventory item (IMEI replacement)
 router.post("/imei-pool/:id/assign", async (req, res): Promise<void> => {
   const poolId = parseInt(String(req.params.id), 10);
-  const { inventoryItemId } = req.body;
-  if (!inventoryItemId) {
-    res.status(400).json({ error: "inventoryItemId required" });
+  if (isNaN(poolId) || poolId <= 0) { res.status(400).json({ error: "Invalid pool entry id" }); return; }
+  const inventoryItemId = parseInt(String(req.body.inventoryItemId), 10);
+  if (isNaN(inventoryItemId) || inventoryItemId <= 0) {
+    res.status(400).json({ error: "inventoryItemId must be a positive integer" });
     return;
   }
 
@@ -186,6 +187,7 @@ router.post("/imei-pool/:id/assign", async (req, res): Promise<void> => {
 // DELETE /imei-pool/:id — delete an unused pool entry
 router.delete("/imei-pool/:id", async (req, res): Promise<void> => {
   const id = parseInt(String(req.params.id), 10);
+  if (isNaN(id) || id <= 0) { res.status(400).json({ error: "Invalid id" }); return; }
   const [row] = await db.select().from(imeiPoolTable).where(eq(imeiPoolTable.id, id));
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
   if (row.isUsed) { res.status(409).json({ error: "Cannot delete a used IMEI" }); return; }
