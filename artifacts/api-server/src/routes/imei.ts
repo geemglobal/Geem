@@ -4,7 +4,7 @@ import { db, imeiPoolTable, inventoryItemsTable, imeiHistoryTable } from "@works
 
 const router: IRouter = Router();
 
-/** Luhn check digit for first 14 digits */
+/** Luhn check digit for a 14-digit string */
 function luhnDigit(digits14: string): number {
   const digits = digits14.split("").map(Number);
   let sum = 0;
@@ -19,22 +19,22 @@ function luhnDigit(digits14: string): number {
   return (10 - (sum % 10)) % 10;
 }
 
-/** Generate 15-digit IMEI from 13-digit prefix + 1-digit serial (14 digits total → luhn) */
-function makeImei(prefix13: string, serial: number): string {
-  const serialStr = String(serial); // single digit: 0-9
-  const digits14 = prefix13 + serialStr;
+/** Generate 15-digit IMEI from 12-digit prefix + 2-digit counter (14 digits total → luhn) */
+function makeImei(prefix12: string, serial: number): string {
+  const serialStr = String(serial).padStart(2, "0"); // two digits: 00–99
+  const digits14 = prefix12 + serialStr;
   return digits14 + luhnDigit(digits14);
 }
 
 // GET /imei-pool — list generated IMEIs
 router.get("/imei-pool", async (req, res): Promise<void> => {
-  const prefix = req.query.prefix ? String(req.query.prefix).slice(0, 13) : undefined;
+  const prefix = req.query.prefix ? String(req.query.prefix).slice(0, 12) : undefined;
   const used = req.query.used;
   const limit  = Math.min(500, Math.max(1, parseInt(String(req.query.limit ?? "100"), 10) || 100));
   const offset = Math.max(0, parseInt(String(req.query.offset ?? "0"), 10) || 0);
 
   const conditions = [];
-  if (prefix) conditions.push(eq(imeiPoolTable.prefix13, prefix));
+  if (prefix) conditions.push(eq(imeiPoolTable.prefix12, prefix));
   if (used === "true") conditions.push(eq(imeiPoolTable.isUsed, true));
   if (used === "false") conditions.push(eq(imeiPoolTable.isUsed, false));
 
@@ -54,40 +54,40 @@ router.get("/imei-pool", async (req, res): Promise<void> => {
   res.json({ total, rows });
 });
 
-// GET /imei-pool/prefix-summary — unique prefixes with stats (for "Generate Next 10" UI)
+// GET /imei-pool/prefix-summary — unique machine prefixes with stats
 router.get("/imei-pool/prefix-summary", async (req, res): Promise<void> => {
   const rows = await db
     .select({
-      prefix13: imeiPoolTable.prefix13,
-      total:    sql<number>`count(*)`,
-      used:     sql<number>`sum(case when ${imeiPoolTable.isUsed} then 1 else 0 end)`,
-      free:     sql<number>`sum(case when not ${imeiPoolTable.isUsed} then 1 else 0 end)`,
+      prefix12:  imeiPoolTable.prefix12,
+      total:     sql<number>`count(*)`,
+      used:      sql<number>`sum(case when ${imeiPoolTable.isUsed} then 1 else 0 end)`,
+      free:      sql<number>`sum(case when not ${imeiPoolTable.isUsed} then 1 else 0 end)`,
       maxSerial: sql<number>`max(${imeiPoolTable.serialNumber})`,
     })
     .from(imeiPoolTable)
-    .groupBy(imeiPoolTable.prefix13)
-    .orderBy(imeiPoolTable.prefix13);
+    .groupBy(imeiPoolTable.prefix12)
+    .orderBy(imeiPoolTable.prefix12);
   res.json(rows);
 });
 
 // POST /imei-pool/generate — generate batch of IMEIs
 router.post("/imei-pool/generate", async (req, res): Promise<void> => {
-  const { prefix13, quantity } = req.body;
-  if (!prefix13 || typeof prefix13 !== "string" || prefix13.length !== 13 || !/^\d{13}$/.test(prefix13)) {
-    res.status(400).json({ error: "prefix13 must be exactly 13 digits" });
+  const { prefix12, quantity } = req.body;
+  if (!prefix12 || typeof prefix12 !== "string" || prefix12.length !== 12 || !/^\d{12}$/.test(prefix12)) {
+    res.status(400).json({ error: "prefix12 must be exactly 12 digits" });
     return;
   }
-  const qty = parseInt(String(quantity ?? 1), 10);
-  if (qty < 1 || qty > 10) {
-    res.status(400).json({ error: "quantity must be 1–10 (serial digits 0–9)" });
+  const qty = parseInt(String(quantity ?? 10), 10);
+  if (qty < 1 || qty > 100) {
+    res.status(400).json({ error: "quantity must be 1–100" });
     return;
   }
 
-  // Find highest existing serial for this prefix
+  // Find highest existing serial (2-digit counter) for this machine prefix
   const existing = await db
     .select({ maxSerial: sql<number>`max(${imeiPoolTable.serialNumber})` })
     .from(imeiPoolTable)
-    .where(eq(imeiPoolTable.prefix13, prefix13));
+    .where(eq(imeiPoolTable.prefix12, prefix12));
   const startSerial = existing[0]?.maxSerial != null ? existing[0].maxSerial + 1 : 0;
 
   // Gather existing IMEIs in inventory so we skip duplicates
@@ -101,21 +101,20 @@ router.post("/imei-pool/generate", async (req, res): Promise<void> => {
   const poolExisting = await db
     .select({ imei15: imeiPoolTable.imei15 })
     .from(imeiPoolTable)
-    .where(eq(imeiPoolTable.prefix13, prefix13));
+    .where(eq(imeiPoolTable.prefix12, prefix12));
   const poolSet = new Set(poolExisting.map(r => r.imei15));
 
   const inserts = [];
   for (let i = 0; i < qty; i++) {
     const serial = startSerial + i;
-    if (serial > 9) break; // cap at 9 (single digit 0-9)
-    const imei15 = makeImei(prefix13, serial);
-    // Skip duplicates in both pool and inventory
+    if (serial > 99) break; // cap at 99 (2-digit counter 00–99, max 100 per machine)
+    const imei15 = makeImei(prefix12, serial);
     if (poolSet.has(imei15) || inventorySet.has(imei15)) continue;
-    inserts.push({ prefix13, imei15, serialNumber: serial });
+    inserts.push({ prefix12, imei15, serialNumber: serial });
   }
 
   if (!inserts.length) {
-    res.status(400).json({ error: "All serials (0–9) already used for this prefix, or all generated IMEIs already exist." });
+    res.status(400).json({ error: "All counters (00–99) already used for this prefix, or all generated IMEIs already exist." });
     return;
   }
 
@@ -130,7 +129,7 @@ router.get("/imei-pool/next-free", async (req, res): Promise<void> => {
     eq(imeiPoolTable.isUsed, false),
     sql`${imeiPoolTable.imei15} NOT IN (SELECT imei FROM inventory_items WHERE imei IS NOT NULL)`,
   ];
-  if (prefix) conditions.push(eq(imeiPoolTable.prefix13, prefix));
+  if (prefix) conditions.push(eq(imeiPoolTable.prefix12, prefix));
 
   const [row] = await db
     .select()

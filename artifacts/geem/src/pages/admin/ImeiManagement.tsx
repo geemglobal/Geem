@@ -12,25 +12,26 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Cpu, Check, Clock, Trash2, Zap } from "lucide-react";
 
 interface ImeiRow {
-  id: number; prefix13: string; imei15: string; serialNumber: number;
+  id: number; prefix12: string; imei15: string; serialNumber: number;
   isUsed: boolean; assignedInventoryItemId: number | null; usedAt: string | null; createdAt: string;
 }
 
 interface PrefixSummary {
-  prefix13: string; total: number; used: number; free: number; maxSerial: number;
+  prefix12: string; total: number; used: number; free: number; maxSerial: number;
 }
 
 export default function ImeiManagement() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [showGenerate, setShowGenerate] = useState(false);
-  const [prefix13, setPrefix13] = useState("");
+  const [prefix12, setPrefix12] = useState("");
   const [quantity, setQuantity] = useState("10");
   const [filterUsed, setFilterUsed] = useState<string>("all");
   const [filterPrefix, setFilterPrefix] = useState("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["imei-pool", filterUsed, filterPrefix],
+    staleTime: 0,
     queryFn: () => {
       const params = new URLSearchParams();
       if (filterUsed !== "all") params.set("used", filterUsed);
@@ -42,11 +43,12 @@ export default function ImeiManagement() {
 
   const { data: prefixSummaries } = useQuery({
     queryKey: ["imei-prefix-summary"],
+    staleTime: 0,
     queryFn: () => axiosInstance.get<PrefixSummary[]>("/imei-pool/prefix-summary").then(r => r.data),
   });
 
   const generateMutation = useMutation({
-    mutationFn: (payload: { prefix13: string; quantity: number }) =>
+    mutationFn: (payload: { prefix12: string; quantity: number }) =>
       axiosInstance.post("/imei-pool/generate", payload).then(r => r.data),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["imei-pool"] });
@@ -57,14 +59,17 @@ export default function ImeiManagement() {
     onError: (e: any) => toast({ title: e?.response?.data?.error ?? "Generation failed", variant: "destructive" }),
   });
 
-  // "Generate Next 10" for an existing prefix — no dialog needed
+  // One-click "Generate Next 10" for an existing machine prefix
   const quickGenerateMutation = useMutation({
     mutationFn: (p: string) =>
-      axiosInstance.post("/imei-pool/generate", { prefix13: p, quantity: 10 }).then(r => r.data),
+      axiosInstance.post("/imei-pool/generate", { prefix12: p, quantity: 10 }).then(r => r.data),
     onSuccess: (data, prefix) => {
       qc.invalidateQueries({ queryKey: ["imei-pool"] });
       qc.invalidateQueries({ queryKey: ["imei-prefix-summary"] });
-      toast({ title: `Generated ${data.generated} new IMEIs for …${prefix.slice(-6)}`, description: data.rows?.[0]?.imei15 ? `First: ${data.rows[0].imei15}` : undefined });
+      toast({
+        title: `Generated ${data.generated} new IMEIs for …${prefix.slice(-6)}`,
+        description: data.rows?.[0]?.imei15 ? `First: ${data.rows[0].imei15}` : undefined,
+      });
     },
     onError: (e: any) => toast({ title: e?.response?.data?.error ?? "Generation failed", variant: "destructive" }),
   });
@@ -83,8 +88,8 @@ export default function ImeiManagement() {
   const usedCount = data?.rows.filter(r => r.isUsed).length ?? 0;
 
   // Luhn preview helper (mirrors backend)
-  function previewImei(p13: string, serial: number): string {
-    const digits14 = p13 + String(serial);
+  function previewImei(p12: string, serial: number): string {
+    const digits14 = p12 + String(serial).padStart(2, "0");
     const arr = digits14.split("").map(Number);
     let sum = 0;
     for (let i = 0; i < arr.length; i++) { let d = arr[i]; if ((arr.length - i) % 2 !== 0) { d *= 2; if (d > 9) d -= 9; } sum += d; }
@@ -109,7 +114,7 @@ export default function ImeiManagement() {
         <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Used / Assigned</p><p className="text-2xl font-bold text-muted-foreground">{usedCount}</p></CardContent></Card>
       </div>
 
-      {/* ── Prefix Summary — "Generate Next 10" per machine ── */}
+      {/* ── Machine Prefixes — one button per machine ── */}
       {prefixSummaries && prefixSummaries.length > 0 && (
         <Card>
           <CardHeader className="pb-3">
@@ -119,36 +124,43 @@ export default function ImeiManagement() {
           </CardHeader>
           <CardContent className="pt-0">
             <div className="space-y-2">
-              {prefixSummaries.map(ps => (
-                <div key={ps.prefix13} className="flex items-center justify-between rounded-lg border px-4 py-2.5 gap-4">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="font-mono text-sm font-semibold truncate">{ps.prefix13}</span>
-                    <div className="flex gap-1.5 flex-shrink-0">
-                      <Badge variant="outline" className="text-green-600 border-green-300 text-xs gap-1">
-                        <Clock className="h-2.5 w-2.5" />{ps.free} free
-                      </Badge>
-                      <Badge variant="secondary" className="text-xs gap-1">
-                        <Check className="h-2.5 w-2.5" />{ps.used} used
-                      </Badge>
+              {prefixSummaries.map(ps => {
+                const nextSerial = ps.maxSerial + 1;
+                const remaining  = 99 - ps.maxSerial;
+                const allUsed    = ps.maxSerial >= 99;
+                return (
+                  <div key={ps.prefix12} className="flex items-center justify-between rounded-lg border px-4 py-2.5 gap-4">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="font-mono text-sm font-semibold truncate">{ps.prefix12}</span>
+                      <div className="flex gap-1.5 flex-shrink-0">
+                        <Badge variant="outline" className="text-green-600 border-green-300 text-xs gap-1">
+                          <Clock className="h-2.5 w-2.5" />{ps.free} free
+                        </Badge>
+                        <Badge variant="secondary" className="text-xs gap-1">
+                          <Check className="h-2.5 w-2.5" />{ps.used} used
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-xs text-muted-foreground">
+                        {allUsed
+                          ? "All 100 serials used"
+                          : `Next: ${String(nextSerial).padStart(2, "0")} (${remaining} remaining)`}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs gap-1"
+                        disabled={allUsed || quickGenerateMutation.isPending}
+                        onClick={() => quickGenerateMutation.mutate(ps.prefix12)}
+                      >
+                        <Zap className="h-3 w-3" />
+                        Generate Next {Math.min(10, remaining)}
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-xs text-muted-foreground">
-                      {ps.maxSerial < 9 ? `Next serial: ${ps.maxSerial + 1}` : "All 10 serials used"}
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 text-xs gap-1"
-                      disabled={ps.maxSerial >= 9 || quickGenerateMutation.isPending}
-                      onClick={() => quickGenerateMutation.mutate(ps.prefix13)}
-                    >
-                      <Zap className="h-3 w-3" />
-                      Generate Next {Math.min(10, 10 - (ps.maxSerial + 1))}
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>
@@ -159,9 +171,9 @@ export default function ImeiManagement() {
         <CardContent className="pt-6">
           <div className="flex gap-3 mb-4 flex-wrap">
             <Input
-              placeholder="Filter by prefix (13 digits)"
+              placeholder="Filter by prefix (12 digits)"
               value={filterPrefix}
-              onChange={e => setFilterPrefix(e.target.value.replace(/\D/g, "").slice(0, 13))}
+              onChange={e => setFilterPrefix(e.target.value.replace(/\D/g, "").slice(0, 12))}
               className="max-w-xs"
             />
             <div className="flex gap-1">
@@ -176,8 +188,8 @@ export default function ImeiManagement() {
               <TableHeader>
                 <TableRow>
                   <TableHead>IMEI (15 digits)</TableHead>
-                  <TableHead>Prefix (13)</TableHead>
-                  <TableHead>Serial</TableHead>
+                  <TableHead>Prefix (12)</TableHead>
+                  <TableHead>Counter</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead className="text-right">Action</TableHead>
@@ -187,8 +199,8 @@ export default function ImeiManagement() {
                 {data?.rows.map(row => (
                   <TableRow key={row.id}>
                     <TableCell className="font-mono font-medium">{row.imei15}</TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{row.prefix13}</TableCell>
-                    <TableCell className="font-mono">{row.serialNumber}</TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">{row.prefix12}</TableCell>
+                    <TableCell className="font-mono">{String(row.serialNumber).padStart(2, "0")}</TableCell>
                     <TableCell>
                       {row.isUsed
                         ? <Badge variant="secondary" className="gap-1"><Check className="h-3 w-3" />Used{row.assignedInventoryItemId ? ` (INV#${row.assignedInventoryItemId})` : ""}</Badge>
@@ -222,32 +234,32 @@ export default function ImeiManagement() {
           <DialogHeader><DialogTitle>Generate IMEI Batch</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>First 13 Digits of IMEI *</Label>
+              <Label>First 12 Digits of IMEI (Machine Prefix) *</Label>
               <Input
-                value={prefix13}
-                onChange={e => setPrefix13(e.target.value.replace(/\D/g, "").slice(0, 13))}
-                placeholder="e.g. 8665610100050"
+                value={prefix12}
+                onChange={e => setPrefix12(e.target.value.replace(/\D/g, "").slice(0, 12))}
+                placeholder="e.g. 866561010005"
                 className="font-mono"
-                maxLength={13}
+                maxLength={12}
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Enter TAC (8 digits) + first 5 SNR digits. The 14th digit (serial 0–9) and 15th digit (Luhn check) are auto-generated. Max 10 IMEIs per prefix.
+                TAC (8 digits) + first 4 SNR digits. The 2-digit counter (digits 13–14) continues from the last generated IMEI, and digit 15 is the Luhn check. Up to 100 IMEIs per machine (00–99).
               </p>
             </div>
             <div>
-              <Label>Quantity (1–10) *</Label>
+              <Label>Quantity (1–100) *</Label>
               <Input
-                type="number" min={1} max={10}
+                type="number" min={1} max={100}
                 value={quantity}
                 onChange={e => setQuantity(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground mt-1">Each IMEI gets a unique 1-digit serial (0, 1, 2…9) with Luhn check digit.</p>
+              <p className="text-xs text-muted-foreground mt-1">Generation continues from the last IMEI number for this machine.</p>
             </div>
-            {prefix13.length === 13 && (
+            {prefix12.length === 12 && (
               <div className="bg-muted rounded-lg p-3 text-sm space-y-1">
-                <p className="font-medium">Preview (first 3):</p>
-                {[0, 1, 2].slice(0, parseInt(quantity) || 1).map(n => (
-                  <p key={n} className="font-mono text-xs">{previewImei(prefix13, n)} (serial {n})</p>
+                <p className="font-medium">Preview (first 3 starting from 00):</p>
+                {[0, 1, 2].slice(0, Math.min(3, parseInt(quantity) || 1)).map(n => (
+                  <p key={n} className="font-mono text-xs">{previewImei(prefix12, n)} (counter {String(n).padStart(2,"0")})</p>
                 ))}
               </div>
             )}
@@ -255,8 +267,8 @@ export default function ImeiManagement() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowGenerate(false)}>Cancel</Button>
             <Button
-              onClick={() => generateMutation.mutate({ prefix13, quantity: parseInt(quantity) })}
-              disabled={prefix13.length !== 13 || generateMutation.isPending}
+              onClick={() => generateMutation.mutate({ prefix12, quantity: parseInt(quantity) })}
+              disabled={prefix12.length !== 12 || generateMutation.isPending}
             >
               {generateMutation.isPending ? "Generating..." : "Generate"}
             </Button>
