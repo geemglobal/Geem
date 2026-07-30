@@ -19,10 +19,9 @@ function luhnDigit(digits14: string): number {
   return (10 - (sum % 10)) % 10;
 }
 
-/** Generate 15-digit IMEI from 12-digit prefix + 2-digit counter (14 digits total → luhn) */
-function makeImei(prefix12: string, serial: number): string {
-  const serialStr = String(serial).padStart(2, "0"); // two digits: 00–99
-  const digits14 = prefix12 + serialStr;
+/** Generate 15-digit IMEI: prefix12 (12) + 2-digit counter (00-99) + Luhn */
+function makeImei(prefix12: string, counter2: number): string {
+  const digits14 = prefix12 + String(counter2).padStart(2, "0");
   return digits14 + luhnDigit(digits14);
 }
 
@@ -54,7 +53,7 @@ router.get("/imei-pool", async (req, res): Promise<void> => {
   res.json({ total, rows });
 });
 
-// GET /imei-pool/prefix-summary — unique machine prefixes with stats
+// GET /imei-pool/prefix-summary — unique machine prefixes with stats (for Quick Generate)
 router.get("/imei-pool/prefix-summary", async (req, res): Promise<void> => {
   const rows = await db
     .select({
@@ -71,24 +70,61 @@ router.get("/imei-pool/prefix-summary", async (req, res): Promise<void> => {
 });
 
 // POST /imei-pool/generate — generate batch of IMEIs
+//   Body option A (dialog):       { prefix13: "8665610100050", quantity: 10 }
+//     → 13-digit prefix, 1-digit serial (0-9), stored as 2-digit = digit13*10 + serial
+//   Body option B (quick button): { prefix12: "866561010005",  quantity: 10 }
+//     → 12-digit prefix, 2-digit counter continues from last maxSerial
 router.post("/imei-pool/generate", async (req, res): Promise<void> => {
-  const { prefix12, quantity } = req.body;
-  if (!prefix12 || typeof prefix12 !== "string" || prefix12.length !== 12 || !/^\d{12}$/.test(prefix12)) {
-    res.status(400).json({ error: "prefix12 must be exactly 12 digits" });
-    return;
-  }
-  const qty = parseInt(String(quantity ?? 10), 10);
-  if (qty < 1 || qty > 100) {
-    res.status(400).json({ error: "quantity must be 1–100" });
+  const { prefix12: p12raw, prefix13: p13raw, quantity } = req.body;
+
+  let p12: string;
+  let serialMin: number;
+  let serialMax: number;
+
+  if (p13raw) {
+    // ── 13-digit prefix mode (from dialog) ──────────────────────────────────
+    if (typeof p13raw !== "string" || p13raw.length !== 13 || !/^\d{13}$/.test(p13raw)) {
+      res.status(400).json({ error: "prefix13 must be exactly 13 digits" });
+      return;
+    }
+    p12 = p13raw.slice(0, 12);
+    const digit13 = parseInt(p13raw[12], 10); // 13th digit: 0-9
+    serialMin = digit13 * 10;                 // e.g. digit13=0 → range 0-9
+    serialMax = serialMin + 9;
+  } else if (p12raw) {
+    // ── 12-digit prefix mode (from Quick Generate button) ───────────────────
+    if (typeof p12raw !== "string" || p12raw.length !== 12 || !/^\d{12}$/.test(p12raw)) {
+      res.status(400).json({ error: "prefix12 must be exactly 12 digits" });
+      return;
+    }
+    p12 = p12raw;
+    serialMin = 0;
+    serialMax = 99;
+  } else {
+    res.status(400).json({ error: "Either prefix13 (13 digits) or prefix12 (12 digits) is required" });
     return;
   }
 
-  // Find highest existing serial (2-digit counter) for this machine prefix
+  const qty = parseInt(String(quantity ?? 10), 10);
+  const maxQty = serialMax - serialMin + 1; // 10 for prefix13 mode, 100 for prefix12 mode
+  if (qty < 1 || qty > maxQty) {
+    res.status(400).json({ error: `quantity must be 1–${maxQty}` });
+    return;
+  }
+
+  // Find highest existing 2-digit counter in the applicable range
   const existing = await db
     .select({ maxSerial: sql<number>`max(${imeiPoolTable.serialNumber})` })
     .from(imeiPoolTable)
-    .where(eq(imeiPoolTable.prefix12, prefix12));
-  const startSerial = existing[0]?.maxSerial != null ? existing[0].maxSerial + 1 : 0;
+    .where(
+      and(
+        eq(imeiPoolTable.prefix12, p12),
+        sql`${imeiPoolTable.serialNumber} >= ${serialMin}`,
+        sql`${imeiPoolTable.serialNumber} <= ${serialMax}`
+      )
+    );
+  const lastSerial = existing[0]?.maxSerial;
+  const startSerial = lastSerial != null ? lastSerial + 1 : serialMin;
 
   // Gather existing IMEIs in inventory so we skip duplicates
   const inventoryImeis = await db
@@ -101,20 +137,23 @@ router.post("/imei-pool/generate", async (req, res): Promise<void> => {
   const poolExisting = await db
     .select({ imei15: imeiPoolTable.imei15 })
     .from(imeiPoolTable)
-    .where(eq(imeiPoolTable.prefix12, prefix12));
+    .where(eq(imeiPoolTable.prefix12, p12));
   const poolSet = new Set(poolExisting.map(r => r.imei15));
 
   const inserts = [];
   for (let i = 0; i < qty; i++) {
-    const serial = startSerial + i;
-    if (serial > 99) break; // cap at 99 (2-digit counter 00–99, max 100 per machine)
-    const imei15 = makeImei(prefix12, serial);
+    const counter2 = startSerial + i;
+    if (counter2 > serialMax) break;
+    const imei15 = makeImei(p12, counter2);
     if (poolSet.has(imei15) || inventorySet.has(imei15)) continue;
-    inserts.push({ prefix12, imei15, serialNumber: serial });
+    inserts.push({ prefix12: p12, imei15, serialNumber: counter2 });
   }
 
   if (!inserts.length) {
-    res.status(400).json({ error: "All counters (00–99) already used for this prefix, or all generated IMEIs already exist." });
+    const rangeLabel = p13raw
+      ? `All serials (0–9) already used for prefix ${p13raw}`
+      : `All counters (00–99) already used for this machine`;
+    res.status(400).json({ error: `${rangeLabel}, or all generated IMEIs already exist.` });
     return;
   }
 
@@ -152,19 +191,15 @@ router.post("/imei-pool/:id/assign", async (req, res): Promise<void> => {
   const inventoryItemId = parseInt(String(req.body.inventoryItemId), 10);
   if (isNaN(inventoryItemId) || inventoryItemId <= 0) { res.status(400).json({ error: "Invalid inventoryItemId" }); return; }
 
-  // Get the pool entry
   const [poolEntry] = await db.select().from(imeiPoolTable).where(eq(imeiPoolTable.id, poolId));
   if (!poolEntry) { res.status(404).json({ error: "Pool entry not found" }); return; }
   if (poolEntry.isUsed) { res.status(409).json({ error: "This IMEI is already used" }); return; }
 
-  // Get the current inventory item
   const [current] = await db.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.id, inventoryItemId));
   if (!current) { res.status(404).json({ error: "Inventory item not found" }); return; }
 
-  // Determine status to restore
   const restoreStatus = current.status === "pta_blocked" ? "available" : current.status;
 
-  // Assign the IMEI
   let inv;
   try {
     [inv] = await db
@@ -183,13 +218,12 @@ router.post("/imei-pool/:id/assign", async (req, res): Promise<void> => {
   }
   if (!inv) { res.status(404).json({ error: "Inventory item not found" }); return; }
 
-  // Log IMEI change to history
   const assignReason =
     typeof req.body.reason === "string" && req.body.reason.trim()
       ? req.body.reason.trim()
       : "Auto-assigned from IMEI pool (PTA Blocked)";
   await db.insert(imeiHistoryTable).values({
-    inventoryItemId: inventoryItemId,
+    inventoryItemId,
     oldImei: current.imei,
     newImei: poolEntry.imei15,
     previousStatus: current.status === "pta_blocked" ? current.status : null,
@@ -198,7 +232,6 @@ router.post("/imei-pool/:id/assign", async (req, res): Promise<void> => {
     source: "pool",
   });
 
-  // Mark pool entry as used
   await db
     .update(imeiPoolTable)
     .set({ isUsed: true, assignedInventoryItemId: inventoryItemId, usedAt: new Date() })

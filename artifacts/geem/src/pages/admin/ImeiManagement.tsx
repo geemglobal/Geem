@@ -24,7 +24,7 @@ export default function ImeiManagement() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [showGenerate, setShowGenerate] = useState(false);
-  const [prefix12, setPrefix12] = useState("");
+  const [prefix13, setPrefix13] = useState("");
   const [quantity, setQuantity] = useState("10");
   const [filterUsed, setFilterUsed] = useState<string>("all");
   const [filterPrefix, setFilterPrefix] = useState("");
@@ -47,8 +47,9 @@ export default function ImeiManagement() {
     queryFn: () => axiosInstance.get<PrefixSummary[]>("/imei-pool/prefix-summary").then(r => r.data),
   });
 
+  // Dialog: manual generation with 13-digit prefix
   const generateMutation = useMutation({
-    mutationFn: (payload: { prefix12: string; quantity: number }) =>
+    mutationFn: (payload: { prefix13: string; quantity: number }) =>
       axiosInstance.post("/imei-pool/generate", payload).then(r => r.data),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["imei-pool"] });
@@ -59,7 +60,7 @@ export default function ImeiManagement() {
     onError: (e: any) => toast({ title: e?.response?.data?.error ?? "Generation failed", variant: "destructive" }),
   });
 
-  // One-click "Generate Next 10" for an existing machine prefix
+  // Quick Generate: one-click with 12-digit machine prefix, continues 2-digit counter
   const quickGenerateMutation = useMutation({
     mutationFn: (p: string) =>
       axiosInstance.post("/imei-pool/generate", { prefix12: p, quantity: 10 }).then(r => r.data),
@@ -87,14 +88,19 @@ export default function ImeiManagement() {
   const freeCount = data?.rows.filter(r => !r.isUsed).length ?? 0;
   const usedCount = data?.rows.filter(r => r.isUsed).length ?? 0;
 
-  // Luhn preview helper (mirrors backend)
-  function previewImei(p12: string, serial: number): string {
-    const digits14 = p12 + String(serial).padStart(2, "0");
+  // Luhn preview helper: prefix12 + 2-digit counter → 15-digit IMEI
+  function previewImei(p12: string, counter2: number): string {
+    const digits14 = p12 + String(counter2).padStart(2, "0");
     const arr = digits14.split("").map(Number);
     let sum = 0;
     for (let i = 0; i < arr.length; i++) { let d = arr[i]; if ((arr.length - i) % 2 !== 0) { d *= 2; if (d > 9) d -= 9; } sum += d; }
     return digits14 + ((10 - (sum % 10)) % 10);
   }
+
+  // Derive preview starting counter from 13-digit prefix: digit13 * 10 + 0
+  const previewStartCounter = prefix13.length === 13
+    ? parseInt(prefix13[12], 10) * 10
+    : 0;
 
   return (
     <div className="space-y-6">
@@ -228,38 +234,38 @@ export default function ImeiManagement() {
         </CardContent>
       </Card>
 
-      {/* ── Generate Dialog ── */}
+      {/* ── Generate Dialog — 13-digit prefix ── */}
       <Dialog open={showGenerate} onOpenChange={setShowGenerate}>
         <DialogContent>
           <DialogHeader><DialogTitle>Generate IMEI Batch</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>First 12 Digits of IMEI (Machine Prefix) *</Label>
+              <Label>First 13 Digits of IMEI *</Label>
               <Input
-                value={prefix12}
-                onChange={e => setPrefix12(e.target.value.replace(/\D/g, "").slice(0, 12))}
-                placeholder="e.g. 866561010005"
+                value={prefix13}
+                onChange={e => setPrefix13(e.target.value.replace(/\D/g, "").slice(0, 13))}
+                placeholder="e.g. 8665610100050"
                 className="font-mono"
-                maxLength={12}
+                maxLength={13}
               />
               <p className="text-xs text-muted-foreground mt-1">
-                TAC (8 digits) + first 4 SNR digits. The 2-digit counter (digits 13–14) continues from the last generated IMEI, and digit 15 is the Luhn check. Up to 100 IMEIs per machine (00–99).
+                TAC (8 digits) + first 5 SNR digits. Digit 14 (serial 0–9) continues from the last generated, digit 15 is Luhn. Max 10 IMEIs per 13-digit prefix.
               </p>
             </div>
             <div>
-              <Label>Quantity (1–100) *</Label>
+              <Label>Quantity (1–10) *</Label>
               <Input
-                type="number" min={1} max={100}
+                type="number" min={1} max={10}
                 value={quantity}
                 onChange={e => setQuantity(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground mt-1">Generation continues from the last IMEI number for this machine.</p>
+              <p className="text-xs text-muted-foreground mt-1">Generation continues from the last IMEI for this prefix.</p>
             </div>
-            {prefix12.length === 12 && (
+            {prefix13.length === 13 && (
               <div className="bg-muted rounded-lg p-3 text-sm space-y-1">
-                <p className="font-medium">Preview (first 3 starting from 00):</p>
-                {[0, 1, 2].slice(0, Math.min(3, parseInt(quantity) || 1)).map(n => (
-                  <p key={n} className="font-mono text-xs">{previewImei(prefix12, n)} (counter {String(n).padStart(2,"0")})</p>
+                <p className="font-medium">Preview (first {Math.min(3, parseInt(quantity) || 1)} starting from {String(previewStartCounter).padStart(2,"0")}):</p>
+                {Array.from({ length: Math.min(3, parseInt(quantity) || 1) }, (_, n) => previewStartCounter + n).map(c => (
+                  <p key={c} className="font-mono text-xs">{previewImei(prefix13.slice(0, 12), c)} (serial {c - previewStartCounter})</p>
                 ))}
               </div>
             )}
@@ -267,8 +273,8 @@ export default function ImeiManagement() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowGenerate(false)}>Cancel</Button>
             <Button
-              onClick={() => generateMutation.mutate({ prefix12, quantity: parseInt(quantity) })}
-              disabled={prefix12.length !== 12 || generateMutation.isPending}
+              onClick={() => generateMutation.mutate({ prefix13, quantity: parseInt(quantity) })}
+              disabled={prefix13.length !== 13 || generateMutation.isPending}
             >
               {generateMutation.isPending ? "Generating..." : "Generate"}
             </Button>
