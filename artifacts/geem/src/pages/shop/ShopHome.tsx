@@ -79,8 +79,8 @@ function ProductCard({ product }: { product: Product }) {
             <ShoppingCart className="h-3 w-3 mr-1.5" />Add to Cart
           </Button>
         ) : (
-          <Button className="w-full mt-3 h-8 text-xs bg-primary/10 text-primary hover:bg-primary/20 border border-primary/30" variant="ghost" asChild>
-            <span onClick={(e) => { e.preventDefault(); openWhatsApp(GEEM_WA, `I'd like to inquire about: ${product.title}`); }}>Get Price</span>
+          <Button className="w-full mt-3 h-8 text-xs bg-orange-500 hover:bg-orange-600 text-white border-0" onClick={(e) => { e.preventDefault(); openWhatsApp(GEEM_WA, `I'd like to order (On Demand): ${product.title}`); }}>
+            <MessageCircle className="h-3 w-3 mr-1.5" />On Demand — Get Price
           </Button>
         )}
       </div>

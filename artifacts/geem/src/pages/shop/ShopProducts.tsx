@@ -88,6 +88,22 @@ function ProductCard({ p }: { p: Product }) {
               >
                 <MessageCircle className="h-3.5 w-3.5" />Get Price / Quote
               </button>
+            ) : p.stockCount === 0 ? (
+              <div className="space-y-1.5">
+                {p.salePrice ? (
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-bold text-primary/60 line-through">Rs {p.salePrice.toLocaleString()}</p>
+                  </div>
+                ) : p.price > 1 ? (
+                  <p className="text-sm font-bold text-primary/60 line-through">Rs {p.price.toLocaleString()}</p>
+                ) : null}
+                <button
+                  onClick={e => { e.preventDefault(); waClick(p.title); }}
+                  className="w-full inline-flex items-center justify-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white transition-colors"
+                >
+                  <MessageCircle className="h-3.5 w-3.5" />On Demand — Get Price
+                </button>
+              </div>
             ) : p.salePrice ? (
               <div className="flex items-center gap-2">
                 <p className="text-base font-bold text-primary">Rs {p.salePrice.toLocaleString()}</p>
