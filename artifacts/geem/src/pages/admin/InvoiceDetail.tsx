@@ -38,11 +38,7 @@ interface Invoice {
   currency: string; currencySymbol: string;
   notes: string | null; items: InvoiceItem[]; payments: Payment[];
   orderPaymentMethod?: string | null;
-  courierId: number | null; courierCn: string | null;
-  courierName: string | null; courierTrackingUrl: string | null;
 }
-
-interface Courier { id: number; name: string; trackingUrl: string | null; apiProvider: string | null; active: boolean; coveredCities: string[]; }
 
 const statusColors: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   paid: "default", partial: "secondary", draft: "outline", overdue: "destructive",
@@ -304,14 +300,6 @@ function buildInvoiceShareMsg(invoice: Invoice): string {
   const items = invoice.items.map(i => fmtItemLine(sym, i)).join("\n");
   const invoiceUrl = `https://geem.pk/api/invoices/${invoice.id}/print`;
 
-  const trackingLines: string[] = [];
-  if (invoice.courierName) trackingLines.push(`📦 Courier: *${invoice.courierName}*`);
-  if (invoice.courierCn)   trackingLines.push(`🔢 Tracking No: *${invoice.courierCn}*`);
-  if (invoice.courierTrackingUrl) trackingLines.push(`🔗 Track on courier site: ${invoice.courierTrackingUrl}`);
-  const trackingPageLine = invoice.courierCn
-    ? `📍 *Track your shipment:*\nhttps://geem.pk/shop/invoice-track?inv=${encodeURIComponent(invoice.invoiceNumber)}`
-    : "";
-
   return [
     `*Invoice ${invoice.invoiceNumber}*`,
     `Date: ${invoice.date}`,
@@ -321,8 +309,6 @@ function buildInvoiceShareMsg(invoice: Invoice): string {
     ``,
     `*Total: ${sym} ${invoice.total.toLocaleString()}*`,
     invoice.balanceDue > 0 ? `Balance Due: ${sym} ${invoice.balanceDue.toLocaleString()}` : "✅ Fully Paid",
-    ...(trackingLines.length ? [``, ...trackingLines] : []),
-    ...(trackingPageLine ? [``, trackingPageLine] : []),
     ``,
     `View/Download Invoice:`,
     invoiceUrl,
@@ -385,27 +371,12 @@ export default function InvoiceDetail() {
   const [sendingChannel, setSendingChannel] = useState<string | null>(null);
   const [slipTotals, setSlipTotals] = useState<{ paid: number; balanceDue: number } | null>(null);
   const [payForm, setPayForm] = useState({ date: new Date().toISOString().split("T")[0], method: "cash", amount: "", transactionId: "", memo: "" });
-  // Courier tracking state
-  const [trackingCourierId, setTrackingCourierId] = useState<string>("");
-  const [trackingCn, setTrackingCn] = useState("");
-  const [notifyChannel, setNotifyChannel] = useState<"whatsapp" | "sms">("whatsapp");
-  // Booking dialog state
-  const [showBookDialog, setShowBookDialog] = useState(false);
-  const [bookWeight, setBookWeight] = useState("0.5");
-  const [bookCod, setBookCod] = useState("0");
-  const [bookOriginCity, setBookOriginCity] = useState("AHMAD PUR EAST");
 
   // ── Queries (declared before any useEffect that reads their data) ────────────
   const { data: invoice, isLoading } = useQuery({
     queryKey: ["invoice", id],
     queryFn: () => axiosInstance.get<Invoice>(`/invoices/${id}`).then(r => r.data),
     enabled: !!id,
-  });
-
-  const { data: couriers } = useQuery({
-    queryKey: ["couriers-list"],
-    queryFn: () => axiosInstance.get<Courier[]>("/couriers").then(r => r.data),
-    staleTime: 5 * 60 * 1000,
   });
 
   const { data: companyCfg } = useQuery({
@@ -428,14 +399,6 @@ export default function InvoiceDetail() {
       });
     }
   }, [showPayment]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Sync courier tracking form state from loaded invoice
-  useEffect(() => {
-    if (invoice) {
-      setTrackingCourierId(invoice.courierId ? String(invoice.courierId) : "");
-      setTrackingCn(invoice.courierCn ?? "");
-    }
-  }, [invoice?.courierId, invoice?.courierCn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pre-fill form when edit dialog opens
   useEffect(() => {
@@ -492,40 +455,6 @@ export default function InvoiceDetail() {
   const deleteMutation = useMutation({
     mutationFn: () => axiosInstance.delete(`/invoices/${id}`),
     onSuccess: () => { toast({ title: "Invoice deleted" }); window.location.href = "/invoices"; },
-  });
-
-  const shippingMutation = useMutation({
-    mutationFn: (payload: { courierId: number | null; courierCn: string; notify: boolean; channel: string }) =>
-      axiosInstance.patch<{ ok: boolean; notified: boolean; sentTo?: string; invoice: Invoice }>(`/invoices/${id}/shipping`, payload).then(r => r.data),
-    onSuccess: (data, vars) => {
-      qc.invalidateQueries({ queryKey: ["invoice", id] });
-      if (vars.notify && data.notified) {
-        toast({ title: `✅ Tracking saved & sent via ${vars.channel === "sms" ? "SMS" : "WhatsApp"} to ${data.sentTo}` });
-      } else if (vars.notify && !data.notified) {
-        toast({ title: "Tracking saved — no phone number on file", variant: "destructive" });
-      } else {
-        toast({ title: "Courier tracking saved" });
-      }
-    },
-    onError: () => toast({ title: "Failed to save tracking", variant: "destructive" }),
-  });
-
-  const bookMutation = useMutation({
-    mutationFn: (payload: { courierId: number; weight: string; pieces: string; collectAmount: string; originCity: string }) =>
-      axiosInstance.post<{ ok: boolean; cn: string; invoice: Invoice }>(`/invoices/${id}/book-shipment`, payload).then(r => r.data),
-    onSuccess: (data) => {
-      qc.invalidateQueries({ queryKey: ["invoice", id] });
-      setShowBookDialog(false);
-      setTrackingCn(data.cn);
-      toast({ title: `✅ Shipment booked! CN: ${data.cn}` });
-      // Navigate to printable airway bill page
-      const params = new URLSearchParams({ weight: bookWeight, origin: bookOriginCity });
-      navigate(`/invoices/${id}/airway-bill?${params}`);
-    },
-    onError: (e: unknown) => {
-      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Booking failed";
-      toast({ title: msg, variant: "destructive" });
-    },
   });
 
   const deletePaymentMutation = useMutation({
@@ -630,13 +559,10 @@ export default function InvoiceDetail() {
                 <MessageCircle className="h-4 w-4 mr-2 text-cyan-600" /> WhatsApp Web (Browser)
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => {
-                const trackingUrl = invoice.courierCn
-                  ? `https://geem.pk/shop/invoice-track?inv=${encodeURIComponent(invoice.invoiceNumber)}`
-                  : `https://geem.pk/api/invoices/${invoice.id}/print`;
-                navigator.clipboard.writeText(trackingUrl);
-                toast({ title: invoice.courierCn ? "Tracking page link copied" : "Invoice link copied to clipboard" });
+                navigator.clipboard.writeText(`https://geem.pk/api/invoices/${invoice.id}/print`);
+                toast({ title: "Invoice link copied to clipboard" });
               }}>
-                <Link2 className="h-4 w-4 mr-2 text-slate-500" /> {invoice.courierCn ? "Copy Tracking Link" : "Copy Invoice Link"}
+                <Link2 className="h-4 w-4 mr-2 text-slate-500" /> Copy Invoice Link
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -675,238 +601,6 @@ export default function InvoiceDetail() {
           {invoice.customerPhone && <p><strong>Phone:</strong> {invoice.customerPhone}</p>}
           {invoice.customerCity && <p><strong>City:</strong> {invoice.customerCity}</p>}
           {invoice.customerAddress && <p><strong>Address:</strong> {invoice.customerAddress}</p>}
-        </CardContent>
-      </Card>
-
-      {/* Courier Tracking */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Truck className="h-4 w-4 text-blue-600" />
-            Courier Tracking
-            {invoice.courierCn && (
-              <span className="ml-auto text-xs font-normal text-green-600 flex items-center gap-1">
-                ✅ Tracking added
-              </span>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Current tracking display */}
-          {invoice.courierCn && (
-            <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 space-y-1.5">
-              {invoice.courierName && (
-                <p className="text-sm font-semibold text-blue-800">📦 {invoice.courierName}</p>
-              )}
-              <p className="text-sm text-blue-700">🔢 Tracking No: <span className="font-mono font-bold">{invoice.courierCn}</span></p>
-              {invoice.courierTrackingUrl && (
-                <a href={invoice.courierTrackingUrl} target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline font-medium">
-                  <ExternalLink className="h-3.5 w-3.5" /> Track Shipment
-                </a>
-              )}
-            </div>
-          )}
-
-          {/* Copy / preview / send tracking page — always visible so staff can pre-share */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                const url = `https://geem.pk/shop/invoice-track?inv=${encodeURIComponent(invoice.invoiceNumber)}`;
-                navigator.clipboard.writeText(url);
-                toast({ title: "Tracking link copied to clipboard" });
-              }}
-            >
-              <Link2 className="h-3.5 w-3.5 mr-1" />
-              Copy Tracking Link
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              title="Open tracking page in new tab"
-              onClick={() => window.open(`https://geem.pk/shop/invoice-track?inv=${encodeURIComponent(invoice.invoiceNumber)}`, "_blank")}
-            >
-              <ExternalLink className="h-3.5 w-3.5 mr-1" />
-              Open
-            </Button>
-            {/* Send Tracking Link dropdown */}
-            {invoice.customerPhone ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="sm" variant="secondary" disabled={!!sendingChannel}>
-                    <Send className="h-3.5 w-3.5 mr-1" />
-                    {sendingChannel === "track-wa" || sendingChannel === "track-sms" ? "Sending…" : "Send Tracking Link"}
-                    <ChevronDown className="h-3 w-3 ml-1" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-52">
-                  <DropdownMenuItem onClick={async () => {
-                    setSendingChannel("track-wa");
-                    try {
-                      const r = await axiosInstance.post(`/invoices/${invoice.id}/send-tracking`, { channel: "whatsapp" });
-                      toast({ title: `✅ Tracking link sent via WhatsApp to ${r.data.sentTo}` });
-                    } catch (e: unknown) {
-                      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Failed to send WhatsApp";
-                      toast({ title: msg, variant: "destructive" });
-                    } finally { setSendingChannel(null); }
-                  }}>
-                    <MessageCircle className="h-4 w-4 mr-2 text-green-600" /> WhatsApp (API)
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={async () => {
-                    setSendingChannel("track-sms");
-                    try {
-                      const r = await axiosInstance.post(`/invoices/${invoice.id}/send-tracking`, { channel: "sms" });
-                      toast({ title: `✅ Tracking link sent via SMS to ${r.data.sentTo}` });
-                    } catch (e: unknown) {
-                      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Failed to send SMS";
-                      toast({ title: msg, variant: "destructive" });
-                    } finally { setSendingChannel(null); }
-                  }}>
-                    <Phone className="h-4 w-4 mr-2 text-violet-600" /> SMS
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => {
-                    const trackingUrl = `https://geem.pk/shop/invoice-track?inv=${encodeURIComponent(invoice.invoiceNumber)}`;
-                    const msg = `Here is your shipment tracking link for order ${invoice.invoiceNumber}:\n\n${trackingUrl}\n\n_Geem.pk_`;
-                    window.open(`https://wa.me/${toWaPhone(invoice.customerPhone)}?text=${encodeURIComponent(msg)}`, "_blank");
-                  }}>
-                    <MessageCircle className="h-4 w-4 mr-2 text-emerald-500" /> WhatsApp App (Mobile)
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => {
-                    const trackingUrl = `https://geem.pk/shop/invoice-track?inv=${encodeURIComponent(invoice.invoiceNumber)}`;
-                    const msg = `Here is your shipment tracking link for order ${invoice.invoiceNumber}:\n\n${trackingUrl}\n\n_Geem.pk_`;
-                    window.open(`https://web.whatsapp.com/send?phone=${toWaPhone(invoice.customerPhone)}&text=${encodeURIComponent(msg)}`, "_blank");
-                  }}>
-                    <MessageCircle className="h-4 w-4 mr-2 text-cyan-600" /> WhatsApp Web (Browser)
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : (
-              <Button size="sm" variant="secondary" disabled title="No phone number on file">
-                <Send className="h-3.5 w-3.5 mr-1" /> Send Tracking Link
-              </Button>
-            )}
-          </div>
-          {!invoice.customerPhone && (
-            <p className="text-xs text-amber-600">⚠️ No phone number on file — add one to the customer to enable sending the tracking link.</p>
-          )}
-
-          {/* Tracking input form */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label>Courier Company</Label>
-              <Select value={trackingCourierId} onValueChange={setTrackingCourierId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select courier…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(couriers ?? []).filter(c => c.active).map(c => (
-                    <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Tracking / Consignment Number (CN)</Label>
-              <Input
-                placeholder="e.g. TCS-1234567890"
-                value={trackingCn}
-                onChange={e => setTrackingCn(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {/* Coverage warning — shown when courier has coverage data and customer city is not covered */}
-          {(() => {
-            if (!trackingCourierId) return null;
-            const selectedCourier = (couriers ?? []).find(c => String(c.id) === trackingCourierId);
-            if (!selectedCourier || !selectedCourier.coveredCities?.length) return null;
-            const customerCity = invoice.customerCity?.trim().toLowerCase() ?? "";
-            if (!customerCity) return null;
-            const covered = selectedCourier.coveredCities.some(
-              city => city.trim().toLowerCase() === customerCity,
-            );
-            if (covered) return null;
-            return (
-              <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 flex items-start gap-3">
-                <span className="text-amber-500 text-lg leading-none mt-0.5">⚠️</span>
-                <div>
-                  <p className="text-sm font-semibold text-amber-800">
-                    {selectedCourier.name} may not deliver to <span className="font-bold">{invoice.customerCity}</span>
-                  </p>
-                  <p className="text-xs text-amber-700 mt-0.5">
-                    This courier's coverage list does not include {invoice.customerCity}. You can still proceed — this is advisory only.
-                  </p>
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* Book via API — shown when selected courier has an apiProvider */}
-          {(() => {
-            const selectedCourier = (couriers ?? []).find(c => String(c.id) === trackingCourierId);
-            if (!selectedCourier?.apiProvider) return null;
-            return (
-              <div className="rounded-lg border border-violet-200 bg-violet-50 px-4 py-3 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-violet-800">🚀 Book via {selectedCourier.name} API</p>
-                  <p className="text-xs text-violet-600 mt-0.5">Auto-fill the CN directly from {selectedCourier.name}'s system — no manual copy-paste needed.</p>
-                </div>
-                <Button
-                  size="sm"
-                  className="bg-violet-600 hover:bg-violet-700 text-white shrink-0"
-                  onClick={() => {
-                    setBookCod(String(Math.max(0, invoice.balanceDue)));
-                    setShowBookDialog(true);
-                  }}
-                >
-                  <Truck className="h-3.5 w-3.5 mr-1" /> Book Shipment
-                </Button>
-              </div>
-            );
-          })()}
-
-          <div className="flex items-center gap-3 flex-wrap">
-            <Button
-              size="sm" variant="outline"
-              disabled={shippingMutation.isPending || (!trackingCourierId && !trackingCn)}
-              onClick={() => shippingMutation.mutate({
-                courierId: trackingCourierId ? parseInt(trackingCourierId, 10) : null,
-                courierCn: trackingCn,
-                notify: false,
-                channel: notifyChannel,
-              })}
-            >
-              <Truck className="h-3.5 w-3.5 mr-1" />
-              {shippingMutation.isPending ? "Saving…" : "Save Tracking"}
-            </Button>
-
-            <div className="flex items-center gap-2 flex-1">
-              <Select value={notifyChannel} onValueChange={v => setNotifyChannel(v as "whatsapp" | "sms")}>
-                <SelectTrigger className="w-36">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                  <SelectItem value="sms">SMS</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button
-                size="sm"
-                disabled={shippingMutation.isPending || !invoice.customerPhone || (!trackingCourierId && !trackingCn)}
-                onClick={() => shippingMutation.mutate({
-                  courierId: trackingCourierId ? parseInt(trackingCourierId, 10) : null,
-                  courierCn: trackingCn,
-                  notify: true,
-                  channel: notifyChannel,
-                })}
-              >
-                <Send className="h-3.5 w-3.5 mr-1" />
-                {shippingMutation.isPending ? "Sending…" : "Save & Notify Customer"}
-              </Button>
-            </div>
-          </div>
         </CardContent>
       </Card>
 
@@ -1167,71 +861,6 @@ export default function InvoiceDetail() {
               </div>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
-      {/* Book Shipment Dialog */}
-      <Dialog open={showBookDialog} onOpenChange={v => { if (!v) setShowBookDialog(false); }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Truck className="h-5 w-5 text-violet-600" /> Book Shipment
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="rounded-lg bg-violet-50 border border-violet-200 px-3 py-2 text-sm text-violet-700">
-              Booking via <strong>{(couriers ?? []).find(c => String(c.id) === trackingCourierId)?.name ?? "courier"} API</strong> for <strong>{invoice.customerName}</strong> in <strong>{invoice.customerCity || "—"}</strong>.
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Weight (kg)</Label>
-                <Input
-                  type="number" min="0.1" step="0.1"
-                  value={bookWeight}
-                  onChange={e => setBookWeight(e.target.value)}
-                  placeholder="0.5"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>COD Amount (Rs)</Label>
-                <Input
-                  type="number" min="0"
-                  value={bookCod}
-                  onChange={e => setBookCod(e.target.value)}
-                  placeholder="0 for prepaid"
-                />
-                <p className="text-xs text-muted-foreground">0 = prepaid, balance = COD</p>
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label>Origin City</Label>
-              <Input
-                value={bookOriginCity}
-                onChange={e => setBookOriginCity(e.target.value)}
-                placeholder="Bahawalpur"
-              />
-            </div>
-            {bookMutation.isError && (
-              <p className="text-xs text-destructive bg-destructive/10 rounded p-2">
-                {(bookMutation.error as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Booking failed"}
-              </p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowBookDialog(false)}>Cancel</Button>
-            <Button
-              className="bg-violet-600 hover:bg-violet-700 text-white"
-              disabled={bookMutation.isPending || !trackingCourierId}
-              onClick={() => bookMutation.mutate({
-                courierId: parseInt(trackingCourierId, 10),
-                weight: bookWeight,
-                pieces: "1",
-                collectAmount: bookCod,
-                originCity: bookOriginCity,
-              })}
-            >
-              {bookMutation.isPending ? "Booking…" : "🚀 Book & Get CN"}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
