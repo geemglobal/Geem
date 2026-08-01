@@ -137,8 +137,8 @@ export default function MasterData() {
     if (tab === "vendors") return <>{f("name", "Vendor Name *")}{f("contactPerson", "Contact Person")}{f("phone", "Phone")}{f("email", "Email")}</>;
     if (tab === "couriers") return <>
       {f("name", "Courier Name *")}
-      {f("apiProvider", "API Provider key (e.g. leopards, tcs — needed for API booking)")}
-      {f("trackingUrl", "Tracking URL template (use {cn} as placeholder, e.g. https://leopardscourier.com/track?id={cn})")}
+      {f("apiProvider", "API Provider key (e.g. tcs — needed for API booking)")}
+      {f("trackingUrl", "Tracking URL template (use {cn} as placeholder, e.g. https://www.tcsexpress.com/track/{cn})")}
       {f("apiKey", "API Key / Username (for direct booking via API)")}
       {f("apiPassword", "API Password (for direct booking via API)")}
       <div className="space-y-1">

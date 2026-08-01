@@ -71,7 +71,7 @@ export default function PrivacyPolicy() {
         <Section title="4. Sharing Your Information">
           <p>We do not sell, rent, or trade your personal information. We share data only with:</p>
           <ul className="list-disc list-inside space-y-1 ml-2">
-            <li><strong>Courier partners</strong> (TCS, Leopards) — name, address, and contact number only, strictly for delivery purposes</li>
+            <li><strong>Courier partners</strong> (TCS) — name, address, and contact number only, strictly for delivery purposes</li>
             <li><strong>Payment processors</strong> — solely to verify and complete your transaction</li>
             <li><strong>Law enforcement or regulatory authorities</strong> — only when legally compelled by valid Pakistani court order or law enforcement request with proper legal authority</li>
           </ul>

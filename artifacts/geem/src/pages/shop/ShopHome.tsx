@@ -312,7 +312,7 @@ export default function ShopHome() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {[
             { icon: Shield,  color: "text-blue-600",  title: "Military-Grade Authentic Products", desc: "Every item is genuine, professionally sourced, and tested. We carry Lawmate, Yuntrack, Micodus and other professional brands — no counterfeits." },
-            { icon: Truck,   color: "text-green-600", title: "Discreet Nationwide Delivery",       desc: "All orders ship in plain, unmarked packaging to protect your privacy. Nationwide delivery in 2–5 business days via TCS and Leopards Courier." },
+            { icon: Truck,   color: "text-green-600", title: "Discreet Nationwide Delivery",       desc: "All orders ship in plain, unmarked packaging to protect your privacy. Nationwide delivery in 2–5 business days via TCS." },
             { icon: Zap,     color: "text-orange-600",title: "On-Demand Agency Imports",           desc: "Can't find what you need? We import security, surveillance, and intelligence equipment from global manufacturers on a per-order basis for agencies and professionals." },
           ].map(item => (
             <div key={item.title} className="bg-white border-2 rounded-xl p-6 hover:border-primary transition-colors">

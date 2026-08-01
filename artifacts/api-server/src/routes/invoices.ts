@@ -1047,7 +1047,7 @@ router.post("/invoices/:id/book-shipment", async (req, res): Promise<void> => {
     return;
   }
   if (!courier.apiProvider) {
-    res.status(400).json({ error: "Courier API provider not set — add a provider key (e.g. \"leopards\" or \"tcs\") in Master Data → Couriers." });
+    res.status(400).json({ error: "Courier API provider not set — add a provider key (e.g. \"tcs\") in Master Data → Couriers." });
     return;
   }
 
@@ -1058,51 +1058,8 @@ router.post("/invoices/:id/book-shipment", async (req, res): Promise<void> => {
 
   let cn: string | null = null;
 
-  // ── Leopard Courier ─────────────────────────────────────────────────────────
-  if (courier.apiProvider === "leopards") {
-    const payload = {
-      api_key:                       courier.apiKey,
-      api_password:                  courier.apiPassword,
-      booked_packet_weight:          String(parsedWeight),
-      booked_packet_no_piece:        String(parsedPieces),
-      booked_packet_collect_amount:  String(codAmount),
-      booked_packet_order_id:        inv.invoiceNumber,
-      origin_city:                   String(originCity).trim(),
-      destination_city:              recipientCity || "Lahore",
-      shipment_name_eng:             recipientName || "—",
-      shipment_email:                recipientEmail,
-      shipment_phone:                recipientPhone,
-      shipment_address:              recipientAddress || "—",
-      shipment_country:              "Pakistan",
-      shipment_currency:             inv.currency ?? "PKR",
-    };
-
-    let raw: Record<string, unknown>;
-    try {
-      const resp = await fetch("https://merchantapi.leopardscourier.com/api/bookPacket/format/json/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Accept": "application/json" },
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(15_000),
-      });
-      raw = await resp.json() as Record<string, unknown>;
-    } catch (e) {
-      res.status(502).json({ error: `Cannot reach Leopard API: ${e instanceof Error ? e.message : String(e)}` });
-      return;
-    }
-
-    // Leopard returns packet_cn on success; status "1" means OK
-    if (raw.packet_cn) {
-      cn = String(raw.packet_cn);
-    } else {
-      const errMsg = String(raw.error_description ?? raw.error ?? JSON.stringify(raw));
-      res.status(502).json({ error: `Leopard booking failed: ${errMsg}`, raw });
-      return;
-    }
-  }
-
   // ── TCS Courier ─────────────────────────────────────────────────────────────
-  else if (courier.apiProvider === "tcs") {
+  if (courier.apiProvider === "tcs") {
     // TCS eXpress API — requires a registered business account from TCS
     // Endpoint: POST https://webapi.tcscourier.com/shippingapi.svc/BookShipment
     // Auth: username/password from courier record
@@ -1155,7 +1112,7 @@ router.post("/invoices/:id/book-shipment", async (req, res): Promise<void> => {
   // ── Unknown provider ─────────────────────────────────────────────────────────
   else {
     res.status(400).json({
-      error: `API booking not supported for provider "${courier.apiProvider}". Only "leopards" and "tcs" are supported. You can enter the tracking number manually.`,
+      error: `API booking not supported for provider "${courier.apiProvider}". Only "tcs" is supported. You can enter the tracking number manually.`,
     });
     return;
   }

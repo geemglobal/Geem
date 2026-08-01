@@ -71,7 +71,7 @@ export default function Shipping() {
             <div className="border rounded-xl p-5">
               <p className="font-bold text-lg mb-1">Standard Delivery</p>
               <p className="text-2xl font-bold text-primary mb-2">Rs 200</p>
-              <p className="text-sm">Nationwide delivery in 2–5 business days via TCS or Leopards Courier. Tracking number provided via WhatsApp.</p>
+              <p className="text-sm">Nationwide delivery in 2–5 business days via TCS. Tracking number provided via WhatsApp.</p>
             </div>
             <div className="border-2 border-primary rounded-xl p-5 bg-primary/5">
               <p className="font-bold text-lg mb-1">Free Delivery 🎉</p>
@@ -114,7 +114,6 @@ export default function Shipping() {
           <p>We use Pakistan's most reliable courier services for all shipments:</p>
           <ul className="list-disc list-inside space-y-1 ml-2">
             <li><strong>TCS Couriers</strong> — Nationwide coverage, real-time tracking</li>
-            <li><strong>Leopards Courier</strong> — Major cities and remote areas</li>
             <li><strong>Pakistan Post</strong> — Remote/rural and AJK/Gilgit-Baltistan areas</li>
           </ul>
           <p>We select the most appropriate courier for your location. For high-value or fragile equipment, we may use premium insured shipping and will notify you accordingly.</p>

@@ -12,7 +12,7 @@ const FAQS = [
     items: [
       { q: "How long does delivery take?", a: "We deliver within 2–5 business days to most cities in Pakistan. Karachi, Lahore, and Islamabad typically receive orders within 2–3 days. Remote areas (Balochistan, FATA) may take up to 5–7 days." },
       { q: "Do you ship in discreet packaging?", a: "Yes — all orders are shipped in plain, unmarked brown boxes or padded envelopes with no branding, product names, or description on the outside. Your privacy is our priority. The sender name on the waybill is simply 'Geem'." },
-      { q: "What courier services do you use?", a: "We ship via TCS, Leopards Courier, and Pakistan Post. You'll receive your tracking number via WhatsApp/SMS once your order is dispatched." },
+      { q: "What courier services do you use?", a: "We ship via TCS and Pakistan Post. You'll receive your tracking number via WhatsApp/SMS once your order is dispatched." },
       { q: "Is same-day delivery available?", a: "Same-day delivery is available in Karachi only for orders placed before 12 PM. Additional charges apply. Contact us on WhatsApp to arrange." },
       { q: "What is the delivery charge?", a: "Standard delivery is Rs 200 flat. Orders above Rs 5,000 qualify for free delivery. For bulk/agency orders, we discuss delivery terms separately." },
       { q: "How do I track my order?", a: "Visit our Track Order page and enter your order number (starts with ORD-). For courier tracking, use the waybill number we send via WhatsApp." },

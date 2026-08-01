@@ -1,7 +1,7 @@
 /**
  * Idempotent courier seed — called once on every server start.
  *
- * Inserts the four common Pakistani couriers with their tracking URL
+ * Inserts the common Pakistani couriers with their tracking URL
  * templates. Uses onConflictDoUpdate targeting the unique api_provider
  * index so repeated restarts are safe and template updates in code are
  * picked up automatically without duplicating rows.
@@ -14,12 +14,6 @@ import { sql } from "drizzle-orm";
 import { logger } from "./logger";
 
 const DEFAULT_COURIERS = [
-  {
-    name: "Leopard Courier (LCS)",
-    apiProvider: "leopards",
-    trackingUrl:
-      "https://www.leopardscourier.com/leopards-power-track/?trackid={cn}",
-  },
   {
     name: "TCS",
     apiProvider: "tcs",

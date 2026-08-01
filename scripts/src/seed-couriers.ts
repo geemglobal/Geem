@@ -11,12 +11,6 @@ import { sql } from "drizzle-orm";
  */
 const DEFAULT_COURIERS = [
   {
-    name: "Leopard Courier (LCS)",
-    apiProvider: "leopards",
-    trackingUrl:
-      "https://www.leopardscourier.com/leopards-power-track/?trackid={cn}",
-  },
-  {
     name: "TCS",
     apiProvider: "tcs",
     trackingUrl: "https://www.tcsexpress.com/track/{cn}",

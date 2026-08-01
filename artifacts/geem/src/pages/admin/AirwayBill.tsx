@@ -114,7 +114,7 @@ export default function AirwayBill() {
             </div>
             <div className="text-right">
               <p className="text-xs text-slate-400 uppercase tracking-widest">Courier</p>
-              <p className="font-bold text-sm">{invoice.courierName ?? "Leopard Courier"}</p>
+              <p className="font-bold text-sm">{invoice.courierName ?? "Courier"}</p>
             </div>
           </div>
 

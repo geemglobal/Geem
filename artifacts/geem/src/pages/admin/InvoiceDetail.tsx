@@ -810,7 +810,7 @@ export default function InvoiceDetail() {
             <div className="space-y-1">
               <Label>Tracking / Consignment Number (CN)</Label>
               <Input
-                placeholder="e.g. LCS-1234567890"
+                placeholder="e.g. TCS-1234567890"
                 value={trackingCn}
                 onChange={e => setTrackingCn(e.target.value)}
               />
