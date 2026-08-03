@@ -129,6 +129,41 @@ router.post("/shop/track", async (req: Request, res: Response): Promise<void> =>
   res.sendStatus(204);
 });
 
+/* ─── Traffic source helpers ─────────────────────────────────────────────── */
+function parseTrafficSource(referrer: string | null, utmSource: string | null): string {
+  if (utmSource) {
+    if (/google/i.test(utmSource)) return "Google Ads";
+    if (/facebook|fb/i.test(utmSource)) return "Facebook Ads";
+    if (/instagram/i.test(utmSource)) return "Instagram Ads";
+    return utmSource.charAt(0).toUpperCase() + utmSource.slice(1);
+  }
+  if (!referrer || referrer.trim() === "") return "Direct";
+  try {
+    const host = new URL(referrer).hostname.replace(/^www\./, "").toLowerCase();
+    if (/google\./i.test(host)) return "Google";
+    if (/bing\./i.test(host)) return "Bing";
+    if (/facebook\.|fb\.com/i.test(host)) return "Facebook";
+    if (/wl\.co|wa\.me|whatsapp/i.test(host)) return "WhatsApp";
+    if (/instagram\./i.test(host)) return "Instagram";
+    if (/twitter\.|t\.co|x\.com/i.test(host)) return "Twitter / X";
+    if (/youtube\./i.test(host)) return "YouTube";
+    if (/tiktok\./i.test(host)) return "TikTok";
+    if (/linkedin\./i.test(host)) return "LinkedIn";
+    if (/geem\.pk|erp\.geem\.pk|sim\.geem\.pk/i.test(host)) return "Internal";
+    if (/replit\./i.test(host)) return "Replit (Dev)";
+    return host || "Other";
+  } catch { return "Other"; }
+}
+
+function extractKeyword(referrer: string | null, utmTerm: string | null): string | null {
+  if (utmTerm && utmTerm.trim()) return utmTerm.trim();
+  if (!referrer) return null;
+  try {
+    const url = new URL(referrer);
+    return url.searchParams.get("q") ?? url.searchParams.get("query") ?? url.searchParams.get("search") ?? null;
+  } catch { return null; }
+}
+
 // Admin: stats
 router.get("/visitors/stats", async (req: Request, res: Response): Promise<void> => {
   const days = parseInt(String(req.query.days ?? "7"), 10);
@@ -160,6 +195,48 @@ router.get("/visitors/stats", async (req: Request, res: Response): Promise<void>
 
   const recentLogs = await db.select().from(visitorLogsTable).where(where).orderBy(desc(visitorLogsTable.createdAt)).limit(100);
 
+  // Traffic sources — fetch referrer + utmSource rows, parse server-side
+  const referrerRows = await db
+    .select({ referrer: visitorLogsTable.referrer, utmSource: visitorLogsTable.utmSource, utmTerm: visitorLogsTable.utmTerm })
+    .from(visitorLogsTable).where(where);
+
+  // Build traffic source counts
+  const sourceMap = new Map<string, number>();
+  const keywordMap = new Map<string, number>();
+  const referrerDomainMap = new Map<string, number>();
+
+  for (const row of referrerRows) {
+    // Traffic source
+    const source = parseTrafficSource(row.referrer, row.utmSource);
+    sourceMap.set(source, (sourceMap.get(source) ?? 0) + 1);
+
+    // Keywords
+    const kw = extractKeyword(row.referrer, row.utmTerm);
+    if (kw) keywordMap.set(kw, (keywordMap.get(kw) ?? 0) + 1);
+
+    // Referrer domain
+    if (row.referrer) {
+      try {
+        const host = new URL(row.referrer).hostname.replace(/^www\./, "");
+        referrerDomainMap.set(host, (referrerDomainMap.get(host) ?? 0) + 1);
+      } catch { /* skip malformed */ }
+    }
+  }
+
+  const trafficSources = [...sourceMap.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([source, count]) => ({ source, count }));
+
+  const topKeywords = [...keywordMap.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 20)
+    .map(([keyword, count]) => ({ keyword, count }));
+
+  const topReferrerDomains = [...referrerDomainMap.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 15)
+    .map(([domain, count]) => ({ domain, count }));
+
   res.json({
     totalSessions: sessions,
     totalPageviews: views,
@@ -173,6 +250,9 @@ router.get("/visitors/stats", async (req: Request, res: Response): Promise<void>
     byOs,
     topTimezones,
     topDeviceModels,
+    trafficSources,
+    topKeywords,
+    topReferrerDomains,
     recentLogs: recentLogs.map(l => ({ ...l, lat: l.lat ?? null, lng: l.lng ?? null, createdAt: l.createdAt.toISOString() })),
   });
 });

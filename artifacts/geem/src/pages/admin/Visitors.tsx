@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   Monitor, Smartphone, Tablet, Globe, MapPin, Eye, Users, Cpu, Wifi,
   Battery, Fingerprint, ShoppingBag, User, Clock, ExternalLink, Package,
-  Radio, ArrowRight,
+  Radio, ArrowRight, Search, TrendingUp, Link,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
@@ -42,6 +42,9 @@ interface VisitorStats {
   byOs: { os: string; count: number }[];
   topTimezones: { timezone: string; count: number }[];
   topDeviceModels: { model: string; count: number }[];
+  trafficSources: { source: string; count: number }[];
+  topKeywords: { keyword: string; count: number }[];
+  topReferrerDomains: { domain: string; count: number }[];
   recentLogs: VisitorLog[];
 }
 
@@ -103,6 +106,18 @@ function Row({ label, value }: { label: string; value: string | null | undefined
 function slugToTitle(slug: string): string {
   return slug.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 }
+
+const SOURCE_ICONS: Record<string, string> = {
+  "Google": "🔍", "Google Ads": "🎯", "Bing": "🔎",
+  "Facebook": "📘", "Facebook Ads": "🎯", "Instagram": "📸", "Instagram Ads": "🎯",
+  "WhatsApp": "💬", "Twitter / X": "🐦", "YouTube": "📺", "TikTok": "🎵",
+  "LinkedIn": "💼", "Direct": "🔗", "Internal": "🏠", "Replit (Dev)": "🛠️",
+};
+function sourceIcon(source: string): string {
+  return SOURCE_ICONS[source] ?? "🌐";
+}
+
+const SOURCE_COLORS = ["#22c55e","#3b82f6","#f59e0b","#ef4444","#8b5cf6","#06b6d4","#ec4899","#84cc16","#f97316","#14b8a6"];
 function productUrl(page: string): string { return `https://geem.pk${page}`; }
 function statusColor(status: string) {
   const map: Record<string, string> = {
@@ -954,6 +969,109 @@ export default function Visitors() {
                 </div>
               </CardContent>
             </Card>
+          </div>
+
+          {/* ── Traffic Sources ── */}
+          <div>
+            <h2 className="text-base font-semibold mb-3 flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-primary" /> Traffic Sources
+              <span className="text-xs font-normal text-muted-foreground ml-1">Where visitors came from</span>
+            </h2>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Pie chart */}
+              <Card className="lg:col-span-1">
+                <CardHeader><CardTitle className="text-sm">Source Breakdown</CardTitle></CardHeader>
+                <CardContent>
+                  {(stats?.trafficSources ?? []).length > 0 ? (
+                    <>
+                      <div className="h-[200px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie data={stats?.trafficSources ?? []} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={2} dataKey="count" nameKey="source">
+                              {(stats?.trafficSources ?? []).map((_, i) => <Cell key={i} fill={SOURCE_COLORS[i % SOURCE_COLORS.length]} />)}
+                            </Pie>
+                            <Tooltip formatter={(v: number, name: string) => [v, name]} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="space-y-1.5 mt-2">
+                        {(stats?.trafficSources ?? []).map((s, i) => {
+                          const total = (stats?.trafficSources ?? []).reduce((acc, x) => acc + x.count, 0);
+                          const pct = total ? Math.round((s.count / total) * 100) : 0;
+                          return (
+                            <div key={s.source} className="flex items-center gap-2 text-sm">
+                              <div className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ background: SOURCE_COLORS[i % SOURCE_COLORS.length] }} />
+                              <span className="flex-1 truncate">{sourceIcon(s.source)} {s.source}</span>
+                              <span className="font-medium tabular-nums">{s.count}</span>
+                              <span className="text-muted-foreground text-xs w-8 text-right">{pct}%</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-8">No traffic data yet</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Top referrer domains */}
+              <Card className="lg:col-span-1">
+                <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Link className="h-3.5 w-3.5" />Top Referrer Domains</CardTitle></CardHeader>
+                <CardContent>
+                  {(stats?.topReferrerDomains ?? []).length > 0 ? (
+                    <div className="space-y-2">
+                      {(stats?.topReferrerDomains ?? []).map(r => (
+                        <div key={r.domain} className="flex items-center justify-between gap-2 text-sm">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Globe className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                            <span className="truncate font-mono text-xs">{r.domain}</span>
+                          </div>
+                          <span className="font-medium tabular-nums flex-shrink-0">{r.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-8">No referrer data yet</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Search keywords */}
+              <Card className="lg:col-span-1">
+                <CardHeader>
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Search className="h-3.5 w-3.5" />Search Keywords
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    From Bing, UTM tags & other search engines. Google hides organic keywords (encrypted since 2011).
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  {(stats?.topKeywords ?? []).length > 0 ? (
+                    <div className="space-y-2">
+                      {(stats?.topKeywords ?? []).map(k => (
+                        <div key={k.keyword} className="flex items-center justify-between gap-2 text-sm">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Search className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                            <span className="truncate text-xs">{k.keyword}</span>
+                          </div>
+                          <span className="font-medium tabular-nums flex-shrink-0">{k.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-6 text-center space-y-2">
+                      <Search className="h-8 w-8 mx-auto text-muted-foreground/40" />
+                      <p className="text-sm text-muted-foreground">No keywords captured yet</p>
+                      <p className="text-xs text-muted-foreground max-w-[220px] mx-auto">
+                        Add <code className="bg-muted px-1 rounded">?utm_term=keyword</code> to your ad links to track paid search terms.
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </div>
       )}
