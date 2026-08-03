@@ -224,19 +224,28 @@ async function patchGps(lat: number, lng: number, accuracy: number) {
   } catch { /* non-critical */ }
 }
 
-// Always try GPS — if permission already granted it succeeds silently,
-// if denied the error callback fires silently. No sessionStorage gate.
+// Only access GPS if the user already granted permission — never trigger the
+// browser permission prompt. IP-based geolocation already runs server-side on
+// every track() call, so visitors always get approximate location without asking.
 function requestGpsAndPatch(onSuccess?: (coords: { lat: number; lng: number; accuracy: number }) => void) {
   if (!navigator.geolocation) return;
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy };
-      saveCachedGps(coords.lat, coords.lng, coords.accuracy);
-      onSuccess?.(coords);
-    },
-    () => { /* denied or unavailable — fine */ },
-    { timeout: 15000, maximumAge: 300000, enableHighAccuracy: false },
-  );
+  if ('permissions' in navigator) {
+    navigator.permissions.query({ name: 'geolocation' as PermissionName }).then((result) => {
+      if (result.state === 'granted') {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy };
+            saveCachedGps(coords.lat, coords.lng, coords.accuracy);
+            onSuccess?.(coords);
+          },
+          () => { /* unavailable — fine */ },
+          { timeout: 10000, maximumAge: 300000, enableHighAccuracy: false },
+        );
+      }
+      // 'denied' or 'prompt' — do nothing, no popup triggered
+    }).catch(() => { /* Permissions API unsupported — skip GPS */ });
+  }
+  // No Permissions API (older browser) — skip to avoid prompt
 }
 
 export function ShopTracker() {

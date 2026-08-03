@@ -42,19 +42,22 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     return;
   }
 
-  const captcha = await verifyRecaptcha(recaptchaToken as string | undefined, "admin_login");
+  // Run reCAPTCHA check and DB user lookup in parallel to cut login latency
+  const [captcha, userRows] = await Promise.all([
+    verifyRecaptcha(recaptchaToken as string | undefined, "admin_login"),
+    db.select().from(usersTable).where(
+      or(
+        eq(usersTable.email, identifier),
+        eq(usersTable.username, identifier),
+        eq(usersTable.mobile, identifier),
+      )
+    ),
+  ]);
   if (!captcha.ok) {
     res.status(400).json({ error: captcha.error ?? "Security check failed" });
     return;
   }
-
-  const [user] = await db.select().from(usersTable).where(
-    or(
-      eq(usersTable.email, identifier),
-      eq(usersTable.username, identifier),
-      eq(usersTable.mobile, identifier),
-    )
-  );
+  const [user] = userRows;
   if (!user || !verifyPassword(password, user.passwordHash)) {
     void logActivity({
       userEmail: identifier, action: "login_failed", details: "Invalid credentials",
@@ -76,8 +79,11 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   }
 
   const token = generateToken();
-  await storeToken(token, user.id);
-  await db.update(usersTable).set({ lastLogin: new Date() }).where(eq(usersTable.id, user.id));
+  // Run DB writes in parallel — token store and lastLogin update are independent
+  await Promise.all([
+    storeToken(token, user.id),
+    db.update(usersTable).set({ lastLogin: new Date() }).where(eq(usersTable.id, user.id)),
+  ]);
 
   void logActivity({
     userId: user.id, userEmail: user.email,

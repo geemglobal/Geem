@@ -10,7 +10,6 @@ import { openWhatsApp, GEEM_WA } from "@/lib/whatsapp";
 import { useQuery } from "@tanstack/react-query";
 import { axiosInstance } from "@/lib/axios";
 import { markShopNotifsRead } from "./ShopNotifications";
-import { AppSetupPrompt } from "@/components/AppSetupPrompt";
 import { WhatsAppChooser } from "@/components/WhatsAppChooser";
 import ShopChatWidget from "@/components/shop/ShopChat";
 
@@ -435,7 +434,6 @@ export function ShopLayout({ children }: { children: React.ReactNode }) {
         </div>
       </footer>
 
-      <AppSetupPrompt appName="Geem Shop" appIcon={branding.gLogo ?? "/icon-192.png"} />
       <WhatsAppChooser />
       <ShopChatWidget />
     </div>
