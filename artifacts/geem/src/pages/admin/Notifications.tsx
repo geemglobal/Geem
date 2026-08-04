@@ -7,6 +7,7 @@ import { Link } from "wouter";
 import {
   ShoppingCart, RotateCcw, CheckCircle2, Truck, XCircle, Clock,
   Bell, BellOff, ArrowRight, RefreshCw, Package, MessageSquare, UserRound,
+  Eye, Monitor, Smartphone, Globe, ExternalLink,
 } from "lucide-react";
 
 interface WebOrder {
@@ -126,8 +127,44 @@ function setLastRead() {
   window.dispatchEvent(new StorageEvent("storage", { key: STORAGE_KEY, newValue: now }));
 }
 
+interface RecentVisitor {
+  id: number;
+  sessionId: string;
+  page: string;
+  city?: string | null;
+  country?: string | null;
+  device?: string | null;
+  browser?: string | null;
+  os?: string | null;
+  referrer?: string | null;
+  ip?: string | null;
+  createdAt: string;
+}
+
+function timeAgoShort(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+function deviceIcon(device?: string | null) {
+  if (!device) return <Globe className="h-3.5 w-3.5" />;
+  if (/mobile|phone/i.test(device)) return <Smartphone className="h-3.5 w-3.5" />;
+  return <Monitor className="h-3.5 w-3.5" />;
+}
+
 export default function Notifications() {
   const qc = useQueryClient();
+
+  const { data: recentVisitors = [], isLoading: visitorsLoading, refetch: refetchVisitors } = useQuery<RecentVisitor[]>({
+    queryKey: ["notif-recent-visitors"],
+    queryFn: () => axiosInstance.get<RecentVisitor[]>("/visitors/recent").then(r => r.data),
+    refetchInterval: 30_000,
+  });
 
   const { data: ordersData, isLoading: ordersLoading, refetch: refetchOrders } = useQuery({
     queryKey: ["notif-orders-all"],
@@ -219,6 +256,7 @@ export default function Notifications() {
     refetchOrders();
     refetchReturns();
     refetchChat();
+    refetchVisitors();
   }
 
   const isLoading = ordersLoading || returnsLoading || chatLoading;
@@ -322,6 +360,87 @@ export default function Notifications() {
             <p className="text-sm text-muted-foreground mt-1">New orders and return requests will appear here</p>
           </div>
         )}
+
+        {/* Recent Visitors */}
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <Eye className="h-3.5 w-3.5" /> Recent Visitors
+            </h2>
+            <span className="text-xs text-muted-foreground">(last 24h)</span>
+            {recentVisitors.length > 0 && (
+              <span className="bg-green-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center ml-1">
+                {recentVisitors.length}
+              </span>
+            )}
+            <Link href="/visitors">
+              <button className="ml-auto text-xs text-primary font-medium hover:underline flex items-center gap-0.5">
+                Full analytics <ArrowRight className="h-3 w-3" />
+              </button>
+            </Link>
+          </div>
+
+          {visitorsLoading ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map(i => <div key={i} className="h-12 rounded-xl bg-gray-100 animate-pulse" />)}
+            </div>
+          ) : recentVisitors.length === 0 ? (
+            <div className="rounded-xl border bg-white p-8 text-center">
+              <Eye className="h-8 w-8 mx-auto mb-2 text-muted-foreground opacity-30" />
+              <p className="text-sm text-muted-foreground">No visitors in the last 24 hours</p>
+            </div>
+          ) : (
+            <div className="rounded-xl border bg-white overflow-hidden">
+              <div className="divide-y divide-border">
+                {recentVisitors.slice(0, 20).map(v => (
+                  <div key={v.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors">
+                    <div className="flex-shrink-0 w-7 h-7 rounded-full bg-blue-50 flex items-center justify-center text-blue-500">
+                      {deviceIcon(v.device)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="font-medium truncate">
+                          {v.city && v.country ? `${v.city}, ${v.country}` : v.country ?? "Unknown"}
+                        </span>
+                        <span className="text-muted-foreground text-xs flex-shrink-0">·</span>
+                        <span className="text-muted-foreground text-xs truncate">
+                          {v.page?.replace(/^\//, "") || "Home"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                        <span>{v.device ?? "Unknown"}</span>
+                        {v.browser && <><span>·</span><span>{v.browser}</span></>}
+                        {v.referrer && (
+                          <>
+                            <span>·</span>
+                            <span className="truncate max-w-[120px]">
+                              {(() => { try { return new URL(v.referrer).hostname.replace(/^www\./, ""); } catch { return v.referrer; } })()}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0 flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">{timeAgoShort(v.createdAt)}</span>
+                      <Link href="/visitors">
+                        <ExternalLink className="h-3 w-3 text-muted-foreground hover:text-primary cursor-pointer" />
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {recentVisitors.length > 20 && (
+                <div className="px-4 py-2 border-t bg-gray-50 text-center">
+                  <Link href="/visitors">
+                    <Button variant="ghost" size="sm" className="text-xs h-7">
+                      +{recentVisitors.length - 20} more · View all in Visitors
+                    </Button>
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
     </div>
   );
 }

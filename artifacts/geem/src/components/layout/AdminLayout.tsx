@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import { useGetMe } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
@@ -30,6 +30,7 @@ import { usePwaInstall } from "@/hooks/usePwaInstall";
 import { Download } from "lucide-react";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { AppSetupPrompt } from "@/components/AppSetupPrompt";
+import { useVisitorLiveStream, type VisitorEvent } from "@/hooks/useVisitorLiveStream";
 
 const NAV_GROUPS = [
   {
@@ -271,6 +272,29 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     refetchInterval: 15_000,
     staleTime: 10_000,
   });
+
+  // Live visitor notifications via SSE
+  const lastVisitorToast = useRef<number>(0);
+  const handleVisitorEvent = useCallback((event: VisitorEvent) => {
+    // Debounce: at most one toast per 3 seconds to avoid spam on multiple pageviews
+    const now = Date.now();
+    if (now - lastVisitorToast.current < 3_000) return;
+    lastVisitorToast.current = now;
+
+    const where = event.city && event.country
+      ? `${event.city}, ${event.country}`
+      : event.country ?? "Unknown";
+    const page = event.page.replace(/^\//, "") || "Home";
+    const dev = event.device ?? "visitor";
+
+    toast({
+      title: `👁️ New visitor on geem.pk`,
+      description: `${where} · ${dev} · /${page}`,
+      duration: 5_000,
+    });
+  }, [toast]);
+
+  useVisitorLiveStream(handleVisitorEvent);
   const [offlineDismissed, setOfflineDismissed] = useState(false);
   const { canInstall, install } = usePwaInstall();
   const { toast } = useToast();

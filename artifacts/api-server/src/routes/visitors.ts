@@ -3,6 +3,30 @@ import { desc, gte, ilike, or, sql, count, countDistinct } from "drizzle-orm";
 import { z } from "zod/v4";
 import { db, visitorLogsTable, webOrdersTable } from "@workspace/db";
 import { subDays } from "date-fns";
+import { getUserIdFromToken } from "../lib/auth";
+
+/* ─── SSE visitor event bus ──────────────────────────────────────────────── */
+const sseClients = new Map<string, Response>();
+
+export interface VisitorEvent {
+  page: string;
+  city?: string | null;
+  country?: string | null;
+  device?: string | null;
+  browser?: string | null;
+  os?: string | null;
+  referrer?: string | null;
+  sessionId: string;
+  timestamp: string;
+}
+
+function broadcastVisitorEvent(event: VisitorEvent) {
+  const data = `data: ${JSON.stringify(event)}\n\n`;
+  for (const [id, res] of sseClients) {
+    try { res.write(data); }
+    catch { sseClients.delete(id); }
+  }
+}
 
 const router: IRouter = Router();
 
@@ -123,10 +147,58 @@ router.post("/shop/track", async (req: Request, res: Response): Promise<void> =>
         utmContent: nullIfEmpty(d.utmContent),
         utmTerm: nullIfEmpty(d.utmTerm),
       });
+      broadcastVisitorEvent({
+        page: d.page,
+        city: geo.city ?? null,
+        country: geo.country ?? null,
+        device: d.device ?? null,
+        browser: d.browser ?? null,
+        os: d.os ?? null,
+        referrer: d.referrer ?? null,
+        sessionId: d.sessionId,
+        timestamp: new Date().toISOString(),
+      });
     } catch { /* ignore insert errors */ }
   }).catch(() => {});
 
   res.sendStatus(204);
+});
+
+// Admin: live visitor SSE stream — GET /visitors/stream?token=<bearer>
+router.get("/visitors/stream", async (req: Request, res: Response): Promise<void> => {
+  const token = (req.query.token as string | undefined) ?? "";
+  if (!token) { res.sendStatus(401); return; }
+  const userId = await getUserIdFromToken(token).catch(() => null);
+  if (!userId) { res.sendStatus(401); return; }
+
+  const clientId = `${userId}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no"); // disable nginx buffering
+  res.flushHeaders();
+
+  // Send a heartbeat every 20s to keep the connection alive through proxies
+  res.write(": heartbeat\n\n");
+  const hb = setInterval(() => {
+    try { res.write(": heartbeat\n\n"); } catch { clearInterval(hb); }
+  }, 20_000);
+
+  sseClients.set(clientId, res);
+
+  req.on("close", () => {
+    clearInterval(hb);
+    sseClients.delete(clientId);
+  });
+});
+
+// Admin: recent visitor logs (last 24 h, up to 50)
+router.get("/visitors/recent", async (req: Request, res: Response): Promise<void> => {
+  const since = subDays(new Date(), 1);
+  const rows = await db.select().from(visitorLogsTable)
+    .where(gte(visitorLogsTable.createdAt, since))
+    .orderBy(desc(visitorLogsTable.createdAt)).limit(50);
+  res.json(rows.map(r => ({ ...r, lat: r.lat ?? null, lng: r.lng ?? null, createdAt: r.createdAt.toISOString() })));
 });
 
 /* ─── Traffic source helpers ─────────────────────────────────────────────── */
