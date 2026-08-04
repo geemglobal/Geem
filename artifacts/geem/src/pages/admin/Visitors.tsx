@@ -4,13 +4,14 @@ import { axiosInstance } from "@/lib/axios";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Monitor, Smartphone, Tablet, Globe, MapPin, Eye, Users, Cpu, Wifi,
   Battery, Fingerprint, ShoppingBag, User, Clock, ExternalLink, Package,
-  Radio, ArrowRight, Search, TrendingUp, Link,
+  Radio, ArrowRight, Search, TrendingUp, Link, MessageCircle, Send, Loader2,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
@@ -155,7 +156,7 @@ function pageLabel(page: string): string {
 }
 
 /* ─── Live Session Card ───────────────────────────────────────────────────── */
-function LiveCard({ session, onClick }: { session: LiveSession; onClick: () => void }) {
+function LiveCard({ session, onClick, onChat }: { session: LiveSession; onClick: () => void; onChat: () => void }) {
   const secAgo = Math.floor((Date.now() - new Date(session.lastSeen).getTime()) / 1000);
   const isNow = secAgo < 120;       // < 2 min  → green pulse
   const isRecent = secAgo < 600;    // < 10 min → yellow
@@ -238,6 +239,13 @@ function LiveCard({ session, onClick }: { session: LiveSession; onClick: () => v
         {session.screenResolution && <span>{session.screenResolution}</span>}
         {session.batteryLevel && <span><Battery className="h-3 w-3 inline mr-0.5" />{session.batteryLevel}</span>}
         {session.connectionType && <span><Wifi className="h-3 w-3 inline mr-0.5" />{session.connectionType}</span>}
+        <button
+          onClick={e => { e.stopPropagation(); onChat(); }}
+          className="ml-auto flex items-center gap-1 text-[10px] bg-blue-600 text-white px-2 py-1 rounded-full font-semibold hover:bg-blue-700 transition-colors"
+          title="Send a proactive chat message to this visitor"
+        >
+          <MessageCircle className="h-3 w-3" /> Chat
+        </button>
       </div>
     </div>
   );
@@ -608,6 +616,111 @@ function VisitorDetail({ log, onClose }: { log: VisitorLog; onClose: () => void 
   );
 }
 
+/* ─── Proactive Chat Dialog ───────────────────────────────────────────────── */
+function ProactiveChatDialog({
+  session,
+  onClose,
+}: {
+  session: LiveSession;
+  onClose: () => void;
+}) {
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  async function handleSend() {
+    if (!message.trim()) return;
+    setSending(true);
+    try {
+      await axiosInstance.post("/chat/sessions/proactive", {
+        trackerSessionId: session.sessionId,
+        message: message.trim(),
+      });
+      setSent(true);
+    } catch {
+      alert("Failed to send message. Please try again.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  const currentPage = session.pages[session.pages.length - 1]?.page ?? "/";
+  const location = [session.city, session.country].filter(Boolean).join(", ") || "Unknown";
+  const deviceLabel = session.deviceModel || session.deviceBrand ||
+    (session.device === "mobile" ? "Mobile" : session.device === "tablet" ? "Tablet" : "Desktop");
+
+  return (
+    <Dialog open onOpenChange={o => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <MessageCircle className="h-4 w-4 text-blue-600" />
+            Send Chat to Visitor
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {/* Visitor info */}
+          <div className="rounded-xl border bg-blue-50/50 px-4 py-3 space-y-1.5 text-sm">
+            <div className="flex items-center gap-2 font-medium">
+              <Monitor className="h-3.5 w-3.5 text-blue-600" />
+              {deviceLabel} · {session.os} · {session.browser}
+            </div>
+            <div className="flex items-center gap-2 text-muted-foreground text-xs">
+              <Globe className="h-3 w-3" /> {location}
+            </div>
+            <div className="rounded-lg bg-white border border-blue-100 px-3 py-1.5 text-xs">
+              <span className="text-muted-foreground">Viewing: </span>
+              <span className="font-medium text-primary">{pageLabel(currentPage)}</span>
+              <span className="text-muted-foreground ml-2 font-mono">{currentPage}</span>
+            </div>
+          </div>
+
+          {sent ? (
+            <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-5 text-center space-y-2">
+              <div className="text-3xl">✅</div>
+              <p className="font-semibold text-green-800 text-sm">Message sent!</p>
+              <p className="text-xs text-green-700">
+                The customer will see a chat notification on the shop. If they open it, you can continue the conversation in Live Chat.
+              </p>
+              <Button variant="outline" size="sm" onClick={onClose} className="mt-2">Close</Button>
+            </div>
+          ) : (
+            <>
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground mb-1.5 block uppercase tracking-wide">
+                  Your message
+                </label>
+                <textarea
+                  className="w-full border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent resize-none bg-white"
+                  rows={4}
+                  placeholder="Hi! I noticed you're looking at our GPS trackers. Can I help you find the right model? 😊"
+                  value={message}
+                  onChange={e => setMessage(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && e.ctrlKey) handleSend(); }}
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">Ctrl+Enter to send</p>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
+                <Button
+                  size="sm"
+                  onClick={handleSend}
+                  disabled={!message.trim() || sending}
+                  className="gap-1.5"
+                >
+                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  Send Chat
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /* ─── Main Page ───────────────────────────────────────────────────────────── */
 export default function Visitors() {
   const [days, setDays] = useState("7");
@@ -617,6 +730,7 @@ export default function Visitors() {
   const [selected, setSelected] = useState<VisitorLog | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<VisitorProfile | null>(null);
   const [selectedLive, setSelectedLive] = useState<LiveSession | null>(null);
+  const [proactiveChatSession, setProactiveChatSession] = useState<LiveSession | null>(null);
   const [tab, setTab] = useState<"live" | "profiles" | "analytics" | "log">("live");
   const [profileSearch, setProfileSearch] = useState("");
 
@@ -674,6 +788,7 @@ export default function Visitors() {
       {selected && <VisitorDetail log={selected} onClose={() => setSelected(null)} />}
       {selectedProfile && <ProfileDetail profile={selectedProfile} onClose={() => setSelectedProfile(null)} />}
       {selectedLive && <LiveDetail session={selectedLive} onClose={() => setSelectedLive(null)} />}
+      {proactiveChatSession && <ProactiveChatDialog session={proactiveChatSession} onClose={() => setProactiveChatSession(null)} />}
 
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -779,7 +894,12 @@ export default function Visitors() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {liveSessions.map(session => (
-                <LiveCard key={session.sessionId} session={session} onClick={() => setSelectedLive(session)} />
+                <LiveCard
+                  key={session.sessionId}
+                  session={session}
+                  onClick={() => setSelectedLive(session)}
+                  onChat={() => setProactiveChatSession(session)}
+                />
               ))}
             </div>
           )}

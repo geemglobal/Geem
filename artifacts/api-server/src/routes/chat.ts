@@ -244,6 +244,86 @@ router.post("/chat/sessions", async (req, res): Promise<void> => {
   res.json({ session, sessionKey: key });
 });
 
+// ─── proactive session (admin initiates chat to a live visitor) ──────────────
+router.post("/chat/sessions/proactive", async (req, res): Promise<void> => {
+  if (!await isAdminAuth(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { trackerSessionId, message, customerName } = req.body as {
+    trackerSessionId?: string; message?: string; customerName?: string;
+  };
+  if (!trackerSessionId || !message) {
+    res.status(400).json({ error: "trackerSessionId and message are required" });
+    return;
+  }
+
+  const proactiveKey = `proactive:${trackerSessionId}`;
+
+  // If a session already exists for this visitor, just add to it
+  const [existing] = await db.select().from(chatSessionsTable)
+    .where(and(eq(chatSessionsTable.sessionKey, proactiveKey), eq(chatSessionsTable.status, "open")));
+
+  if (existing) {
+    const [msg] = await db.insert(chatMessagesTable).values({
+      sessionId: existing.id, role: "agent", messageType: "text", content: message,
+    }).returning();
+    const preview = message.slice(0, 100);
+    await db.update(chatSessionsTable)
+      .set({ lastMessage: preview, updatedAt: new Date() })
+      .where(eq(chatSessionsTable.id, existing.id));
+    broadcast(existing.id, "message", msg);
+    broadcast(existing.id, "session_updated", { id: existing.id, lastMessage: preview });
+    res.json({ session: existing, created: false });
+    return;
+  }
+
+  const assignedStaffId = await autoAssignStaff();
+  const [session] = await db.insert(chatSessionsTable).values({
+    sessionKey: proactiveKey,
+    customerName: customerName || null,
+    aiMode: false,
+    status: "open",
+    unreadCount: 0,
+    assignedStaffId,
+    lastMessage: message.slice(0, 100),
+  }).returning();
+
+  // Opening system banner + agent's first message
+  await db.insert(chatMessagesTable).values({
+    sessionId: session.id, role: "system", messageType: "text",
+    content: "🧑‍💼 A Geem agent wants to chat with you!",
+  });
+  const [agentMsg] = await db.insert(chatMessagesTable).values({
+    sessionId: session.id, role: "agent", messageType: "text", content: message,
+  }).returning();
+
+  broadcast(session.id, "message", agentMsg);
+  logger.info({ sessionId: session.id, trackerSessionId }, "Proactive chat session created by admin");
+  res.status(201).json({ session, created: true });
+});
+
+// ─── probe: customer checks if admin has initiated a chat (no auth required) ──
+router.get("/chat/probe", async (req, res): Promise<void> => {
+  const sid = (req.query.sid as string | undefined)?.trim();
+  if (!sid) { res.json({ hasSession: false }); return; }
+
+  const proactiveKey = `proactive:${sid}`;
+  const [session] = await db.select({
+    id: chatSessionsTable.id,
+    sessionKey: chatSessionsTable.sessionKey,
+    lastMessage: chatSessionsTable.lastMessage,
+    status: chatSessionsTable.status,
+  }).from(chatSessionsTable)
+    .where(and(eq(chatSessionsTable.sessionKey, proactiveKey), eq(chatSessionsTable.status, "open")));
+
+  if (!session) { res.json({ hasSession: false }); return; }
+
+  res.json({
+    hasSession: true,
+    sessionId: session.id,
+    sessionKey: proactiveKey,
+    lastMessage: session.lastMessage,
+  });
+});
+
 // ─── list sessions (admin only) ───────────────────────────────────────────────
 router.get("/chat/sessions", async (req, res): Promise<void> => {
   if (!await isAdminAuth(req)) { res.status(401).json({ error: "Unauthorized" }); return; }

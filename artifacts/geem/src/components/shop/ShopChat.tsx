@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { MessageCircle, X, Send, Mic, MicOff, Paperclip, ChevronDown, Loader2, Bot, UserRound, RefreshCw, XCircle } from "lucide-react";
+import { MessageCircle, X, Send, Mic, MicOff, Paperclip, ChevronDown, Loader2, Bot, UserRound, RefreshCw, XCircle, BellRing } from "lucide-react";
 import Axios from "axios";
 
 // Dedicated axios instance for shop chat — intentionally has NO auth interceptor.
@@ -11,6 +11,11 @@ const SESSION_KEY_STORAGE     = "geem_chat_session_key";
 const SESSION_ID_STORAGE      = "geem_chat_session_id";
 const CHAT_CUSTOMER_NAME_KEY  = "geem_chat_name";
 const CHAT_CUSTOMER_MOBILE_KEY = "geem_chat_mobile";
+
+/** Get the tracker session ID from sessionStorage (same one ShopTracker uses) */
+function getTrackerSid(): string | null {
+  try { return sessionStorage.getItem("geem_sid"); } catch { return null; }
+}
 
 // SSE connects directly to /api/... (not via chatApi baseURL)
 const API_BASE = "/api";
@@ -37,6 +42,13 @@ export default function ShopChatWidget() {
   const [sessionExpired, setSessionExpired] = useState(false);
   const [closing, setClosing] = useState(false);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+
+  // Proactive chat (admin reached out to visitor)
+  const [proactiveSessionId, setProactiveSessionId] = useState<number | null>(null);
+  const [proactiveSessionKey, setProactiveSessionKey] = useState<string | null>(null);
+  const [proactiveLastMsg, setProactiveLastMsg] = useState<string | null>(null);
+  const [proactiveDismissed, setProactiveDismissed] = useState(false);
+  const probeRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Intro form
   const [showForm, setShowForm]   = useState(false);
@@ -79,6 +91,37 @@ export default function ShopChatWidget() {
         });
     }
   }, []);
+
+  // ── Probe for proactive (admin-initiated) sessions ──
+  useEffect(() => {
+    // Only probe if there's no existing session and nothing dismissed
+    if (sessionId) return;
+
+    async function probe() {
+      const sid = getTrackerSid();
+      if (!sid) return;
+      try {
+        const { data } = await chatApi.get<{
+          hasSession: boolean;
+          sessionId?: number;
+          sessionKey?: string;
+          lastMessage?: string;
+        }>(`/chat/probe?sid=${encodeURIComponent(sid)}`);
+        if (data.hasSession && data.sessionId && data.sessionKey) {
+          setProactiveSessionId(data.sessionId);
+          setProactiveSessionKey(data.sessionKey);
+          setProactiveLastMsg(data.lastMessage ?? null);
+        }
+      } catch { /* non-critical */ }
+    }
+
+    probe();
+    probeRef.current = setInterval(probe, 15_000);
+    return () => {
+      if (probeRef.current) clearInterval(probeRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
 
   useEffect(() => {
     if (!sessionId || !sessionKey) return;
@@ -163,6 +206,43 @@ export default function ShopChatWidget() {
     setMessages([]);
     setSessionExpired(false);
     setShowForm(true);
+  }
+
+  /** Customer clicks the proactive banner — join the admin-initiated session */
+  async function joinProactiveSession() {
+    if (!proactiveSessionId || !proactiveSessionKey) return;
+    setLoading(true);
+    try {
+      // Validate + reconnect via the existing POST /chat/sessions endpoint
+      const { data } = await chatApi.post("/chat/sessions", { sessionKey: proactiveSessionKey });
+      if (!data.session) {
+        // Session expired
+        setProactiveSessionId(null);
+        setProactiveSessionKey(null);
+        return;
+      }
+      // Save to localStorage so it persists like a normal session
+      localStorage.setItem(SESSION_KEY_STORAGE, proactiveSessionKey);
+      localStorage.setItem(SESSION_ID_STORAGE, String(proactiveSessionId));
+      setSessionId(data.session.id);
+      setSessionKey(data.sessionKey);
+      setProactiveSessionId(null);
+      setProactiveSessionKey(null);
+      setOpen(true);
+      setShowForm(false);
+    } catch {
+      // Fallback: connect directly
+      localStorage.setItem(SESSION_KEY_STORAGE, proactiveSessionKey);
+      localStorage.setItem(SESSION_ID_STORAGE, String(proactiveSessionId));
+      setSessionId(proactiveSessionId);
+      setSessionKey(proactiveSessionKey);
+      setProactiveSessionId(null);
+      setProactiveSessionKey(null);
+      setOpen(true);
+      setShowForm(false);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function fetchMessages() {
@@ -343,8 +423,57 @@ export default function ShopChatWidget() {
     );
   }
 
+  // Show proactive banner only if: there's an admin-initiated session, the customer
+  // hasn't already joined a session, hasn't dismissed it, and the chat isn't open.
+  const showProactiveBanner = !!(
+    proactiveSessionId &&
+    proactiveSessionKey &&
+    !proactiveDismissed &&
+    !sessionId &&
+    !open
+  );
+
   return (
     <>
+      {/* Proactive chat banner — agent reached out */}
+      {showProactiveBanner && (
+        <div className="fixed bottom-24 right-4 z-50 w-[300px] max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-2xl border border-blue-200 overflow-hidden animate-in slide-in-from-bottom-4">
+          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2.5 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <BellRing className="h-4 w-4 text-white animate-pulse" />
+              <p className="text-white text-xs font-semibold">New message from Geem</p>
+            </div>
+            <button
+              onClick={() => setProactiveDismissed(true)}
+              className="p-1 rounded-full hover:bg-white/20 text-white/80 hover:text-white transition-colors"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <div className="px-4 py-3 space-y-3">
+            <div className="flex items-start gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                <img src="/api/shop/app-icon" alt="Geem" className="w-full h-full object-contain rounded-full" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-gray-800">Geem Agent</p>
+                <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">
+                  {proactiveLastMsg || "An agent wants to chat with you!"}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={joinProactiveSession}
+              disabled={loading}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5"
+            >
+              {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MessageCircle className="h-3.5 w-3.5" />}
+              Open Chat
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Floating button */}
       <button
         onClick={handleOpen}
@@ -352,8 +481,10 @@ export default function ShopChatWidget() {
         aria-label="Open chat"
       >
         {open ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
-        {!open && unread > 0 && (
-          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold">{unread}</span>
+        {!open && (unread > 0 || showProactiveBanner) && (
+          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold">
+            {unread > 0 ? unread : "!"}
+          </span>
         )}
       </button>
 

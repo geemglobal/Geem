@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { axiosInstance } from "@/lib/axios";
 import { Badge } from "@/components/ui/badge";
@@ -7,7 +7,7 @@ import { Link } from "wouter";
 import {
   ShoppingCart, RotateCcw, CheckCircle2, Truck, XCircle, Clock,
   Bell, BellOff, ArrowRight, RefreshCw, Package, MessageSquare, UserRound,
-  Eye, Monitor, Smartphone, Globe, ExternalLink,
+  Eye, Monitor, Smartphone, Globe, ExternalLink, Trash2, X,
 } from "lucide-react";
 
 interface WebOrder {
@@ -82,7 +82,32 @@ const STATUS_META: Record<string, { label: string; color: string; icon: React.El
   chat_new:     { label: "Chat",         color: "bg-blue-400",   icon: MessageSquare },
 };
 
-function NotifCard({ item, isUnread }: { item: NotifItem; isUnread: boolean }) {
+const DISMISSED_KEY = "geem_notif_dismissed_ids";
+
+function getDismissed(): Set<string> {
+  try {
+    const raw = localStorage.getItem(DISMISSED_KEY);
+    return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveDismissed(ids: Set<string>) {
+  // Keep only last 500 to avoid localStorage bloat
+  const arr = Array.from(ids).slice(-500);
+  localStorage.setItem(DISMISSED_KEY, JSON.stringify(arr));
+}
+
+function NotifCard({
+  item,
+  isUnread,
+  onDismiss,
+}: {
+  item: NotifItem;
+  isUnread: boolean;
+  onDismiss: (id: string) => void;
+}) {
   const meta = STATUS_META[item.status] ?? STATUS_META["new"];
   const Icon = item.type === "return_request" ? RotateCcw : meta.icon;
 
@@ -96,7 +121,16 @@ function NotifCard({ item, isUnread }: { item: NotifItem; isUnread: boolean }) {
           <p className={`text-sm font-semibold leading-snug ${isUnread ? "text-foreground" : "text-foreground/80"}`}>
             {item.title}
           </p>
-          <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">{item.time}</span>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">{item.time}</span>
+            <button
+              onClick={() => onDismiss(item.id)}
+              className="p-1 rounded-full hover:bg-gray-100 text-muted-foreground hover:text-red-500 transition-colors"
+              title="Dismiss"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
         <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{item.subtitle}</p>
         <div className="flex items-center gap-2 mt-2">
@@ -185,6 +219,16 @@ export default function Notifications() {
   });
 
   const [lastRead, setLastReadState] = useState(getLastRead());
+  const [dismissed, setDismissed] = useState<Set<string>>(getDismissed);
+
+  const dismiss = useCallback((id: string) => {
+    setDismissed(prev => {
+      const next = new Set(prev);
+      next.add(id);
+      saveDismissed(next);
+      return next;
+    });
+  }, []);
 
   const orderItems: NotifItem[] = (ordersData?.orders ?? []).map(o => ({
     id: `order-${o.id}`,
@@ -225,10 +269,12 @@ export default function Notifications() {
     raw: s,
   }));
 
-  const allItems: NotifItem[] = [...orderItems, ...returnItems, ...chatItems].sort(
-    (a, b) => new Date((b.raw as { createdAt: string; updatedAt?: string }).updatedAt || (b.raw as { createdAt: string }).createdAt).getTime()
-            - new Date((a.raw as { createdAt: string; updatedAt?: string }).updatedAt || (a.raw as { createdAt: string }).createdAt).getTime()
-  );
+  const allItems: NotifItem[] = [...orderItems, ...returnItems, ...chatItems]
+    .filter(i => !dismissed.has(i.id))
+    .sort(
+      (a, b) => new Date((b.raw as { createdAt: string; updatedAt?: string }).updatedAt || (b.raw as { createdAt: string }).createdAt).getTime()
+              - new Date((a.raw as { createdAt: string; updatedAt?: string }).updatedAt || (a.raw as { createdAt: string }).createdAt).getTime()
+    );
 
   const actionItems = allItems.filter(i =>
     i.type === "new_order" ||
@@ -250,6 +296,15 @@ export default function Notifications() {
     setLastRead();
     setLastReadState(Date.now());
     qc.invalidateQueries({ queryKey: ["notif-bell-count"] });
+  }
+
+  function clearAll() {
+    const allIds = new Set([...actionItems, ...activityItems].map(i => i.id));
+    setDismissed(prev => {
+      const next = new Set([...prev, ...allIds]);
+      saveDismissed(next);
+      return next;
+    });
   }
 
   function handleRefresh() {
@@ -286,6 +341,12 @@ export default function Notifications() {
                 Mark all read
               </Button>
             )}
+            {allItems.length > 0 && (
+              <Button variant="outline" size="sm" onClick={clearAll} className="text-red-600 border-red-200 hover:bg-red-50">
+                <Trash2 className="h-4 w-4 mr-1.5" />
+                Clear all
+              </Button>
+            )}
           </div>
         </div>
 
@@ -318,6 +379,7 @@ export default function Notifications() {
                   key={item.id}
                   item={item}
                   isUnread={new Date((item.raw as { createdAt: string }).createdAt).getTime() > lastRead}
+                  onDismiss={dismiss}
                 />
               ))}
             </div>
@@ -337,6 +399,7 @@ export default function Notifications() {
                   key={item.id}
                   item={item}
                   isUnread={new Date((item.raw as { createdAt: string }).createdAt).getTime() > lastRead}
+                  onDismiss={dismiss}
                 />
               ))}
             </div>
