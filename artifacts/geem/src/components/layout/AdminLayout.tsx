@@ -273,6 +273,10 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     staleTime: 10_000,
   });
 
+  const [offlineDismissed, setOfflineDismissed] = useState(false);
+  const { canInstall, install } = usePwaInstall();
+  const { toast } = useToast();
+
   // Live visitor notifications via SSE
   const lastVisitorToast = useRef<number>(0);
   const handleVisitorEvent = useCallback((event: VisitorEvent) => {
@@ -295,9 +299,6 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   }, [toast]);
 
   useVisitorLiveStream(handleVisitorEvent);
-  const [offlineDismissed, setOfflineDismissed] = useState(false);
-  const { canInstall, install } = usePwaInstall();
-  const { toast } = useToast();
   const [pendingSync, setPendingSync] = useState(0);
   const [syncing, setSyncing] = useState(false);
 
