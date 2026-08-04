@@ -15,7 +15,20 @@ import { useShopAuth, SHOP_TOKEN_KEY } from "@/lib/shopAuth";
 import { getRecaptchaToken } from "@/lib/recaptcha";
 
 import { PAKISTAN_CITIES } from "@/data/pakistan-cities";
+import { CITY_KEY, ADDRESS_KEY } from "@/components/shop/LocationPermissionBanner";
 const CITIES = PAKISTAN_CITIES;
+
+/** Try to match a raw geocoded city string to the closest city in our list */
+function matchCity(raw: string): string {
+  if (!raw) return "";
+  const normalized = raw.toLowerCase().trim();
+  // Exact match first
+  const exact = PAKISTAN_CITIES.find(c => c.toLowerCase() === normalized);
+  if (exact) return exact;
+  // Partial match (geocoded city might be "Karachi City" → "Karachi")
+  const partial = PAKISTAN_CITIES.find(c => normalized.includes(c.toLowerCase()) || c.toLowerCase().includes(normalized));
+  return partial ?? "";
+}
 
 interface OrderResponse {
   orderNumber: string;
@@ -65,6 +78,10 @@ export default function Checkout() {
     const chatName   = localStorage.getItem("geem_chat_name")   || "";
     const chatMobile = localStorage.getItem("geem_chat_mobile") || "";
 
+    // Location auto-fill from browser geolocation (if user granted it)
+    const savedCity    = matchCity(localStorage.getItem(CITY_KEY) ?? "");
+    const savedAddress = localStorage.getItem(ADDRESS_KEY) ?? "";
+
     Promise.all([
       fetch("/api/shop/auth/profile", { headers: hdrs }).then(r => r.ok ? r.json() as Promise<ShopProfile> : null).catch(() => null),
       fetch("/api/shop/auth/orders",  { headers: hdrs }).then(r => r.ok ? r.json() as Promise<RecentOrder[]> : []).catch(() => [] as RecentOrder[]),
@@ -77,10 +94,26 @@ export default function Checkout() {
         name:    p.name    || (profile as ShopProfile | null)?.name    || last?.customerName    || chatName   || "",
         email:   p.email   || (profile as ShopProfile | null)?.email   || last?.customerEmail   || "",
         mobile:  p.mobile  || (profile as ShopProfile | null)?.mobile  || last?.customerMobile  || chatMobile || "",
-        city:    p.city    || (profile as ShopProfile | null)?.city    || last?.customerCity    || "",
-        address: p.address || (profile as ShopProfile | null)?.address || last?.customerAddress || "",
+        city:    p.city    || (profile as ShopProfile | null)?.city    || last?.customerCity    || savedCity  || "",
+        address: p.address || (profile as ShopProfile | null)?.address || last?.customerAddress || savedAddress || "",
       }));
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // For guests (no token), still try to auto-fill city/address from saved location
+  useEffect(() => {
+    const token = getToken();
+    if (token) return; // handled by the authenticated effect above
+    const savedCity    = matchCity(localStorage.getItem(CITY_KEY) ?? "");
+    const savedAddress = localStorage.getItem(ADDRESS_KEY) ?? "";
+    if (savedCity || savedAddress) {
+      setForm(p => ({
+        ...p,
+        city:    p.city    || savedCity    || "",
+        address: p.address || savedAddress || "",
+      }));
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -12,6 +12,7 @@ import { axiosInstance } from "@/lib/axios";
 import { markShopNotifsRead } from "./ShopNotifications";
 import { WhatsAppChooser } from "@/components/WhatsAppChooser";
 import ShopChatWidget from "@/components/shop/ShopChat";
+import LocationPermissionBanner from "@/components/shop/LocationPermissionBanner";
 
 const CATEGORIES = [
   { href: "/shop/products?category=Security+Equipment",     label: "Security Equipment",       icon: Shield },
@@ -91,6 +92,7 @@ export function ShopLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-white flex flex-col">
       <ShopTracker />
+      <LocationPermissionBanner />
 
       {/* ── Top contact bar ─────────────────────────────────────────── */}
       <div className="bg-gray-900 text-gray-300 text-xs py-1.5 px-4">
