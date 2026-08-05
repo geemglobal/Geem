@@ -257,14 +257,30 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   // (avoids infinite loops where auth briefly oscillates between error states)
   const hasRedirected = useRef(false);
 
+  // lastRead: timestamp of when the admin last clicked the bell.
+  // Items older than this are not counted, so the bell clears when clicked.
+  const [lastRead, setLastRead] = useState<number>(() =>
+    parseInt(localStorage.getItem("geem_notif_last_read") ?? "0", 10)
+  );
+
   const { data: bellCount = 0 } = useQuery<number>({
-    queryKey: ["notif-bell-count"],
+    queryKey: ["notif-bell-count", lastRead],
     queryFn: async () => {
       const [orders, returns, chatSessions] = await Promise.all([
-        axiosInstance.get<{ orders: { id: number }[] }>("/web-orders?status=new").then(r => r.data.orders.length),
-        axiosInstance.get<{ id: number; status: string }[]>("/web-orders/returns?status=pending").then(r => r.data.length),
-        axiosInstance.get<{ id: number; status: string; aiMode: boolean; unreadCount: number }[]>("/chat/sessions")
-          .then(r => r.data.filter(s => s.status === "open" && (!s.aiMode || s.unreadCount > 0)).length)
+        axiosInstance
+          .get<{ orders: { id: number; createdAt: string }[] }>("/web-orders?status=new")
+          .then(r => r.data.orders.filter(o => new Date(o.createdAt).getTime() > lastRead).length),
+        axiosInstance
+          .get<{ id: number; status: string; createdAt: string }[]>("/web-orders/returns?status=pending")
+          .then(r => r.data.filter(ret => new Date(ret.createdAt).getTime() > lastRead).length),
+        axiosInstance
+          .get<{ id: number; status: string; aiMode: boolean; unreadCount: number; updatedAt: string }[]>("/chat/sessions")
+          // Only count sessions that genuinely have unread messages AND are newer than lastRead
+          .then(r => r.data.filter(s =>
+            s.status === "open" &&
+            s.unreadCount > 0 &&
+            new Date(s.updatedAt).getTime() > lastRead
+          ).length)
           .catch(() => 0),
       ]);
       return orders + returns + chatSessions;
@@ -490,10 +506,11 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
                   className="relative flex items-center justify-center h-8 w-8 rounded-lg hover:bg-accent transition-colors"
                   title="Notifications"
                   onClick={() => {
-                    const now = String(Date.now());
-                    localStorage.setItem("geem_notif_last_read", now);
-                    window.dispatchEvent(new StorageEvent("storage", { key: "geem_notif_last_read", newValue: now }));
-                    qc.invalidateQueries({ queryKey: ["notif-bell-count"] });
+                    const now = Date.now();
+                    const nowStr = String(now);
+                    localStorage.setItem("geem_notif_last_read", nowStr);
+                    window.dispatchEvent(new StorageEvent("storage", { key: "geem_notif_last_read", newValue: nowStr }));
+                    setLastRead(now); // updates query key → bell immediately shows 0
                   }}
                 >
                   <Bell className="h-[18px] w-[18px]" />
