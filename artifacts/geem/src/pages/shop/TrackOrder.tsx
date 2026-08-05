@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Search, Package, Truck, CheckCircle, Clock, XCircle } from "lucide-react";
+import { Search, Package, Truck, CheckCircle, Clock, XCircle, ExternalLink } from "lucide-react";
 
-interface WebOrder { id: number; orderNumber: string; status: string; paymentStatus: string; customerName: string; customerCity: string; total: number; courierCn: string | null; courierName: string | null; createdAt: string; items: Array<{ description: string; qty: number; price: number; amount: number }>; }
+interface WebOrder { id: number; orderNumber: string; status: string; paymentStatus: string; customerName: string; customerCity: string; total: number; courierCn: string | null; courierName: string | null; courierTrackingUrl: string | null; createdAt: string; items: Array<{ description: string; qty: number; price: number; amount: number }>; }
 
 const STATUS_STEPS = [
   { key: "new", label: "Order Received", icon: Clock },
@@ -93,7 +93,18 @@ export default function TrackOrder() {
                   <div><span className="text-muted-foreground">City:</span> {order.customerCity}</div>
                   <div><span className="text-muted-foreground">Date:</span> {new Date(order.createdAt).toLocaleDateString("en-PK", { timeZone: "Asia/Karachi", day: "2-digit", month: "short", year: "numeric" })}</div>
                   <div><span className="text-muted-foreground">Total:</span> <span className="font-bold">Rs {order.total.toLocaleString()}</span></div>
-                  {order.courierCn && <div className="col-span-2"><span className="text-muted-foreground">Courier CN:</span> <span className="font-mono font-bold">{order.courierCn}</span></div>}
+                  {order.courierCn && (
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground">Courier CN:</span>{" "}
+                      <span className="font-mono font-bold">{order.courierCn}</span>
+                    </div>
+                  )}
+                  {order.courierName && (
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground">Courier:</span>{" "}
+                      <span className="font-medium">{order.courierName}</span>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -117,6 +128,28 @@ export default function TrackOrder() {
                       );
                     })}
                   </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {order.courierTrackingUrl && (
+              <Card className="border-blue-200">
+                <CardContent className="pt-5 space-y-2">
+                  <h3 className="font-semibold text-sm flex items-center gap-2">
+                    <Truck className="h-4 w-4 text-blue-600" /> Live Parcel Tracking
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Track your parcel in real-time on the courier website.
+                  </p>
+                  <a
+                    href={order.courierTrackingUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:underline mt-1"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Track on {order.courierName ?? "Courier"} Website
+                  </a>
                 </CardContent>
               </Card>
             )}

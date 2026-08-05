@@ -409,6 +409,24 @@ router.get("/shop/orders/:orderNumber", async (req, res): Promise<void> => {
   const [wo] = await db.select().from(webOrdersTable).where(eq(webOrdersTable.orderNumber, orderNumber));
   if (!wo) { res.status(404).json({ error: "Order not found" }); return; }
   const items = await db.select().from(webOrderItemsTable).where(eq(webOrderItemsTable.webOrderId, wo.id));
+
+  // Resolve courier name + tracking URL from the couriers table.
+  // Web orders store only the CN; look up Leopard (default courier) when a CN is present.
+  let courierName: string | null = null;
+  let courierTrackingUrl: string | null = null;
+  if (wo.courierCn) {
+    const [leopard] = await db
+      .select({ name: couriersTable.name, trackingUrl: couriersTable.trackingUrl })
+      .from(couriersTable)
+      .where(eq(couriersTable.apiProvider, "leopard"));
+    if (leopard) {
+      courierName = leopard.name;
+      courierTrackingUrl = leopard.trackingUrl
+        ? leopard.trackingUrl.replace("{cn}", encodeURIComponent(wo.courierCn))
+        : null;
+    }
+  }
+
   res.json({
     id: wo.id,
     orderNumber: wo.orderNumber,
@@ -419,7 +437,8 @@ router.get("/shop/orders/:orderNumber", async (req, res): Promise<void> => {
     customerCity: wo.customerCity,
     total: parseFloat(String(wo.total)),
     courierCn: wo.courierCn ?? null,
-    courierName: null,
+    courierName,
+    courierTrackingUrl,
     createdAt: wo.createdAt.toISOString(),
     items: items.map(i => ({
       description: i.description, qty: parseFloat(String(i.qty)), price: parseFloat(String(i.price)), amount: parseFloat(String(i.amount)),

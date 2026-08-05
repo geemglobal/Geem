@@ -25,6 +25,11 @@ const DEFAULT_COURIERS = [
     apiProvider: "trax",
     trackingUrl: "https://portal.traxlogistics.com/tracking?cn={cn}",
   },
+  {
+    name: "Leopard Courier",
+    apiProvider: "leopard",
+    trackingUrl: "https://pk.leopardscourier.com/shipment_tracking_view?title=Tracking&value={cn}",
+  },
 ];
 
 async function main() {
