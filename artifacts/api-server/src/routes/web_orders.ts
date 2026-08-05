@@ -650,6 +650,81 @@ router.patch("/web-orders/:id", async (req, res): Promise<void> => {
   res.json(await buildWebOrder(wo));
 });
 
+// ─── Item Price Override ──────────────────────────────────────────────────────
+// Updates per-item prices for dealer/custom pricing. Cascades to:
+//   web_order_items → order totals → invoice items → invoice totals → ledger
+router.patch("/web-orders/:id/item-prices", async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const priceUpdates: { id: number; price: number }[] = Array.isArray(req.body.items) ? req.body.items : [];
+  if (!priceUpdates.length) { res.status(400).json({ error: "No items provided" }); return; }
+
+  const [wo] = await db.select().from(webOrdersTable).where(eq(webOrdersTable.id, id));
+  if (!wo) { res.status(404).json({ error: "Order not found" }); return; }
+  const oldTotal = parseFloat(String(wo.total));
+
+  // 1. Update each web_order_item price + amount
+  for (const { id: itemId, price } of priceUpdates) {
+    const [item] = await db.select().from(webOrderItemsTable).where(eq(webOrderItemsTable.id, itemId));
+    if (!item || item.webOrderId !== id) continue;
+    const qty = parseFloat(String(item.qty));
+    await db.update(webOrderItemsTable)
+      .set({ price: String(price), amount: String(price * qty) })
+      .where(eq(webOrderItemsTable.id, itemId));
+  }
+
+  // 2. Recalculate order subtotal + total
+  const allItems = await db.select().from(webOrderItemsTable).where(eq(webOrderItemsTable.webOrderId, id));
+  const newSubtotal = allItems.reduce((s, i) => s + parseFloat(String(i.amount)), 0);
+  const shipping = parseFloat(String(wo.shipping));
+  const newTotal = newSubtotal + shipping;
+
+  const [updatedWo] = await db.update(webOrdersTable)
+    .set({ subtotal: String(newSubtotal), total: String(newTotal) })
+    .where(eq(webOrdersTable.id, id))
+    .returning();
+
+  // 3. Cascade to linked invoice if one exists
+  const [inv] = await db.select().from(invoicesTable)
+    .where(or(eq(invoicesTable.webOrderId, id), eq(invoicesTable.invoiceNumber, wo.orderNumber)));
+
+  if (inv) {
+    // Update invoice items by description match (no direct FK from order items → invoice items)
+    for (const { id: itemId, price } of priceUpdates) {
+      const [orderItem] = await db.select().from(webOrderItemsTable).where(eq(webOrderItemsTable.id, itemId));
+      if (!orderItem) continue;
+      const matchingInvItems = await db.select().from(invoiceItemsTable)
+        .where(and(eq(invoiceItemsTable.invoiceId, inv.id), eq(invoiceItemsTable.description, orderItem.description)));
+      for (const ii of matchingInvItems) {
+        const qty = parseFloat(String(ii.qty));
+        await db.update(invoiceItemsTable)
+          .set({ price: String(price), amount: String(price * qty) })
+          .where(eq(invoiceItemsTable.id, ii.id));
+      }
+    }
+    // Update invoice totals to match new order totals
+    await db.update(invoicesTable)
+      .set({ subtotal: String(newSubtotal), total: String(newTotal) })
+      .where(eq(invoicesTable.id, inv.id));
+
+    // Adjust ledger debit entry for the price difference
+    const diff = newTotal - oldTotal;
+    if (Math.abs(diff) > 0.01) {
+      const entries = await db.select().from(ledgerEntriesTable)
+        .where(and(eq(ledgerEntriesTable.reference, wo.orderNumber), eq(ledgerEntriesTable.type, "invoice")));
+      for (const entry of entries) {
+        const adjustedDebit = Math.max(0, parseFloat(String(entry.debit)) + diff);
+        await db.update(ledgerEntriesTable)
+          .set({ debit: String(adjustedDebit) })
+          .where(eq(ledgerEntriesTable.id, entry.id));
+        await recalculateCustomerLedger(entry.customerId);
+      }
+    }
+  }
+
+  logger.info({ orderId: id, oldTotal, newTotal }, "Order item prices updated");
+  res.json(await buildWebOrder(updatedWo!));
+});
+
 // COD cash collection: records payment on the invoice, marks it paid, updates order paymentStatus
 router.post("/web-orders/:id/collect-cod", async (req, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);

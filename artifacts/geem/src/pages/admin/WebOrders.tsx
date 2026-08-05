@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Truck, Plus, RotateCcw, Phone, MapPin, Mail, CreditCard,
   Package, Calendar, Hash, User, Wallet, Smartphone,
-  Copy, MessageCircle, FileText, Send,
+  Copy, MessageCircle, FileText, Send, Pencil,
 } from "lucide-react";
 import { cn, isIccid, imeiLabel } from "@/lib/utils";
 import { formatPakDate, formatPakDateTime, toWaPhone } from "@/lib/format";
@@ -126,6 +126,8 @@ export default function WebOrders() {
   const [inventorySearchText, setInventorySearchText] = useState<Record<string, string>>({});
   const [inventorySearching, setInventorySearching] = useState<Record<string, boolean>>({});
   const [manualImeis, setManualImeis] = useState<Record<string, string>>({});
+  const [itemPriceEdits, setItemPriceEdits] = useState<Record<number, string>>({});
+  const [priceEditMode, setPriceEditMode] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["web-orders", filterStatus],
@@ -195,6 +197,28 @@ export default function WebOrders() {
     },
     onError: () => toast({ title: "Failed to record COD collection", variant: "destructive" }),
   });
+
+  const updatePricesMutation = useMutation({
+    mutationFn: ({ id, items }: { id: number; items: { id: number; price: number }[] }) =>
+      axiosInstance.patch(`/web-orders/${id}/item-prices`, { items }).then(r => r.data),
+    onSuccess: (updatedOrder: WebOrder) => {
+      qc.invalidateQueries({ queryKey: ["web-orders"] });
+      setSelectedOrder(updatedOrder);
+      setItemPriceEdits({});
+      setPriceEditMode(false);
+      toast({ title: "Prices updated — totals and invoice recalculated" });
+    },
+    onError: () => toast({ title: "Failed to update prices", variant: "destructive" }),
+  });
+
+  function handleSavePrices() {
+    if (!selectedOrder) return;
+    const items = Object.entries(itemPriceEdits)
+      .map(([id, price]) => ({ id: parseInt(id), price: parseFloat(price) }))
+      .filter(({ price }) => !isNaN(price) && price >= 0);
+    if (!items.length) { setPriceEditMode(false); return; }
+    updatePricesMutation.mutate({ id: selectedOrder.id, items });
+  }
 
   useEffect(() => {
     if (!imeiDialog || !selectedOrder) {
@@ -432,6 +456,7 @@ export default function WebOrders() {
                         setSelectedOrder(order); setNewStatus(order.status);
                         setNewPaymentStatus(order.paymentStatus);
                         setCourierCn(order.courierCn ?? ""); setCourierMode("manual"); setSelectedCourierId("");
+                        setItemPriceEdits({}); setPriceEditMode(false);
                       }}>
                         <TableCell className="font-mono font-semibold text-sm">{order.orderNumber}</TableCell>
                         <TableCell>
@@ -456,6 +481,7 @@ export default function WebOrders() {
                             setSelectedOrder(order); setNewStatus(order.status);
                             setNewPaymentStatus(order.paymentStatus);
                             setCourierCn(order.courierCn ?? ""); setCourierMode("manual"); setSelectedCourierId("");
+                            setItemPriceEdits({}); setPriceEditMode(false);
                           }}>Manage</Button>
                         </TableCell>
                       </TableRow>
@@ -675,24 +701,82 @@ export default function WebOrders() {
 
                 {/* ─── Items ─── */}
                 <div className="rounded-lg border overflow-hidden">
-                  <div className="bg-slate-50 px-4 py-2.5 border-b">
+                  <div className="bg-slate-50 px-4 py-2.5 border-b flex items-center justify-between">
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       Order Items ({selectedOrder.items.length})
                     </p>
+                    <button
+                      type="button"
+                      onClick={() => { setPriceEditMode(v => !v); setItemPriceEdits({}); }}
+                      className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                    >
+                      {priceEditMode
+                        ? "Cancel"
+                        : <><Pencil className="h-3 w-3" /> Edit Prices</>}
+                    </button>
                   </div>
                   <div className="divide-y">
-                    {selectedOrder.items.map((item, i) => (
-                      <div key={i} className="flex items-center gap-3 px-4 py-3">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{item.description}</p>
-                          <p className="text-xs text-muted-foreground">
-                            Rs {item.price.toLocaleString()} × {item.qty}
+                    {selectedOrder.items.map((item) => {
+                      const editedPriceStr = itemPriceEdits[item.id];
+                      const editedPrice = editedPriceStr !== undefined ? (parseFloat(editedPriceStr) || 0) : item.price;
+                      const editedAmount = editedPrice * item.qty;
+                      const isChanged = editedPriceStr !== undefined;
+                      return (
+                        <div key={item.id} className="flex items-center gap-3 px-4 py-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{item.description}</p>
+                            {priceEditMode ? (
+                              <div className="flex items-center gap-1.5 mt-1.5">
+                                <span className="text-xs text-muted-foreground">Rs</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="1"
+                                  value={editedPriceStr ?? String(item.price)}
+                                  onChange={e => setItemPriceEdits(p => ({ ...p, [item.id]: e.target.value }))}
+                                  className="w-28 text-sm border border-blue-300 rounded px-2 py-0.5 font-mono focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                />
+                                <span className="text-xs text-muted-foreground">× {item.qty}</span>
+                              </div>
+                            ) : (
+                              <p className="text-xs text-muted-foreground">
+                                Rs {item.price.toLocaleString()} × {item.qty}
+                              </p>
+                            )}
+                          </div>
+                          <p className={`text-sm font-bold flex-shrink-0 ${priceEditMode && isChanged ? "text-blue-600" : ""}`}>
+                            Rs {(priceEditMode && isChanged ? editedAmount : item.amount).toLocaleString()}
                           </p>
                         </div>
-                        <p className="text-sm font-bold flex-shrink-0">Rs {item.amount.toLocaleString()}</p>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
+                  {priceEditMode && Object.keys(itemPriceEdits).length > 0 && (
+                    <div className="px-4 py-3 bg-blue-50 border-t border-blue-100 flex items-center justify-between gap-3">
+                      <div className="text-sm">
+                        <span className="text-muted-foreground text-xs">New total: </span>
+                        <span className="font-bold text-blue-700">
+                          Rs {(
+                            selectedOrder.items.reduce((s, item) => {
+                              const p = itemPriceEdits[item.id] !== undefined
+                                ? (parseFloat(itemPriceEdits[item.id]) || 0)
+                                : item.price;
+                              return s + p * item.qty;
+                            }, 0) + selectedOrder.shipping
+                          ).toLocaleString()}
+                        </span>
+                        <span className="text-xs text-muted-foreground ml-1">(incl. shipping)</span>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={handleSavePrices}
+                        disabled={updatePricesMutation.isPending}
+                        className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0"
+                      >
+                        {updatePricesMutation.isPending ? "Saving..." : "Save Price Changes"}
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
                 {/* ─── Status & Payment Status ─── */}
