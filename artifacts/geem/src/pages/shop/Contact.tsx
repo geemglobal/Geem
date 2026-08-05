@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { openWhatsApp, GEEM_WA } from "@/lib/whatsapp";
 import { ShopLayout } from "./ShopLayout";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { useSEO } from "@/hooks/useSEO";
 import { MapPin, Phone, Mail, MessageCircle, Clock, CheckCircle2, Shield, Package } from "lucide-react";
+import { useCustomerData } from "@/hooks/useCustomerData";
 
 const SUBJECTS = [
   "General Product Inquiry",
@@ -25,8 +26,20 @@ const SUBJECTS = [
 
 export default function Contact() {
   const { toast } = useToast();
+  const customerData = useCustomerData();
   const [form, setForm] = useState({ name: "", email: "", mobile: "", subject: "", message: "", organisation: "" });
   const [submitted, setSubmitted] = useState(false);
+
+  // Pre-fill name / mobile / email once customer data is ready
+  useEffect(() => {
+    if (!customerData.loaded) return;
+    setForm(p => ({
+      ...p,
+      name:   p.name   || customerData.name   || "",
+      email:  p.email  || customerData.email  || "",
+      mobile: p.mobile || customerData.mobile || "",
+    }));
+  }, [customerData.loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useSEO({
     title: "Contact Geem — Security Equipment Supplier Pakistan",

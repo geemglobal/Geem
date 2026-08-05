@@ -13,39 +13,13 @@ import { axiosInstance } from "@/lib/axios";
 import { Package, ArrowLeft, ShieldCheck, Truck, CheckCircle2, CreditCard, Wallet } from "lucide-react";
 import { useShopAuth, SHOP_TOKEN_KEY } from "@/lib/shopAuth";
 import { getRecaptchaToken } from "@/lib/recaptcha";
+import { useCustomerData } from "@/hooks/useCustomerData";
 
 import { PAKISTAN_CITIES } from "@/data/pakistan-cities";
-import { CITY_KEY, ADDRESS_KEY } from "@/components/shop/LocationPermissionBanner";
 const CITIES = PAKISTAN_CITIES;
 
-/** Try to match a raw geocoded city string to the closest city in our list */
-function matchCity(raw: string): string {
-  if (!raw) return "";
-  const normalized = raw.toLowerCase().trim();
-  // Exact match first
-  const exact = PAKISTAN_CITIES.find(c => c.toLowerCase() === normalized);
-  if (exact) return exact;
-  // Partial match (geocoded city might be "Karachi City" → "Karachi")
-  const partial = PAKISTAN_CITIES.find(c => normalized.includes(c.toLowerCase()) || c.toLowerCase().includes(normalized));
-  return partial ?? "";
-}
-
-interface OrderResponse {
-  orderNumber: string;
-  total: number;
-}
-
-interface ShopProfile {
-  id: number; name: string; email: string | null; mobile: string | null;
-  username: string | null; address: string; city: string; country: string;
-}
-
-interface WalletData { balance: number; }
-
-interface RecentOrder {
-  customerName: string; customerEmail: string | null; customerMobile: string;
-  customerAddress: string; customerCity: string;
-}
+interface OrderResponse { orderNumber: string; total: number; }
+interface WalletData    { balance: number; }
 
 export default function Checkout() {
   const { cart, subtotal, shipping, total, clearCart } = useCart();
@@ -53,6 +27,7 @@ export default function Checkout() {
   const [, navigate] = useLocation();
   const { customer, getToken } = useShopAuth();
   const qc = useQueryClient();
+  const customerData = useCustomerData();
 
   const authHeader = () => {
     const t = localStorage.getItem(SHOP_TOKEN_KEY);
@@ -66,56 +41,30 @@ export default function Checkout() {
   const [step, setStep] = useState<"info" | "payment">("info");
   const [walletBalance, setWalletBalance] = useState(0);
 
-  // Bypass Axios interceptor entirely — use raw fetch for shop auth calls
+  // Populate form once all customer data is resolved (profile + last order + localStorage)
+  useEffect(() => {
+    if (!customerData.loaded) return;
+    setForm(p => ({
+      ...p,
+      name:    p.name    || customerData.name    || "",
+      email:   p.email   || customerData.email   || "",
+      mobile:  p.mobile  || customerData.mobile  || "",
+      city:    p.city    || customerData.city    || "",
+      address: p.address || customerData.address || "",
+    }));
+  }, [customerData.loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch wallet balance separately (auth-only)
   useEffect(() => {
     const token = getToken();
     if (!token) return;
-
     const hdrs = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
-
-    // Fetch profile + last order in parallel, then fill form once
-    // Guest fallbacks from chat widget intro form
-    const chatName   = localStorage.getItem("geem_chat_name")   || "";
-    const chatMobile = localStorage.getItem("geem_chat_mobile") || "";
-
-    // Location auto-fill from browser geolocation (if user granted it)
-    const savedCity    = matchCity(localStorage.getItem(CITY_KEY) ?? "");
-    const savedAddress = localStorage.getItem(ADDRESS_KEY) ?? "";
-
-    Promise.all([
-      fetch("/api/shop/auth/profile", { headers: hdrs }).then(r => r.ok ? r.json() as Promise<ShopProfile> : null).catch(() => null),
-      fetch("/api/shop/auth/orders",  { headers: hdrs }).then(r => r.ok ? r.json() as Promise<RecentOrder[]> : []).catch(() => [] as RecentOrder[]),
-      fetch("/api/shop/auth/wallet",  { headers: hdrs }).then(r => r.ok ? r.json() as Promise<WalletData> : null).catch(() => null),
-    ]).then(([profile, orders, wallet]) => {
-      const last = (orders as RecentOrder[])[0];
-      if (wallet) setWalletBalance((wallet as WalletData).balance ?? 0);
-      setForm(p => ({
-        ...p,
-        name:    p.name    || (profile as ShopProfile | null)?.name    || last?.customerName    || chatName   || "",
-        email:   p.email   || (profile as ShopProfile | null)?.email   || last?.customerEmail   || "",
-        mobile:  p.mobile  || (profile as ShopProfile | null)?.mobile  || last?.customerMobile  || chatMobile || "",
-        city:    p.city    || (profile as ShopProfile | null)?.city    || last?.customerCity    || savedCity  || "",
-        address: p.address || (profile as ShopProfile | null)?.address || last?.customerAddress || savedAddress || "",
-      }));
-    });
+    fetch("/api/shop/auth/wallet", { headers: hdrs })
+      .then(r => r.ok ? r.json() as Promise<WalletData> : null)
+      .then(w => { if (w) setWalletBalance(w.balance ?? 0); })
+      .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // For guests (no token), still try to auto-fill city/address from saved location
-  useEffect(() => {
-    const token = getToken();
-    if (token) return; // handled by the authenticated effect above
-    const savedCity    = matchCity(localStorage.getItem(CITY_KEY) ?? "");
-    const savedAddress = localStorage.getItem(ADDRESS_KEY) ?? "";
-    if (savedCity || savedAddress) {
-      setForm(p => ({
-        ...p,
-        city:    p.city    || savedCity    || "",
-        address: p.address || savedAddress || "",
-      }));
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [customer?.id]);
 
   const f = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm(p => ({ ...p, [key]: e.target.value }));

@@ -24,10 +24,11 @@ export default function ShopSignUp() {
 
   const [step, setStep] = useState<Step>("form");
 
-  const [name, setName] = useState("");
+  // Pre-fill from localStorage (chat widget intro form data) — run once on mount
+  const [name, setName] = useState(() => localStorage.getItem("geem_chat_name")   ?? "");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
-  const [mobile, setMobile] = useState("");
+  const [mobile, setMobile] = useState(() => localStorage.getItem("geem_chat_mobile") ?? "");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showPw, setShowPw] = useState(false);
