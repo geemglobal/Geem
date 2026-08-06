@@ -28,7 +28,7 @@ interface WebOrder {
   customerName: string; customerMobile: string; customerCity: string;
   customerAddress: string | null; customerEmail: string | null;
   transactionId: string | null;
-  subtotal: number; shipping: number; total: number;
+  subtotal: number; discount: number; shipping: number; total: number;
   courierCn: string | null; createdAt: string;
   invoiceId: number | null; invoiceStatus: string | null;
   invoicePaid: number | null; invoiceTotal: number | null;
@@ -128,6 +128,8 @@ export default function WebOrders() {
   const [manualImeis, setManualImeis] = useState<Record<string, string>>({});
   const [itemPriceEdits, setItemPriceEdits] = useState<Record<number, string>>({});
   const [priceEditMode, setPriceEditMode] = useState(false);
+  const [editedShipping, setEditedShipping] = useState<string>("");
+  const [editedDiscount, setEditedDiscount] = useState<string>("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["web-orders", filterStatus],
@@ -199,16 +201,18 @@ export default function WebOrders() {
   });
 
   const updatePricesMutation = useMutation({
-    mutationFn: ({ id, items }: { id: number; items: { id: number; price: number }[] }) =>
-      axiosInstance.patch(`/web-orders/${id}/item-prices`, { items }).then(r => r.data),
+    mutationFn: ({ id, items, shipping, discount }: { id: number; items: { id: number; price: number }[]; shipping?: number; discount?: number }) =>
+      axiosInstance.patch(`/web-orders/${id}/item-prices`, { items, shipping, discount }).then(r => r.data),
     onSuccess: (updatedOrder: WebOrder) => {
       qc.invalidateQueries({ queryKey: ["web-orders"] });
       setSelectedOrder(updatedOrder);
       setItemPriceEdits({});
+      setEditedShipping("");
+      setEditedDiscount("");
       setPriceEditMode(false);
-      toast({ title: "Prices updated — totals and invoice recalculated" });
+      toast({ title: "Pricing updated — totals and invoice recalculated" });
     },
-    onError: () => toast({ title: "Failed to update prices", variant: "destructive" }),
+    onError: () => toast({ title: "Failed to update pricing", variant: "destructive" }),
   });
 
   function handleSavePrices() {
@@ -216,8 +220,11 @@ export default function WebOrders() {
     const items = Object.entries(itemPriceEdits)
       .map(([id, price]) => ({ id: parseInt(id), price: parseFloat(price) }))
       .filter(({ price }) => !isNaN(price) && price >= 0);
-    if (!items.length) { setPriceEditMode(false); return; }
-    updatePricesMutation.mutate({ id: selectedOrder.id, items });
+    const shipping = editedShipping !== "" ? parseFloat(editedShipping) : undefined;
+    const discount = editedDiscount !== "" ? parseFloat(editedDiscount) : undefined;
+    const hasChanges = items.length > 0 || shipping !== undefined || discount !== undefined;
+    if (!hasChanges) { setPriceEditMode(false); return; }
+    updatePricesMutation.mutate({ id: selectedOrder.id, items, shipping, discount });
   }
 
   useEffect(() => {
@@ -456,7 +463,7 @@ export default function WebOrders() {
                         setSelectedOrder(order); setNewStatus(order.status);
                         setNewPaymentStatus(order.paymentStatus);
                         setCourierCn(order.courierCn ?? ""); setCourierMode("manual"); setSelectedCourierId("");
-                        setItemPriceEdits({}); setPriceEditMode(false);
+                        setItemPriceEdits({}); setPriceEditMode(false); setEditedShipping(""); setEditedDiscount("");
                       }}>
                         <TableCell className="font-mono font-semibold text-sm">{order.orderNumber}</TableCell>
                         <TableCell>
@@ -481,7 +488,7 @@ export default function WebOrders() {
                             setSelectedOrder(order); setNewStatus(order.status);
                             setNewPaymentStatus(order.paymentStatus);
                             setCourierCn(order.courierCn ?? ""); setCourierMode("manual"); setSelectedCourierId("");
-                            setItemPriceEdits({}); setPriceEditMode(false);
+                            setItemPriceEdits({}); setPriceEditMode(false); setEditedShipping(""); setEditedDiscount("");
                           }}>Manage</Button>
                         </TableCell>
                       </TableRow>
@@ -657,8 +664,14 @@ export default function WebOrders() {
                       </div>
                       <div className="flex justify-between text-muted-foreground">
                         <span>Shipping</span>
-                        <span>Rs {selectedOrder.shipping.toLocaleString()}</span>
+                        <span>{selectedOrder.shipping === 0 ? <span className="text-green-600 font-medium">Free</span> : `Rs ${selectedOrder.shipping.toLocaleString()}`}</span>
                       </div>
+                      {(selectedOrder.discount ?? 0) > 0 && (
+                        <div className="flex justify-between text-orange-600">
+                          <span>Discount</span>
+                          <span>− Rs {(selectedOrder.discount ?? 0).toLocaleString()}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between font-bold text-base border-t pt-1.5 mt-1">
                         <span>Total</span>
                         <span className="text-primary">Rs {selectedOrder.total.toLocaleString()}</span>
@@ -707,12 +720,20 @@ export default function WebOrders() {
                     </p>
                     <button
                       type="button"
-                      onClick={() => { setPriceEditMode(v => !v); setItemPriceEdits({}); }}
+                      onClick={() => {
+                        if (priceEditMode) {
+                          setPriceEditMode(false); setItemPriceEdits({}); setEditedShipping(""); setEditedDiscount("");
+                        } else {
+                          setPriceEditMode(true);
+                          setEditedShipping(String(selectedOrder.shipping));
+                          setEditedDiscount(String(selectedOrder.discount ?? 0));
+                        }
+                      }}
                       className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
                     >
                       {priceEditMode
                         ? "Cancel"
-                        : <><Pencil className="h-3 w-3" /> Edit Prices</>}
+                        : <><Pencil className="h-3 w-3" /> Edit Pricing</>}
                     </button>
                   </div>
                   <div className="divide-y">
@@ -751,30 +772,78 @@ export default function WebOrders() {
                       );
                     })}
                   </div>
-                  {priceEditMode && Object.keys(itemPriceEdits).length > 0 && (
-                    <div className="px-4 py-3 bg-blue-50 border-t border-blue-100 flex items-center justify-between gap-3">
-                      <div className="text-sm">
-                        <span className="text-muted-foreground text-xs">New total: </span>
-                        <span className="font-bold text-blue-700">
-                          Rs {(
-                            selectedOrder.items.reduce((s, item) => {
-                              const p = itemPriceEdits[item.id] !== undefined
-                                ? (parseFloat(itemPriceEdits[item.id]) || 0)
-                                : item.price;
-                              return s + p * item.qty;
-                            }, 0) + selectedOrder.shipping
-                          ).toLocaleString()}
-                        </span>
-                        <span className="text-xs text-muted-foreground ml-1">(incl. shipping)</span>
+                  {priceEditMode && (
+                    <div className="border-t border-blue-100 bg-blue-50 divide-y divide-blue-100">
+                      {/* Shipping row */}
+                      <div className="px-4 py-3 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground w-20">Shipping</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={editedShipping}
+                            onChange={e => setEditedShipping(e.target.value)}
+                            className="w-28 text-sm border border-blue-300 rounded px-2 py-0.5 font-mono focus:outline-none focus:ring-1 focus:ring-blue-400"
+                            placeholder="0"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setEditedShipping("0")}
+                          className="text-xs font-medium text-green-700 bg-green-100 hover:bg-green-200 px-2 py-0.5 rounded border border-green-200"
+                        >
+                          Free (0)
+                        </button>
                       </div>
-                      <Button
-                        size="sm"
-                        onClick={handleSavePrices}
-                        disabled={updatePricesMutation.isPending}
-                        className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0"
-                      >
-                        {updatePricesMutation.isPending ? "Saving..." : "Save Price Changes"}
-                      </Button>
+                      {/* Discount row */}
+                      <div className="px-4 py-3 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground w-20">Discount</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={editedDiscount}
+                            onChange={e => setEditedDiscount(e.target.value)}
+                            className="w-28 text-sm border border-blue-300 rounded px-2 py-0.5 font-mono focus:outline-none focus:ring-1 focus:ring-blue-400"
+                            placeholder="0"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setEditedDiscount("0")}
+                          className="text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded border border-slate-200"
+                        >
+                          No discount
+                        </button>
+                      </div>
+                      {/* New total preview + save */}
+                      <div className="px-4 py-3 flex items-center justify-between gap-3">
+                        <div className="text-sm">
+                          <span className="text-muted-foreground text-xs">New total: </span>
+                          <span className="font-bold text-blue-700">
+                            Rs {Math.max(0,
+                              selectedOrder.items.reduce((s, item) => {
+                                const p = itemPriceEdits[item.id] !== undefined
+                                  ? (parseFloat(itemPriceEdits[item.id]) || 0)
+                                  : item.price;
+                                return s + p * item.qty;
+                              }, 0)
+                              + (editedShipping !== "" ? (parseFloat(editedShipping) || 0) : selectedOrder.shipping)
+                              - (editedDiscount !== "" ? (parseFloat(editedDiscount) || 0) : (selectedOrder.discount ?? 0))
+                            ).toLocaleString()}
+                          </span>
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={handleSavePrices}
+                          disabled={updatePricesMutation.isPending}
+                          className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0"
+                        >
+                          {updatePricesMutation.isPending ? "Saving..." : "Save Changes"}
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </div>

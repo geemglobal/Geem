@@ -15,6 +15,7 @@ export const webOrdersTable = pgTable("web_orders", {
   paymentMethod: text("payment_method").notNull(),
   transactionId: text("transaction_id"),
   subtotal: numeric("subtotal", { precision: 12, scale: 2 }).notNull().default("0"),
+  discount: numeric("discount", { precision: 12, scale: 2 }).notNull().default("0"),
   shipping: numeric("shipping", { precision: 12, scale: 2 }).notNull().default("0"),
   total: numeric("total", { precision: 12, scale: 2 }).notNull().default("0"),
   courierCn: text("courier_cn"),

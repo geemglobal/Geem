@@ -62,6 +62,7 @@ async function buildWebOrder(wo: typeof webOrdersTable.$inferSelect) {
   return {
     ...wo,
     subtotal: parseFloat(String(wo.subtotal)),
+    discount: parseFloat(String(wo.discount ?? "0")),
     shipping: parseFloat(String(wo.shipping)),
     total: parseFloat(String(wo.total)),
     customerEmail: wo.customerEmail ?? null,
@@ -650,13 +651,19 @@ router.patch("/web-orders/:id", async (req, res): Promise<void> => {
   res.json(await buildWebOrder(wo));
 });
 
-// ─── Item Price Override ──────────────────────────────────────────────────────
-// Updates per-item prices for dealer/custom pricing. Cascades to:
-//   web_order_items → order totals → invoice items → invoice totals → ledger
+// ─── Pricing Override ─────────────────────────────────────────────────────────
+// Updates item prices, shipping charge, and/or discount. Cascades to:
+//   web_order_items → order totals → invoice items + totals → ledger
+// Body: { items?: [{id, price}], shipping?: number, discount?: number }
 router.patch("/web-orders/:id/item-prices", async (req, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
   const priceUpdates: { id: number; price: number }[] = Array.isArray(req.body.items) ? req.body.items : [];
-  if (!priceUpdates.length) { res.status(400).json({ error: "No items provided" }); return; }
+  const shippingOverride: number | undefined = req.body.shipping !== undefined ? parseFloat(String(req.body.shipping)) : undefined;
+  const discountOverride: number | undefined = req.body.discount !== undefined ? parseFloat(String(req.body.discount)) : undefined;
+
+  if (!priceUpdates.length && shippingOverride === undefined && discountOverride === undefined) {
+    res.status(400).json({ error: "Nothing to update" }); return;
+  }
 
   const [wo] = await db.select().from(webOrdersTable).where(eq(webOrdersTable.id, id));
   if (!wo) { res.status(404).json({ error: "Order not found" }); return; }
@@ -672,14 +679,15 @@ router.patch("/web-orders/:id/item-prices", async (req, res): Promise<void> => {
       .where(eq(webOrderItemsTable.id, itemId));
   }
 
-  // 2. Recalculate order subtotal + total
+  // 2. Recalculate order totals (use overrides if provided, else keep existing values)
   const allItems = await db.select().from(webOrderItemsTable).where(eq(webOrderItemsTable.webOrderId, id));
   const newSubtotal = allItems.reduce((s, i) => s + parseFloat(String(i.amount)), 0);
-  const shipping = parseFloat(String(wo.shipping));
-  const newTotal = newSubtotal + shipping;
+  const newShipping = shippingOverride !== undefined ? shippingOverride : parseFloat(String(wo.shipping));
+  const newDiscount = discountOverride !== undefined ? discountOverride : parseFloat(String(wo.discount ?? "0"));
+  const newTotal = Math.max(0, newSubtotal + newShipping - newDiscount);
 
   const [updatedWo] = await db.update(webOrdersTable)
-    .set({ subtotal: String(newSubtotal), total: String(newTotal) })
+    .set({ subtotal: String(newSubtotal), discount: String(newDiscount), shipping: String(newShipping), total: String(newTotal) })
     .where(eq(webOrdersTable.id, id))
     .returning();
 
@@ -701,12 +709,12 @@ router.patch("/web-orders/:id/item-prices", async (req, res): Promise<void> => {
           .where(eq(invoiceItemsTable.id, ii.id));
       }
     }
-    // Update invoice totals to match new order totals
+    // Update invoice subtotal + discount + shipping + total
     await db.update(invoicesTable)
-      .set({ subtotal: String(newSubtotal), total: String(newTotal) })
+      .set({ subtotal: String(newSubtotal), discount: String(newDiscount), shipping: String(newShipping), total: String(newTotal) })
       .where(eq(invoicesTable.id, inv.id));
 
-    // Adjust ledger debit entry for the price difference
+    // Adjust ledger debit entry for the total difference
     const diff = newTotal - oldTotal;
     if (Math.abs(diff) > 0.01) {
       const entries = await db.select().from(ledgerEntriesTable)
@@ -721,7 +729,7 @@ router.patch("/web-orders/:id/item-prices", async (req, res): Promise<void> => {
     }
   }
 
-  logger.info({ orderId: id, oldTotal, newTotal }, "Order item prices updated");
+  logger.info({ orderId: id, oldTotal, newTotal, newShipping, newDiscount }, "Order pricing updated");
   res.json(await buildWebOrder(updatedWo!));
 });
 
