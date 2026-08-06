@@ -616,7 +616,10 @@ export default function NewInvoice() {
   const [dueDate, setDueDate] = useState(today);
   const [notes, setNotes] = useState("");
   const [discount, setDiscount] = useState("");
+  const [discountType, setDiscountType] = useState<"amount" | "percent">("amount");
   const [discountOpen, setDiscountOpen] = useState(false);
+  const [shipping, setShipping] = useState("");
+  const [shippingOpen, setShippingOpen] = useState(false);
 
   const [lines, setLines] = useState<LineItem[]>([]);
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -725,6 +728,10 @@ export default function NewInvoice() {
     setDueDate(editInvoice.dueDate ?? today);
     setNotes(editInvoice.notes ?? "");
     setDiscount(editInvoice.discount > 0 ? String(editInvoice.discount) : "");
+    if (editInvoice.discount > 0) setDiscountOpen(true);
+    const sh = parseFloat(String(editInvoice.shipping ?? 0));
+    setShipping(sh > 0 ? String(sh) : "");
+    if (sh > 0) setShippingOpen(true);
     const cur = CURRENCIES.find(c => c.code === editInvoice.currency) ?? CURRENCIES[0];
     setSelectedCurrency(cur);
     setLines(
@@ -858,7 +865,10 @@ export default function NewInvoice() {
   }
 
   const subtotal = lines.reduce((s, l) => s + l.qty * parseFloat(l.price || "0"), 0);
-  const discountAmt = parseFloat(discount || "0");
+  const discountAmt = discountType === "percent"
+    ? subtotal * (parseFloat(discount || "0") / 100)
+    : parseFloat(discount || "0");
+  const shippingAmt = parseFloat(shipping || "0");
   const taxMap = new Map<string, { label: string; detail: string; rate: number; amount: number }>();
   for (const l of lines) {
     if (l.taxRate > 0 && l.taxLabel) {
@@ -874,7 +884,7 @@ export default function NewInvoice() {
   }
   const taxBreakdown = [...taxMap.values()];
   const totalTax = taxBreakdown.reduce((s, t) => s + t.amount, 0);
-  const total = subtotal - discountAmt + totalTax;
+  const total = subtotal - discountAmt + totalTax + shippingAmt;
 
   function handleSave(status: "draft" | "unpaid") {
     if (!customer) { toast({ title: "Please select a customer", variant: "destructive" }); return; }
@@ -886,6 +896,7 @@ export default function NewInvoice() {
       dueDate: dueDate || null,
       invoiceNumber: invoiceNum || undefined,
       discount: String(discountAmt),
+      shipping: String(shippingAmt),
       notes: notes || undefined,
       status,
       currency: selectedCurrency.code,
@@ -1133,6 +1144,24 @@ export default function NewInvoice() {
                 <span>{selectedCurrency.symbol}{fmt(subtotal)}</span>
               </div>
 
+              {/* Shipping */}
+              {!shippingOpen ? (
+                <button className="flex items-center gap-1.5 text-blue-600 text-xs hover:text-blue-700 transition-colors" onClick={() => setShippingOpen(true)}>
+                  <PlusCircle className="h-3.5 w-3.5" />Add shipping
+                </button>
+              ) : (
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Shipping</span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-muted-foreground text-xs">{selectedCurrency.symbol}</span>
+                    <input value={shipping} onChange={e => setShipping(e.target.value.replace(/[^\d.]/g, ""))} className="w-20 text-right px-2 py-0.5 text-sm border rounded outline-none focus:ring-1 focus:ring-blue-500" placeholder="0.00" />
+                    <button onClick={() => setShipping("0")} className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700 border border-green-200 hover:bg-green-200 leading-none">Free</button>
+                    <button onClick={() => { setShippingOpen(false); setShipping(""); }}><X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" /></button>
+                  </div>
+                </div>
+              )}
+
+              {/* Discount */}
               {!discountOpen ? (
                 <button
                   className="flex items-center gap-1.5 text-blue-600 text-xs hover:text-blue-700 transition-colors"
@@ -1142,17 +1171,23 @@ export default function NewInvoice() {
                 </button>
               ) : (
                 <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Discount</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-muted-foreground text-xs">{selectedCurrency.symbol}</span>
+                  <span className="text-muted-foreground">
+                    Discount{discountType === "percent" && parseFloat(discount || "0") > 0 ? ` (${parseFloat(discount || "0")}%)` : ""}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    {discountType === "amount" && <span className="text-muted-foreground text-xs">{selectedCurrency.symbol}</span>}
                     <input
                       autoFocus
-                      className="w-24 text-right px-2 py-0.5 text-sm border rounded outline-none focus:ring-1 focus:ring-blue-500"
+                      className="w-20 text-right px-2 py-0.5 text-sm border rounded outline-none focus:ring-1 focus:ring-blue-500"
                       placeholder="0.00"
                       value={discount}
                       onChange={e => setDiscount(e.target.value.replace(/[^\d.]/g, ""))}
                     />
-                    <button onClick={() => { setDiscountOpen(false); setDiscount(""); }}>
+                    {discountType === "percent" && <span className="text-muted-foreground text-xs">%</span>}
+                    <button onClick={() => { setDiscountType(t => t === "amount" ? "percent" : "amount"); setDiscount(""); }} className="text-xs px-1.5 py-0.5 rounded border bg-slate-100 hover:bg-slate-200 text-slate-700 min-w-[28px] leading-none">
+                      {discountType === "amount" ? "%" : selectedCurrency.symbol}
+                    </button>
+                    <button onClick={() => { setDiscountOpen(false); setDiscount(""); setDiscountType("amount"); }}>
                       <X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
                     </button>
                   </div>

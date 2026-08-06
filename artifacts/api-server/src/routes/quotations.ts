@@ -207,7 +207,7 @@ router.get("/quotations", async (req, res): Promise<void> => {
 });
 
 router.post("/quotations", async (req, res): Promise<void> => {
-  const { customerId, date, expiryDate, items, discount, tax, notes, currency, currencySymbol } = req.body;
+  const { customerId, date, expiryDate, items, discount, tax, shipping, notes, currency, currencySymbol } = req.body;
   if (!customerId || !date || !items?.length) {
     res.status(400).json({ error: "customerId, date, items required" });
     return;
@@ -216,12 +216,13 @@ router.post("/quotations", async (req, res): Promise<void> => {
   const num = (settings?.nextInvoiceNumber ?? 100) + 5000;
   const qNumber = `QT-${String(num).padStart(4, "0")}`;
   const subtotal = items.reduce((s: number, i: { qty: number; price: number }) => s + i.qty * i.price, 0);
-  const total = subtotal - parseFloat(String(discount ?? 0)) + parseFloat(String(tax ?? 0));
+  const shippingAmt = parseFloat(String(shipping ?? 0));
+  const total = subtotal - parseFloat(String(discount ?? 0)) + parseFloat(String(tax ?? 0)) + shippingAmt;
 
   const [quotation] = await db.insert(quotationsTable).values({
     quotationNumber: qNumber, customerId, date, expiryDate, status: "draft",
     subtotal: String(subtotal), discount: String(discount ?? 0), tax: String(tax ?? 0),
-    total: String(total), notes,
+    shipping: String(shippingAmt), total: String(total), notes,
     currency: currency ?? "PKR",
     currencySymbol: currencySymbol ?? "Rs",
   }).returning();
@@ -249,18 +250,19 @@ router.get("/quotations/:id", async (req, res): Promise<void> => {
 
 router.put("/quotations/:id", async (req, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
-  const { customerId, date, expiryDate, items, discount, tax, notes, currency, currencySymbol } = req.body;
+  const { customerId, date, expiryDate, items, discount, tax, shipping, notes, currency, currencySymbol } = req.body;
   if (!customerId || !date || !items?.length) {
     res.status(400).json({ error: "customerId, date, items required" });
     return;
   }
   const subtotal = items.reduce((s: number, i: { qty: number; price: number }) => s + i.qty * i.price, 0);
-  const total = subtotal - parseFloat(String(discount ?? 0)) + parseFloat(String(tax ?? 0));
+  const shippingAmt = parseFloat(String(shipping ?? 0));
+  const total = subtotal - parseFloat(String(discount ?? 0)) + parseFloat(String(tax ?? 0)) + shippingAmt;
 
   const [q] = await db.update(quotationsTable).set({
     customerId, date, expiryDate: expiryDate ?? null,
     subtotal: String(subtotal), discount: String(discount ?? 0),
-    tax: String(tax ?? 0), total: String(total), notes,
+    tax: String(tax ?? 0), shipping: String(shippingAmt), total: String(total), notes,
     currency: currency ?? "PKR", currencySymbol: currencySymbol ?? "Rs",
   }).where(eq(quotationsTable.id, id)).returning();
   if (!q) { res.status(404).json({ error: "Not found" }); return; }
@@ -313,7 +315,7 @@ router.post("/quotations/:id/convert-invoice", async (req, res): Promise<void> =
     invoiceNumber: invNumber, customerId: q.customerId,
     date: new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Karachi" }),
     status: "draft", subtotal: q.subtotal, discount: q.discount,
-    tax: q.tax, shipping: "0", total: q.total, paid: "0", notes: q.notes,
+    tax: q.tax, shipping: q.shipping ?? "0", total: q.total, paid: "0", notes: q.notes,
     currency: q.currency ?? "PKR", currencySymbol: q.currencySymbol ?? "Rs",
   }).returning();
 
