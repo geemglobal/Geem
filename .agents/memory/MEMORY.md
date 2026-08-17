@@ -1,3 +1,4 @@
 - [Inventory N+1 fix](inventory-perf.md) — enrichItem had 5 queries/item; replaced with enrichItems batch (8 queries total for any page size)
 - [Deploy path fix](deploy-path.md) — ERP nginx root is /var/www/geem/erp (not erp/public); deploy.sh must set ERP_PUBLIC=/var/www/geem/erp
 - [VPS access](vps-access.md) — SSH password in VPS_SSH_PRIVATE_KEY secret; use sshpass; DB is geemdb, postgres user via su -s /bin/bash postgres
+- [GitHub deployment auth](github-deploy-auth.md) — pushes to the public Geem repository require the secure GITHUB_CLASSIC_KEY secret; main pushes trigger the VPS webhook
