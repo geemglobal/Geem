@@ -534,10 +534,12 @@ async function enrichItem(item: typeof inventoryItemsTable.$inferSelect) {
       customerId: invoicesTable.customerId,
       webOrderId: invoicesTable.webOrderId,
       courierCn: invoicesTable.courierCn,
+      webOrderCourierCn: webOrdersTable.courierCn,
     })
     .from(invoiceItemsTable)
     .innerJoin(invoicesTable, eq(invoiceItemsTable.invoiceId, invoicesTable.id))
     .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+    .leftJoin(webOrdersTable, eq(invoicesTable.webOrderId, webOrdersTable.id))
     .where(and(eq(invoiceItemsTable.inventoryItemId, item.id), sql`${invoicesTable.invoiceNumber} like 'INV-%'`))
     .limit(1);
 
@@ -623,10 +625,12 @@ async function enrichItems(items: (typeof inventoryItemsTable.$inferSelect)[]) {
         customerId:      invoicesTable.customerId,
         webOrderId:      invoicesTable.webOrderId,
         courierCn:       invoicesTable.courierCn,
+        webOrderCourierCn: webOrdersTable.courierCn,
       })
       .from(invoiceItemsTable)
       .innerJoin(invoicesTable, eq(invoiceItemsTable.invoiceId, invoicesTable.id))
       .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+      .leftJoin(webOrdersTable, eq(invoicesTable.webOrderId, webOrdersTable.id))
       .where(and(
         inArray(invoiceItemsTable.inventoryItemId, ids),
         sql`${invoicesTable.invoiceNumber} like 'INV-%'`
@@ -712,7 +716,7 @@ function buildEnrichedItem(
   item: typeof inventoryItemsTable.$inferSelect,
   extra: {
     brandName: string; modelName: string; categoryName: string | null;
-    salesInv: { id: number; invoiceNumber: string; paymentStatus: string; saleDate: unknown; customerName: string | null; customerMobile: string | null; customerCity: string | null; customerId: number; webOrderId: number | null; courierCn: string | null; } | null;
+    salesInv: { id: number; invoiceNumber: string; paymentStatus: string; saleDate: unknown; customerName: string | null; customerMobile: string | null; customerCity: string | null; customerId: number; webOrderId: number | null; courierCn: string | null; webOrderCourierCn: string | null; } | null;
     imeiChangeCount: number;
     shipment: ShipmentSummary | null;
   },
@@ -751,8 +755,8 @@ function buildEnrichedItem(
     shipmentId: shipment?.id ?? null,
     courierName: shipment?.courierName ?? null,
     courierTrackingUrl: shipment?.trackingUrl ?? null,
-    courierCn: shipment?.cn ?? salesInv?.courierCn ?? null,
-    shipmentStatus: shipment?.status ?? (salesInv?.courierCn ? "dispatched" : null),
+    courierCn: shipment?.cn ?? salesInv?.courierCn ?? salesInv?.webOrderCourierCn ?? null,
+    shipmentStatus: shipment?.status ?? ((salesInv?.courierCn || salesInv?.webOrderCourierCn) ? "dispatched" : null),
     shipmentDestination: shipment?.destination ?? null,
     shipmentSlipLink: shipment?.slipLink ?? null,
     shipmentCreatedAt: shipment?.createdAt ?? null,

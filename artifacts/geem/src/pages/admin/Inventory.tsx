@@ -595,7 +595,7 @@ export default function Inventory() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Inventory</h1>
-          <p className="text-sm text-muted-foreground">{data?.total?.toLocaleString() ?? 0} total items · Click a Courier CN to view shipment status</p>
+          <p className="text-sm text-muted-foreground">{data?.total?.toLocaleString() ?? 0} total items · Use Courier CN to add a number or click an existing CN to view shipment status</p>
         </div>
         <div className="flex gap-2">
           {data?.items && data.items.length > 0 && (
