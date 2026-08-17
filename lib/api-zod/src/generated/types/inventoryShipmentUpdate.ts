@@ -6,8 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface CategoryInput {
-  name: string;
-  parentId?: number;
-  active?: boolean;
+export interface InventoryShipmentUpdate {
+  courierId: number;
+  cn: string;
+  status?: string;
 }

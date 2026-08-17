@@ -1,8 +1,8 @@
 import { Router, type IRouter } from "express";
-import { eq, and, sql, count, ilike, desc, isNotNull, inArray } from "drizzle-orm";
+import { eq, and, or, sql, count, ilike, desc, isNotNull, inArray } from "drizzle-orm";
 import {
   db, inventoryItemsTable, brandsTable, deviceModelsTable, categoriesTable, productsTable,
-  invoicesTable, invoiceItemsTable, paymentsTable, customersTable, vendorsTable, invoiceSettingsTable,
+  invoicesTable, invoiceItemsTable, paymentsTable, customersTable, vendorsTable, invoiceSettingsTable, webOrdersTable,
   ledgerEntriesTable, imeiHistoryTable, shipmentsTable, couriersTable,
 } from "@workspace/db";
 import OpenAI from "openai";
@@ -505,7 +505,18 @@ async function upsertProductFromInventory(brandId: number, modelId: number, sell
   }
 }
 
-/** Single-item enrichment — used for POST/PATCH/GET-by-id responses (5 queries, fine for 1 item) */
+interface ShipmentSummary {
+  id: number;
+  courierName: string;
+  trackingUrl: string | null;
+  cn: string | null;
+  status: string;
+  destination: string;
+  slipLink: string | null;
+  createdAt: string;
+}
+
+/** Single-item enrichment — used for POST/PATCH/GET-by-id responses */
 async function enrichItem(item: typeof inventoryItemsTable.$inferSelect) {
   const [brand] = await db.select({ name: brandsTable.name }).from(brandsTable).where(eq(brandsTable.id, item.brandId));
   const [model] = await db.select({ name: deviceModelsTable.name }).from(deviceModelsTable).where(eq(deviceModelsTable.id, item.modelId));
@@ -521,6 +532,8 @@ async function enrichItem(item: typeof inventoryItemsTable.$inferSelect) {
       customerMobile: customersTable.mobile,
       customerCity: customersTable.city,
       customerId: invoicesTable.customerId,
+      webOrderId: invoicesTable.webOrderId,
+      courierCn: invoicesTable.courierCn,
     })
     .from(invoiceItemsTable)
     .innerJoin(invoicesTable, eq(invoiceItemsTable.invoiceId, invoicesTable.id))
@@ -533,17 +546,50 @@ async function enrichItem(item: typeof inventoryItemsTable.$inferSelect) {
     .from(imeiHistoryTable)
     .where(eq(imeiHistoryTable.inventoryItemId, item.id));
 
+  const shipmentRows = salesInv
+    ? await db
+      .select({
+        id: shipmentsTable.id,
+        courierName: couriersTable.name,
+        trackingUrl: couriersTable.trackingUrl,
+        cn: shipmentsTable.cn,
+        status: shipmentsTable.status,
+        destination: shipmentsTable.destination,
+        slipLink: shipmentsTable.slipLink,
+        createdAt: shipmentsTable.createdAt,
+      })
+      .from(shipmentsTable)
+      .leftJoin(couriersTable, eq(shipmentsTable.courierId, couriersTable.id))
+      .where(or(
+        eq(shipmentsTable.invoiceId, salesInv.id),
+        salesInv.webOrderId ? eq(shipmentsTable.webOrderId, salesInv.webOrderId) : sql`false`,
+      ))
+      .orderBy(desc(shipmentsTable.createdAt))
+      .limit(1)
+    : [];
+  const shipment = shipmentRows[0]
+    ? {
+        ...shipmentRows[0],
+        courierName: shipmentRows[0].courierName ?? "",
+        trackingUrl: shipmentRows[0].trackingUrl ?? null,
+        cn: shipmentRows[0].cn ?? null,
+        slipLink: shipmentRows[0].slipLink ?? null,
+        createdAt: shipmentRows[0].createdAt.toISOString(),
+      }
+    : null;
+
   return buildEnrichedItem(item, {
     brandName: brand?.name ?? "",
     modelName: model?.name ?? "",
     categoryName: cat?.name ?? null,
     salesInv: salesInv ?? null,
     imeiChangeCount: Number(imeiChangeCount),
+    shipment,
   });
 }
 
 /** Batch enrichment — replaces N+1 enrichItem calls for list queries.
- *  Fires 5 queries total regardless of how many items are in the list. */
+ *  Fires a fixed number of queries regardless of how many items are in the list. */
 async function enrichItems(items: (typeof inventoryItemsTable.$inferSelect)[]) {
   if (items.length === 0) return [];
 
@@ -575,6 +621,8 @@ async function enrichItems(items: (typeof inventoryItemsTable.$inferSelect)[]) {
         customerMobile:  customersTable.mobile,
         customerCity:    customersTable.city,
         customerId:      invoicesTable.customerId,
+        webOrderId:      invoicesTable.webOrderId,
+        courierCn:       invoicesTable.courierCn,
       })
       .from(invoiceItemsTable)
       .innerJoin(invoicesTable, eq(invoiceItemsTable.invoiceId, invoicesTable.id))
@@ -603,12 +651,59 @@ async function enrichItems(items: (typeof inventoryItemsTable.$inferSelect)[]) {
   }
   const imeiCountMap = new Map(imeiCounts.map(r => [r.inventoryItemId, Number(r.cnt)]));
 
+  const salesInvoices = [...salesInvMap.values()];
+  const salesInvoiceIds = salesInvoices.map(row => row.id);
+  const webOrderIds = salesInvoices.map(row => row.webOrderId).filter((id): id is number => id != null);
+  const shipmentRows = salesInvoiceIds.length > 0 || webOrderIds.length > 0
+    ? await db
+      .select({
+        id: shipmentsTable.id,
+        invoiceId: shipmentsTable.invoiceId,
+        webOrderId: shipmentsTable.webOrderId,
+        courierName: couriersTable.name,
+        trackingUrl: couriersTable.trackingUrl,
+        cn: shipmentsTable.cn,
+        status: shipmentsTable.status,
+        destination: shipmentsTable.destination,
+        slipLink: shipmentsTable.slipLink,
+        createdAt: shipmentsTable.createdAt,
+      })
+      .from(shipmentsTable)
+      .leftJoin(couriersTable, eq(shipmentsTable.courierId, couriersTable.id))
+      .where(or(
+        salesInvoiceIds.length > 0 ? inArray(shipmentsTable.invoiceId, salesInvoiceIds) : sql`false`,
+        webOrderIds.length > 0 ? inArray(shipmentsTable.webOrderId, webOrderIds) : sql`false`,
+      ))
+      .orderBy(desc(shipmentsTable.createdAt))
+    : [];
+  const shipmentByInvoice = new Map<number, ShipmentSummary>();
+  const shipmentByWebOrder = new Map<number, ShipmentSummary>();
+  for (const row of shipmentRows) {
+    const summary: ShipmentSummary = {
+      id: row.id,
+      courierName: row.courierName ?? "",
+      trackingUrl: row.trackingUrl ?? null,
+      cn: row.cn ?? null,
+      status: row.status,
+      destination: row.destination,
+      slipLink: row.slipLink ?? null,
+      createdAt: row.createdAt.toISOString(),
+    };
+    if (row.invoiceId != null && !shipmentByInvoice.has(row.invoiceId)) shipmentByInvoice.set(row.invoiceId, summary);
+    if (row.webOrderId != null && !shipmentByWebOrder.has(row.webOrderId)) shipmentByWebOrder.set(row.webOrderId, summary);
+  }
+
   return items.map(item => buildEnrichedItem(item, {
     brandName:      brandMap.get(item.brandId) ?? "",
     modelName:      modelMap.get(item.modelId) ?? "",
     categoryName:   item.categoryId ? catMap.get(item.categoryId) ?? null : null,
     salesInv:       salesInvMap.get(item.id) ?? null,
     imeiChangeCount: imeiCountMap.get(item.id) ?? 0,
+    shipment: (() => {
+      const salesInv = salesInvMap.get(item.id);
+      if (!salesInv) return null;
+      return shipmentByInvoice.get(salesInv.id) ?? (salesInv.webOrderId ? shipmentByWebOrder.get(salesInv.webOrderId) ?? null : null);
+    })(),
   }));
 }
 
@@ -617,11 +712,12 @@ function buildEnrichedItem(
   item: typeof inventoryItemsTable.$inferSelect,
   extra: {
     brandName: string; modelName: string; categoryName: string | null;
-    salesInv: { id: number; invoiceNumber: string; paymentStatus: string; saleDate: unknown; customerName: string | null; customerMobile: string | null; customerCity: string | null; customerId: number; } | null;
+    salesInv: { id: number; invoiceNumber: string; paymentStatus: string; saleDate: unknown; customerName: string | null; customerMobile: string | null; customerCity: string | null; customerId: number; webOrderId: number | null; courierCn: string | null; } | null;
     imeiChangeCount: number;
+    shipment: ShipmentSummary | null;
   },
 ) {
-  const { brandName, modelName, categoryName, salesInv, imeiChangeCount } = extra;
+  const { brandName, modelName, categoryName, salesInv, imeiChangeCount, shipment } = extra;
   return {
     ...item,
     brandName,
@@ -652,6 +748,14 @@ function buildEnrichedItem(
     saleCustomerCity:   salesInv?.customerCity ?? null,
     saleCustomerId:     salesInv?.customerId ?? null,
     imeiChangeCount,
+    shipmentId: shipment?.id ?? null,
+    courierName: shipment?.courierName ?? null,
+    courierTrackingUrl: shipment?.trackingUrl ?? null,
+    courierCn: shipment?.cn ?? salesInv?.courierCn ?? null,
+    shipmentStatus: shipment?.status ?? (salesInv?.courierCn ? "dispatched" : null),
+    shipmentDestination: shipment?.destination ?? null,
+    shipmentSlipLink: shipment?.slipLink ?? null,
+    shipmentCreatedAt: shipment?.createdAt ?? null,
   };
 }
 
@@ -1147,6 +1251,90 @@ router.post("/inventory/sync-shop", async (req, res): Promise<void> => {
 router.get("/inventory/pta-pending", async (req, res): Promise<void> => {
   const items = await db.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.ptaStatus, "pending")).limit(100);
   res.json(await Promise.all(items.map(enrichItem)));
+});
+
+// Add or update the courier CN linked to an inventory item's sales shipment.
+// Keeping this on the inventory route makes manual CN entry available wherever
+// the operator is already checking the device record.
+router.patch("/inventory/:id/shipment", async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const courierId = Number(req.body.courierId);
+  const cn = typeof req.body.cn === "string" ? req.body.cn.trim() : "";
+  const status = typeof req.body.status === "string" && req.body.status.trim()
+    ? req.body.status.trim()
+    : "dispatched";
+
+  if (!courierId || !cn) {
+    res.status(400).json({ error: "Courier and CN / tracking number are required" });
+    return;
+  }
+
+  const [item] = await db.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.id, id));
+  if (!item) { res.status(404).json({ error: "Inventory item not found" }); return; }
+
+  const [salesInvoice] = await db
+    .select({
+      id: invoicesTable.id,
+      webOrderId: invoicesTable.webOrderId,
+      customerCity: customersTable.city,
+    })
+    .from(invoiceItemsTable)
+    .innerJoin(invoicesTable, eq(invoiceItemsTable.invoiceId, invoicesTable.id))
+    .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+    .where(and(
+      eq(invoiceItemsTable.inventoryItemId, id),
+      sql`${invoicesTable.invoiceNumber} like 'INV-%'`,
+    ))
+    .limit(1);
+
+  if (!salesInvoice) {
+    res.status(400).json({ error: "This inventory item does not have a sales invoice yet" });
+    return;
+  }
+
+  const [existingShipment] = await db
+    .select({ id: shipmentsTable.id })
+    .from(shipmentsTable)
+    .where(or(
+      eq(shipmentsTable.invoiceId, salesInvoice.id),
+      salesInvoice.webOrderId ? eq(shipmentsTable.webOrderId, salesInvoice.webOrderId) : sql`false`,
+    ))
+    .orderBy(desc(shipmentsTable.createdAt))
+    .limit(1);
+
+  let shipmentId: number;
+  if (existingShipment) {
+    const [updated] = await db.update(shipmentsTable)
+      .set({ courierId, cn, status })
+      .where(eq(shipmentsTable.id, existingShipment.id))
+      .returning({ id: shipmentsTable.id });
+    shipmentId = updated.id;
+  } else {
+    const [created] = await db.insert(shipmentsTable).values({
+      invoiceId: salesInvoice.id,
+      webOrderId: salesInvoice.webOrderId ?? undefined,
+      courierId,
+      cn,
+      status,
+      destination: salesInvoice.customerCity ?? "Pakistan",
+      pieces: 1,
+      codAmount: "0",
+      shippingCharges: "0",
+    }).returning({ id: shipmentsTable.id });
+    shipmentId = created.id;
+  }
+
+  // Keep the invoice and web-order tracking fields in sync with the shipment.
+  await db.update(invoicesTable)
+    .set({ courierId, courierCn: cn })
+    .where(eq(invoicesTable.id, salesInvoice.id));
+  if (salesInvoice.webOrderId) {
+    await db.update(webOrdersTable)
+      .set({ courierCn: cn })
+      .where(eq(webOrdersTable.id, salesInvoice.webOrderId));
+  }
+
+  res.json({ ...(await enrichItem(item)), shipmentId });
 });
 
 router.get("/inventory/:id", async (req, res): Promise<void> => {

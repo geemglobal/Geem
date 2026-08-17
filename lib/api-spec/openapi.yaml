@@ -305,6 +305,35 @@ paths:
         "204":
           description: Deleted
 
+  /inventory/{id}/shipment:
+    patch:
+      operationId: updateInventoryShipment
+      tags: [inventory]
+      summary: Add or update the courier CN for an inventory item's sales shipment
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryShipmentUpdate"
+      responses:
+        "200":
+          description: Updated inventory item with shipment details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryItem"
+        "400":
+          description: Courier CN or sales invoice is missing
+        "404":
+          description: Inventory item not found
+
   # --- BRANDS ---
   /brands:
     get:
@@ -2204,6 +2233,22 @@ components:
           type: ["string", "null"]
         createdAt:
           type: string
+        shipmentId:
+          type: ["integer", "null"]
+        courierName:
+          type: ["string", "null"]
+        courierTrackingUrl:
+          type: ["string", "null"]
+        courierCn:
+          type: ["string", "null"]
+        shipmentStatus:
+          type: ["string", "null"]
+        shipmentDestination:
+          type: ["string", "null"]
+        shipmentSlipLink:
+          type: ["string", "null"]
+        shipmentCreatedAt:
+          type: ["string", "null"]
 
     InventoryItemInput:
       type: object
@@ -2254,6 +2299,17 @@ components:
         sellingPrice:
           type: number
         notes:
+          type: string
+
+    InventoryShipmentUpdate:
+      type: object
+      required: [courierId, cn]
+      properties:
+        courierId:
+          type: integer
+        cn:
+          type: string
+        status:
           type: string
 
     InventoryListResponse:

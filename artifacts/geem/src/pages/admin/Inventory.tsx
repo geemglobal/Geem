@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Upload, ChevronLeft, ChevronRight, Pencil, Trash2, X, FileSpreadsheet, CheckCircle2, Download, Receipt, Layers, RefreshCw, Hash, History, MessageSquarePlus, User, Phone, MapPin, CreditCard, Calendar } from "lucide-react";
+import { Plus, Upload, ChevronLeft, ChevronRight, Pencil, Trash2, X, FileSpreadsheet, CheckCircle2, Download, Receipt, Layers, RefreshCw, Hash, History, MessageSquarePlus, User, Phone, MapPin, CreditCard, Calendar, Truck } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import * as XLSX from "xlsx";
 
@@ -30,9 +30,13 @@ interface InventoryItem {
   saleCustomerName: string | null; saleCustomerMobile: string | null;
   saleCustomerCity: string | null; saleCustomerId: number | null;
   imeiChangeCount?: number;
+  shipmentId: number | null; courierName: string | null; courierTrackingUrl: string | null;
+  courierCn: string | null; shipmentStatus: string | null; shipmentDestination: string | null;
+  shipmentSlipLink: string | null; shipmentCreatedAt: string | null;
 }
 interface Brand { id: number; name: string; deviceIdMandatory: boolean; }
 interface DeviceModel { id: number; brandId: number; name: string; }
+interface Courier { id: number; name: string; trackingUrl: string | null; active: boolean; }
 interface ImeiHistoryEntry {
   id: number; inventoryItemId: number; oldImei: string; newImei: string;
   previousStatus: string | null; restoredStatus: string | null;
@@ -77,6 +81,15 @@ function fmtStatus(s: string) {
 function fmtPta(s: string) {
   if (s === "blocked") return "PTA Blocked";
   return PTA_OPTIONS.find(o => o.value === s)?.label ?? s;
+}
+function shipmentStatusClass(s: string): string {
+  if (s === "delivered") return "bg-green-100 text-green-700 border-green-200";
+  if (s === "in_transit" || s === "dispatched") return "bg-blue-100 text-blue-700 border-blue-200";
+  if (s === "returned" || s === "cancelled") return "bg-red-100 text-red-700 border-red-200";
+  return "bg-amber-100 text-amber-700 border-amber-200";
+}
+function fmtShipmentStatus(s: string) {
+  return s.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 }
 
 const emptyForm = {
@@ -148,6 +161,12 @@ export default function Inventory() {
   const [assignPreview, setAssignPreview] = useState<{ item: InventoryItem; pool: { id: number; imei15: string } } | null>(null);
   const [assignReason, setAssignReason] = useState("");
   const [assignSaving, setAssignSaving] = useState(false);
+  const [shipmentItem, setShipmentItem] = useState<InventoryItem | null>(null);
+  const [shipmentMode, setShipmentMode] = useState<"view" | "edit">("view");
+  const [shipmentCourierId, setShipmentCourierId] = useState("");
+  const [shipmentCnValue, setShipmentCnValue] = useState("");
+  const [shipmentStatusValue, setShipmentStatusValue] = useState("dispatched");
+  const [shipmentSaving, setShipmentSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -235,6 +254,7 @@ export default function Inventory() {
   });
 
   const { data: brands } = useQuery({ queryKey: ["brands"], queryFn: () => axiosInstance.get<Brand[]>("/brands").then(r => r.data) });
+  const { data: couriers } = useQuery({ queryKey: ["couriers"], queryFn: () => axiosInstance.get<Courier[]>("/couriers").then(r => r.data) });
   const { data: models } = useQuery({
     queryKey: ["models", filterBrand],
     queryFn: () => axiosInstance.get<DeviceModel[]>(`/models${filterBrand ? `?brandId=${filterBrand}` : ""}`).then(r => r.data),
@@ -262,6 +282,43 @@ export default function Inventory() {
     setDebouncedSearch(search);
     setPage(1);
   }, [search]);
+
+  function openShipment(item: InventoryItem, mode: "view" | "edit") {
+    setShipmentItem(item);
+    setShipmentMode(mode);
+    setShipmentCourierId(couriers?.find(c => c.name === item.courierName)?.id.toString() ?? "");
+    setShipmentCnValue(item.courierCn ?? "");
+    setShipmentStatusValue(item.shipmentStatus ?? "dispatched");
+  }
+
+  function closeShipment() {
+    setShipmentItem(null);
+    setShipmentMode("view");
+    setShipmentCourierId("");
+    setShipmentCnValue("");
+    setShipmentStatusValue("dispatched");
+  }
+
+  async function saveShipment() {
+    if (!shipmentItem || !shipmentCourierId || !shipmentCnValue.trim()) return;
+    setShipmentSaving(true);
+    try {
+      const res = await axiosInstance.patch<InventoryItem>(`/inventory/${shipmentItem.id}/shipment`, {
+        courierId: Number(shipmentCourierId),
+        cn: shipmentCnValue.trim(),
+        status: shipmentStatusValue,
+      });
+      qc.invalidateQueries({ queryKey: ["inventory"] });
+      setShipmentItem(res.data);
+      setShipmentMode("view");
+      toast({ title: "Courier CN saved", description: `${shipmentCnValue.trim()} is now linked to this inventory item.` });
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Failed to save courier CN";
+      toast({ title: "Could not save courier CN", description: message, variant: "destructive" });
+    } finally {
+      setShipmentSaving(false);
+    }
+  }
 
   const saveMutation = useMutation({
     mutationFn: (payload: object) => editItem
@@ -538,7 +595,7 @@ export default function Inventory() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Inventory</h1>
-          <p className="text-sm text-muted-foreground">{data?.total?.toLocaleString() ?? 0} total items</p>
+          <p className="text-sm text-muted-foreground">{data?.total?.toLocaleString() ?? 0} total items · Click a Courier CN to view shipment status</p>
         </div>
         <div className="flex gap-2">
           {data?.items && data.items.length > 0 && (
@@ -657,6 +714,7 @@ export default function Inventory() {
               <TableHead>Device ID</TableHead>
               <TableHead>Brand / Model</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Courier CN</TableHead>
               <TableHead>PTA</TableHead>
               <TableHead>PSID</TableHead>
               <TableHead className="text-right">Landed Cost</TableHead>
@@ -667,9 +725,9 @@ export default function Inventory() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
             ) : !data?.items?.length ? (
-              <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+              <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
                 {hasFilters ? "No items match your filters" : "No inventory items yet. Add one or import from Excel."}
               </TableCell></TableRow>
             ) : (
@@ -687,6 +745,36 @@ export default function Inventory() {
                   </TableCell>
                   <TableCell>
                     <Badge className={`text-xs border ${statusClass(item.status)}`}>{fmtStatus(item.status)}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    {item.courierCn ? (
+                      <button
+                        type="button"
+                        className="text-left group"
+                        title="View courier shipment status"
+                        onClick={() => openShipment(item, "view")}
+                      >
+                        <span className="block font-mono text-xs font-semibold text-blue-700 underline decoration-dotted underline-offset-2 group-hover:text-blue-900">
+                          {item.courierCn}
+                        </span>
+                        {item.shipmentStatus && (
+                          <span className={`mt-1 inline-flex rounded-full border px-1.5 py-0.5 text-[10px] font-medium capitalize ${shipmentStatusClass(item.shipmentStatus)}`}>
+                            {fmtShipmentStatus(item.shipmentStatus)}
+                          </span>
+                        )}
+                      </button>
+                    ) : item.salesInvoiceId ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+                        onClick={() => openShipment(item, "edit")}
+                      >
+                        <Truck className="h-3 w-3 mr-1" />Add CN
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Badge className={`text-xs border ${ptaClass(item.ptaStatus)}`}>{fmtPta(item.ptaStatus)}</Badge>
@@ -749,7 +837,7 @@ export default function Inventory() {
                 </TableRow>
                 {item.status === "sold" && (item.saleCustomerName || item.saleDate) && (
                   <TableRow key={`${item.id}-sale`} className="bg-blue-50/50 border-t-0">
-                    <TableCell colSpan={10} className="py-1.5 px-4">
+                  <TableCell colSpan={11} className="py-1.5 px-4">
                       <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-blue-800">
                         {item.saleCustomerName && (
                           <span className="flex items-center gap-1"><User className="h-3 w-3 opacity-60" />{item.saleCustomerName}</span>
@@ -1187,6 +1275,122 @@ export default function Inventory() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteConfirm(null)}>Cancel</Button>
             <Button variant="destructive" onClick={() => deleteConfirm && deleteMutation.mutate(deleteConfirm)} disabled={deleteMutation.isPending}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Courier CN / Shipment Status Dialog ── */}
+      <Dialog open={shipmentItem !== null} onOpenChange={v => { if (!v) closeShipment(); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Truck className="h-4 w-4 text-blue-600" />
+              Courier Shipment
+            </DialogTitle>
+          </DialogHeader>
+          {shipmentItem && (
+            <div className="space-y-4 py-1">
+              <div className="rounded-md bg-muted px-3 py-2 text-xs space-y-1">
+                <div className="font-medium">{shipmentItem.brandName} {shipmentItem.modelName}</div>
+                <div className="font-mono text-muted-foreground">{shipmentItem.imei}</div>
+                {shipmentItem.saleCustomerName && (
+                  <div className="text-muted-foreground">
+                    Customer: {shipmentItem.saleCustomerName}
+                    {shipmentItem.saleCustomerCity ? ` · ${shipmentItem.saleCustomerCity}` : ""}
+                  </div>
+                )}
+              </div>
+
+              {shipmentMode === "view" && shipmentItem.courierCn ? (
+                <div className="rounded-lg border divide-y text-sm">
+                  <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+                    <span className="text-muted-foreground">Courier</span>
+                    <span className="font-medium">{shipmentItem.courierName ?? "—"}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+                    <span className="text-muted-foreground">CN / Tracking No.</span>
+                    <span className="font-mono font-semibold text-blue-700">{shipmentItem.courierCn}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+                    <span className="text-muted-foreground">Status</span>
+                    {shipmentItem.shipmentStatus ? (
+                      <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${shipmentStatusClass(shipmentItem.shipmentStatus)}`}>
+                        {fmtShipmentStatus(shipmentItem.shipmentStatus)}
+                      </span>
+                    ) : <span className="text-muted-foreground">Not available</span>}
+                  </div>
+                  {shipmentItem.shipmentDestination && (
+                    <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+                      <span className="text-muted-foreground">Destination</span>
+                      <span className="text-right">{shipmentItem.shipmentDestination}</span>
+                    </div>
+                  )}
+                  {shipmentItem.shipmentCreatedAt && (
+                    <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+                      <span className="text-muted-foreground">Created</span>
+                      <span>{new Date(shipmentItem.shipmentCreatedAt).toLocaleString("en-PK", { dateStyle: "medium", timeStyle: "short" })}</span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+                  Add the courier and CN / tracking number here. This will also update the linked invoice and shipment record.
+                </div>
+              )}
+
+              {shipmentMode === "edit" && (
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label>Courier *</Label>
+                    <Select value={shipmentCourierId} onValueChange={setShipmentCourierId}>
+                      <SelectTrigger><SelectValue placeholder="Select courier" /></SelectTrigger>
+                      <SelectContent>
+                        {couriers?.filter(c => c.active !== false).map(c => (
+                          <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>CN / Tracking Number *</Label>
+                    <Input
+                      className="font-mono"
+                      placeholder="e.g. TCS-123456789"
+                      value={shipmentCnValue}
+                      onChange={e => setShipmentCnValue(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter" && !shipmentSaving) saveShipment(); }}
+                      autoFocus
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Shipment Status</Label>
+                    <Select value={shipmentStatusValue} onValueChange={setShipmentStatusValue}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {["pending", "booked", "dispatched", "in_transit", "delivered", "returned", "cancelled"].map(status => (
+                          <SelectItem key={status} value={status}>{fmtShipmentStatus(status)}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            {shipmentMode === "view" ? (
+              <>
+                <Button variant="outline" onClick={closeShipment}>Close</Button>
+                <Button onClick={() => setShipmentMode("edit")}>Edit CN</Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => shipmentItem?.courierCn ? setShipmentMode("view") : closeShipment}>Cancel</Button>
+                <Button onClick={saveShipment} disabled={shipmentSaving || !shipmentCourierId || !shipmentCnValue.trim()}>
+                  {shipmentSaving ? "Saving…" : "Save Courier CN"}
+                </Button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
