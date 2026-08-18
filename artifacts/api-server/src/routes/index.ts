@@ -24,6 +24,7 @@ import expensesRouter from "./expenses";
 import simRouter from "./sim";
 import pushRouter from "./push";
 import chatRouter from "./chat";
+import courierTrackingRouter from "./courier_tracking";
 
 const router: IRouter = Router();
 
@@ -52,5 +53,6 @@ router.use(expensesRouter);
 router.use(simRouter);
 router.use(pushRouter);
 router.use(chatRouter);
+router.use(courierTrackingRouter);
 
 export default router;

@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Upload, ChevronLeft, ChevronRight, Pencil, Trash2, X, FileSpreadsheet, CheckCircle2, Download, Receipt, Layers, RefreshCw, Hash, History, MessageSquarePlus, User, Phone, MapPin, CreditCard, Calendar, Truck } from "lucide-react";
+import { Plus, Upload, ChevronLeft, ChevronRight, Pencil, Trash2, X, FileSpreadsheet, CheckCircle2, Download, Receipt, Layers, RefreshCw, Hash, History, MessageSquarePlus, User, Phone, MapPin, CreditCard, Calendar, Truck, ExternalLink } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import * as XLSX from "xlsx";
 
@@ -37,6 +37,17 @@ interface InventoryItem {
 interface Brand { id: number; name: string; deviceIdMandatory: boolean; }
 interface DeviceModel { id: number; brandId: number; name: string; }
 interface Courier { id: number; name: string; trackingUrl: string | null; active: boolean; }
+interface LiveTracking {
+  courier: string;
+  provider: string | null;
+  cn: string;
+  found: boolean;
+  supported: boolean;
+  status: string | null;
+  details: Array<{ label: string; value: string }>;
+  message: string;
+  sourceUrl: string | null;
+}
 interface ImeiHistoryEntry {
   id: number; inventoryItemId: number; oldImei: string; newImei: string;
   previousStatus: string | null; restoredStatus: string | null;
@@ -255,6 +266,15 @@ export default function Inventory() {
 
   const { data: brands } = useQuery({ queryKey: ["brands"], queryFn: () => axiosInstance.get<Brand[]>("/brands").then(r => r.data) });
   const { data: couriers } = useQuery({ queryKey: ["couriers"], queryFn: () => axiosInstance.get<Courier[]>("/couriers").then(r => r.data) });
+  const liveTracking = useQuery<LiveTracking>({
+    queryKey: ["courier-live-tracking", shipmentCourierId, shipmentItem?.courierCn],
+    queryFn: () => axiosInstance
+      .get<LiveTracking>(`/couriers/${shipmentCourierId}/track`, { params: { cn: shipmentItem?.courierCn } })
+      .then(r => r.data),
+    enabled: shipmentMode === "view" && Boolean(shipmentCourierId && shipmentItem?.courierCn),
+    retry: false,
+    staleTime: 0,
+  });
   const { data: models } = useQuery({
     queryKey: ["models", filterBrand],
     queryFn: () => axiosInstance.get<DeviceModel[]>(`/models${filterBrand ? `?brandId=${filterBrand}` : ""}`).then(r => r.data),
@@ -1302,7 +1322,8 @@ export default function Inventory() {
               </div>
 
               {shipmentMode === "view" && shipmentItem.courierCn ? (
-                <div className="rounded-lg border divide-y text-sm">
+                 <div className="space-y-3">
+                   <div className="rounded-lg border divide-y text-sm">
                   <div className="flex items-center justify-between gap-3 px-3 py-2.5">
                     <span className="text-muted-foreground">Courier</span>
                     <span className="font-medium">{shipmentItem.courierName ?? "—"}</span>
@@ -1331,6 +1352,53 @@ export default function Inventory() {
                       <span>{new Date(shipmentItem.shipmentCreatedAt).toLocaleString("en-PK", { dateStyle: "medium", timeStyle: "short" })}</span>
                     </div>
                   )}
+                   </div>
+                   <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-3 space-y-2">
+                     <div className="flex items-center justify-between gap-2">
+                       <div className="flex items-center gap-2 text-sm font-semibold text-blue-900">
+                         <RefreshCw className={`h-3.5 w-3.5 ${liveTracking.isLoading ? "animate-spin" : ""}`} />
+                         Live courier status
+                       </div>
+                       {liveTracking.data?.sourceUrl && (
+                         <a
+                           href={liveTracking.data.sourceUrl}
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 hover:underline"
+                         >
+                           Official site <ExternalLink className="h-3 w-3" />
+                         </a>
+                       )}
+                     </div>
+                     {liveTracking.isLoading && (
+                       <p className="text-xs text-blue-800">Checking the official courier website…</p>
+                     )}
+                     {liveTracking.isError && (
+                       <p className="text-xs text-red-700">The official courier website is unavailable right now. Use the official-site link above to retry.</p>
+                     )}
+                     {liveTracking.data && (
+                       <>
+                         <div className="flex items-center justify-between gap-2 text-xs">
+                           <span className="text-blue-800">{liveTracking.data.message}</span>
+                           {liveTracking.data.status && (
+                             <Badge className="capitalize bg-blue-600 text-white hover:bg-blue-600">
+                               {liveTracking.data.status}
+                             </Badge>
+                           )}
+                         </div>
+                         {liveTracking.data.details.length > 0 && (
+                           <div className="rounded-md border border-blue-100 bg-white divide-y text-xs">
+                             {liveTracking.data.details.map((detail, index) => (
+                               <div key={`${detail.label}-${index}`} className="flex items-start justify-between gap-3 px-2.5 py-2">
+                                 <span className="text-muted-foreground">{detail.label}</span>
+                                 <span className="text-right font-medium text-foreground">{detail.value}</span>
+                               </div>
+                             ))}
+                           </div>
+                         )}
+                       </>
+                     )}
+                   </div>
                 </div>
               ) : (
                 <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">
