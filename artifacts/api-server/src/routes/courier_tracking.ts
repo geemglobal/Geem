@@ -59,12 +59,19 @@ function officialTrackingUrl(provider: string | null, template: string | null, c
   return template.replace(/\{cn\}/gi, encodedCn);
 }
 
-function getStatus(details: TrackingDetail[], text: string): string | null {
+function formatStatus(value: string): string {
+  return value.replace(/[-_]+/g, " ").replace(/\b\w/g, character => character.toUpperCase());
+}
+
+function getStatus(details: TrackingDetail[], text: string, html: string): string | null {
   const row = details.find(detail => /status|current state|shipment state/i.test(detail.label));
   if (row) return row.value;
 
+  const classMatch = html.match(/<[^>]+\bclass=["'][^"']*\btracking-status-([a-z-]+)/i);
+  if (classMatch?.[1]) return formatStatus(classMatch[1]);
+
   const statusMatch = text.match(/\b(delivered|out for delivery|in transit|dispatched|booked|returned|cancelled|pending)\b/i);
-  return statusMatch?.[1] ?? null;
+  return statusMatch?.[1] ? formatStatus(statusMatch[1]) : null;
 }
 
 router.get("/couriers/:id/track", async (req, res): Promise<void> => {
@@ -127,7 +134,7 @@ router.get("/couriers/:id/track", async (req, res): Promise<void> => {
       cn,
       found: !notFound,
       supported: true,
-      status: notFound ? null : getStatus(details, text),
+      status: notFound ? null : getStatus(details, text, html),
       details,
       message: notFound
         ? "The official courier website could not find this CN."

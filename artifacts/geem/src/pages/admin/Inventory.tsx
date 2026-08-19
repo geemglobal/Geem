@@ -1337,26 +1337,6 @@ export default function Inventory() {
                     <span className="text-muted-foreground">CN / Tracking No.</span>
                     <span className="font-mono font-semibold text-blue-700">{shipmentItem.courierCn}</span>
                   </div>
-                  <div className="flex items-center justify-between gap-3 px-3 py-2.5">
-                    <span className="text-muted-foreground">Status</span>
-                    {shipmentItem.shipmentStatus ? (
-                      <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${shipmentStatusClass(shipmentItem.shipmentStatus)}`}>
-                        {fmtShipmentStatus(shipmentItem.shipmentStatus)}
-                      </span>
-                    ) : <span className="text-muted-foreground">Not available</span>}
-                  </div>
-                  {shipmentItem.shipmentDestination && (
-                    <div className="flex items-center justify-between gap-3 px-3 py-2.5">
-                      <span className="text-muted-foreground">Destination</span>
-                      <span className="text-right">{shipmentItem.shipmentDestination}</span>
-                    </div>
-                  )}
-                  {shipmentItem.shipmentCreatedAt && (
-                    <div className="flex items-center justify-between gap-3 px-3 py-2.5">
-                      <span className="text-muted-foreground">Created</span>
-                      <span>{new Date(shipmentItem.shipmentCreatedAt).toLocaleString("en-PK", { dateStyle: "medium", timeStyle: "short" })}</span>
-                    </div>
-                  )}
                    </div>
                    <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-3 space-y-2">
                      <div className="flex items-center justify-between gap-2">
@@ -1384,7 +1364,9 @@ export default function Inventory() {
                      {liveTracking.data && (
                        <>
                          <div className="flex items-center justify-between gap-2 text-xs">
-                           <span className="text-blue-800">{liveTracking.data.message}</span>
+                           <span className={liveTracking.data.found ? "text-blue-800" : "text-amber-800"}>
+                             {liveTracking.data.message}
+                           </span>
                            {liveTracking.data.status && (
                              <Badge className="capitalize bg-blue-600 text-white hover:bg-blue-600">
                                {liveTracking.data.status}
