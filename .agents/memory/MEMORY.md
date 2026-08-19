@@ -2,3 +2,5 @@
 - [Deploy path fix](deploy-path.md) — ERP nginx root is /var/www/geem/erp (not erp/public); deploy.sh must set ERP_PUBLIC=/var/www/geem/erp
 - [VPS access](vps-access.md) — SSH password in VPS_SSH_PRIVATE_KEY secret; use sshpass; DB is geemdb, postgres user via su -s /bin/bash postgres
 - [GitHub deployment auth](github-deploy-auth.md) — pushes to the public Geem repository require the secure GITHUB_CLASSIC_KEY secret; main pushes trigger the VPS webhook
+- [Courier tracking coverage](courier-tracking-coverage.md) — keep browser tracking compact and server-side; only expose a parser after its courier flow is verified
+- [VPS deploy safety](vps-deploy-safety.md) — stash VPS-local generated changes before pulling main; never force-reset the production working tree

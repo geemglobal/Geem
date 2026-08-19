@@ -275,6 +275,11 @@ export default function Inventory() {
     retry: false,
     staleTime: 0,
   });
+  const shipmentOfficialUrl = liveTracking.data?.sourceUrl ?? (
+    shipmentItem?.courierTrackingUrl && shipmentItem.courierCn
+      ? shipmentItem.courierTrackingUrl.replace(/\{cn\}/gi, encodeURIComponent(shipmentItem.courierCn))
+      : null
+  );
   const { data: models } = useQuery({
     queryKey: ["models", filterBrand],
     queryFn: () => axiosInstance.get<DeviceModel[]>(`/models${filterBrand ? `?brandId=${filterBrand}` : ""}`).then(r => r.data),
@@ -1359,9 +1364,9 @@ export default function Inventory() {
                          <RefreshCw className={`h-3.5 w-3.5 ${liveTracking.isLoading ? "animate-spin" : ""}`} />
                          Live courier status
                        </div>
-                       {liveTracking.data?.sourceUrl && (
+                       {shipmentOfficialUrl && (
                          <a
-                           href={liveTracking.data.sourceUrl}
+                           href={shipmentOfficialUrl}
                            target="_blank"
                            rel="noopener noreferrer"
                            className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 hover:underline"
