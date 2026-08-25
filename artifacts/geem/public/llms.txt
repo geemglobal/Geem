@@ -1,0 +1,44 @@
+# Geem.pk — AI-readable site summary
+
+Geem.pk is Pakistan's specialist supplier of military-grade security equipment, surveillance devices, GPS trackers, and covert communications gear. We serve security professionals, agencies, and individuals across Pakistan with genuine branded products and custom agency imports.
+
+## What We Sell
+
+- **Spy Cameras & Surveillance**: Pinhole cameras, covert recording devices, hidden cameras, body-worn cameras (LawMate, Esonic brands)
+- **RF Signal Detectors & Bug Sweepers**: TSCM equipment, spectrum analyzers, frequency scanners
+- **GPS Trackers**: Vehicle trackers, OBD2 trackers, personal GPS, kids GPS watches, motorcycle trackers, GPS SIM cards (Yuntrack, MiCODUS, SinoTrack, Wanway, TKStar, Garmin)
+- **Counter-Surveillance Devices**: Anti-surveillance tools, signal jammers (legal use only), privacy protection
+- **Covert Communications**: Encrypted radios, tactical comms equipment
+- **3D Printer Filaments**: PLA, ABS, PETG, TPU, Nylon, ASA, Carbon Fiber, PC
+- **Industrial Composite Materials**: Carbon fiber sheets/tubes, epoxy resin systems
+- **Battery & Power Systems**: Custom battery packs, high-voltage systems, marine batteries
+
+## Key Facts
+
+- **Location**: Pakistan (nationwide delivery, 2–5 business days)
+- **Contact**: +92-307-8680005 | info@geem.pk | WhatsApp available
+- **Payment Methods**: Cash on Delivery, Bank Transfer, EasyPaisa, JazzCash
+- **Custom Imports**: Available for security agencies and organizations on request
+- **Brands stocked**: LawMate, Esonic, Yuntrack, MiCODUS, SinoTrack, Wanway, TKStar, Garmin, and more
+
+## Site Structure
+
+- `/shop/products` — Full product catalog with search and filters
+- `/shop/category/{id}` — Products by category
+- `/shop/products/{slug}` — Individual product detail page with specs and pricing
+- `/shop/cart` — Shopping cart
+- `/shop/checkout` — Order placement
+- `/shop/track` — Order tracking
+- `/about` — Company information
+- `/contact` — Contact form and details
+- `/faq` — Frequently asked questions
+- `/privacy` — Privacy policy
+- `/terms` — Terms and conditions
+
+## Structured Data
+
+Full JSON-LD structured data is available on the homepage for Organization, WebSite (with SearchAction), and Store entities.
+
+## Sitemap
+
+https://geem.pk/api/sitemap.xml
