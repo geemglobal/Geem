@@ -38,4 +38,12 @@ systemctl restart geem-api.service
 systemctl is-active geem-api.service && echo "  API: OK"
 
 echo ">>> Deploy complete!"
-curl -s http://127.0.0.1:8080/api/healthz && echo ""
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+  if curl -fsS --max-time 5 http://127.0.0.1:8080/api/healthz; then
+    echo ""
+    exit 0
+  fi
+  sleep 2
+done
+echo "API health check did not become ready after restart" >&2
+exit 1
