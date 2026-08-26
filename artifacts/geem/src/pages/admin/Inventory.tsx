@@ -1318,7 +1318,7 @@ export default function Inventory() {
 
       {/* ── Courier CN / Shipment Status Dialog ── */}
       <Dialog open={shipmentItem !== null} onOpenChange={v => { if (!v) closeShipment(); }}>
-        <DialogContent className="max-w-md">
+         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Truck className="h-4 w-4 text-blue-600" />
@@ -1334,6 +1334,9 @@ export default function Inventory() {
                   <div className="text-muted-foreground">
                     Customer: {shipmentItem.saleCustomerName}
                     {shipmentItem.saleCustomerCity ? ` · ${shipmentItem.saleCustomerCity}` : ""}
+                    {shipmentItem.saleCustomerMobile && (
+                      <> · <a href={`tel:${shipmentItem.saleCustomerMobile}`} className="text-blue-700 hover:underline">{shipmentItem.saleCustomerMobile}</a></>
+                    )}
                   </div>
                 )}
               </div>
