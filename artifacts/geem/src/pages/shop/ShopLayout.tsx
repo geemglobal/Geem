@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useShopBranding } from "@/lib/shopBranding";
 import { Link, useLocation } from "wouter";
-import { ShoppingCart, Menu, X, ChevronDown, Shield, Radio, Lock, Camera, MapPin, Eye, Wifi, User, LogIn, MessageCircle, Phone, Search, Bell } from "lucide-react";
+import { ShoppingCart, Menu, X, ChevronDown, Shield, Radio, Lock, Camera, MapPin, Eye, Wifi, User, LogIn, MessageCircle, Phone, Search, Bell, BellRing, BellOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/contexts/CartContext";
 import { ShopTracker } from "@/components/ShopTracker";
@@ -13,6 +13,8 @@ import { markShopNotifsRead } from "./ShopNotifications";
 import { WhatsAppChooser } from "@/components/WhatsAppChooser";
 import ShopChatWidget from "@/components/shop/ShopChat";
 import LocationPermissionBanner from "@/components/shop/LocationPermissionBanner";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { useToast } from "@/hooks/use-toast";
 
 const CATEGORIES = [
   { href: "/shop/products?category=Security+Equipment",     label: "Security Equipment",       icon: Shield },
@@ -57,8 +59,45 @@ export function ShopLayout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
   const branding = useShopBranding();
   const { customer, getToken } = useShopAuth();
+  const { toast } = useToast();
 
-  const authHeader = () => { const t = getToken(); return t ? { Authorization: `Bearer ${t}` } : {}; };
+  const authHeader = (): Record<string, string> => {
+    const t = getToken();
+    return t ? { Authorization: `Bearer ${t}` } : {};
+  };
+
+  const { status: pushStatus, subscribe: subscribePush } = usePushNotifications({
+    authHeader,
+    userType: "shop",
+    // Prefer email because existing order records commonly target by email.
+    // Fall back to mobile for accounts created without an email address, and
+    // finally to the immutable shop customer id.
+    userId: customer
+      ? (customer.email ?? customer.mobile ?? String(customer.id))
+      : undefined,
+  });
+  const [enablingPush, setEnablingPush] = useState(false);
+
+  async function handleEnablePush() {
+    if (enablingPush) return;
+    if (pushStatus === "denied") {
+      toast({
+        title: "Notifications are blocked",
+        description: "Allow notifications for this site in your browser settings, then try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setEnablingPush(true);
+    try {
+      const ok = await subscribePush();
+      toast(ok
+        ? { title: "Notifications enabled", description: "You’ll receive order updates on this device." }
+        : { title: "Could not enable notifications", description: "Please try again from this device.", variant: "destructive" });
+    } finally {
+      setEnablingPush(false);
+    }
+  }
 
   interface ShopNotifItem { id: string; createdAt: string; }
   const { data: shopNotifs = [] } = useQuery<ShopNotifItem[]>({
@@ -66,7 +105,7 @@ export function ShopLayout({ children }: { children: React.ReactNode }) {
     queryFn: () => axiosInstance.get<ShopNotifItem[]>("/shop/auth/notifications", { headers: authHeader() }).then(r => r.data),
     enabled: !!customer,
     staleTime: 30_000,
-    refetchInterval: 60_000,
+    refetchInterval: 15_000,
     select: (d) => d,
   });
   // Track last-read timestamp to force re-render of bell count
@@ -244,6 +283,25 @@ export function ShopLayout({ children }: { children: React.ReactNode }) {
                   </span>
                 </Link>
               </div>
+            )}
+
+            {customer && (
+              pushStatus !== "subscribed" && pushStatus !== "unsupported" && (
+                <button
+                  type="button"
+                  onClick={handleEnablePush}
+                  disabled={enablingPush}
+                  className={`inline-flex items-center justify-center w-9 h-9 rounded-full border transition-all duration-150 cursor-pointer select-none ${
+                    pushStatus === "denied"
+                      ? "text-red-500 border-red-200 hover:bg-red-50"
+                      : "text-primary border-primary/30 hover:bg-primary/8"
+                  }`}
+                  title={pushStatus === "denied" ? "Notifications blocked" : "Enable order notifications"}
+                  aria-label={pushStatus === "denied" ? "Notifications blocked" : "Enable order notifications"}
+                >
+                  {pushStatus === "denied" ? <BellOff className="h-4 w-4" /> : <BellRing className={`h-4 w-4 ${enablingPush ? "animate-pulse" : ""}`} />}
+                </button>
+              )
             )}
 
             {customer && (

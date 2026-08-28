@@ -116,6 +116,13 @@ const pwaWorkbox =
         navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
           {
+            // Authenticated shop data must never be cached: cache keys do not
+            // include the Authorization header, so caching these responses can
+            // both hide fresh alerts and leak one customer's data to another.
+            urlPattern: ({ url }: { url: URL }) => url.pathname.startsWith("/api/shop/auth/"),
+            handler: "NetworkOnly" as const,
+          },
+          {
             // app-icon and favicon-icon are server-side DB-proxies — never cache them
             // so every page load picks up the latest logo the admin has saved.
             urlPattern: ({ url }: { url: URL }) =>

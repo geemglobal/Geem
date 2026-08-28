@@ -51,17 +51,17 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const rawUrl = event.notification.data?.url || "/";
-  // Always use an absolute URL so the correct domain is opened regardless of
-  // which origin this SW was registered on (geem.pk vs erp.geem.pk).
-  const targetUrl = rawUrl.startsWith("http")
-    ? rawUrl
-    : "https://erp.geem.pk" + rawUrl;
+  // Resolve relative URLs against the origin that registered this worker.
+  // The same app is served from geem.pk (shop) and erp.geem.pk (ERP), so
+  // hardcoding either hostname sends users to the wrong product.
+  const targetUrl = new URL(rawUrl, self.location.origin).href;
 
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
-      // If the ERP is already open, navigate that tab and focus it
+      // If the same product is already open, navigate that tab and focus it.
+      // Do not reuse an ERP tab for a shop notification (or vice versa).
       for (const client of windowClients) {
-        if (client.url.includes("erp.geem.pk") && "focus" in client) {
+        if (client.url.startsWith(self.location.origin) && "focus" in client) {
           client.navigate(targetUrl);
           return client.focus();
         }

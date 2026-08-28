@@ -338,7 +338,7 @@ router.patch("/web-orders/returns/:id", async (req, res): Promise<void> => {
     }
   }
 
-  if (status && row.customerEmail) {
+  if (status && (row.customerEmail || row.customerMobile)) {
     const statusLabels: Record<string, string> = {
       approved: "✅ Return Approved",
       rejected: "❌ Return Rejected",
@@ -346,7 +346,7 @@ router.patch("/web-orders/returns/:id", async (req, res): Promise<void> => {
     };
     const label = statusLabels[status];
     if (label) {
-      sendPushToUser("shop", row.customerEmail, {
+      sendPushToUser("shop", [row.customerEmail, row.customerMobile].filter((value): value is string => Boolean(value?.trim())), {
         title: label,
         body: walletCredited
           ? `Your return for order ${row.orderNumber} is ${status}. Rs ${refAmt.toLocaleString()} refunded to your wallet.`
@@ -629,7 +629,7 @@ router.patch("/web-orders/:id", async (req, res): Promise<void> => {
     }
   }
 
-  if (req.body.status && wo.customerEmail) {
+  if (req.body.status && (wo.customerEmail || wo.customerMobile)) {
     const statusLabels: Record<string, string> = {
       confirmed: "✅ Order Confirmed",
       processing: "⚙️ Order Processing",
@@ -639,7 +639,7 @@ router.patch("/web-orders/:id", async (req, res): Promise<void> => {
     };
     const statusLabel = statusLabels[req.body.status];
     if (statusLabel) {
-      sendPushToUser("shop", wo.customerEmail, {
+      sendPushToUser("shop", [wo.customerEmail, wo.customerMobile].filter((value): value is string => Boolean(value?.trim())), {
         title: statusLabel,
         body: `Your order ${wo.orderNumber} has been ${req.body.status}.`,
         url: "/shop/account",

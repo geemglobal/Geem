@@ -2,7 +2,7 @@ import webpush from "web-push";
 import fs from "fs";
 import path from "path";
 import { db, pushSubscriptionsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import { logger } from "./logger";
 
 const KEYS_FILE = path.join(import.meta.dirname, "../../.vapid-keys.json");
@@ -55,15 +55,22 @@ export async function sendPushToAdmins(payload: PushPayload): Promise<void> {
         const status = (err as { statusCode?: number }).statusCode;
         if (status === 410 || status === 404) {
           await db.delete(pushSubscriptionsTable).where(eq(pushSubscriptionsTable.id, sub.id));
+        } else {
+          logger.warn({ err, endpoint: sub.endpoint.slice(0, 80), status }, "Admin push delivery failed");
         }
       }
     })
   );
 }
 
-export async function sendPushToUser(userType: string, userId: string, payload: PushPayload): Promise<void> {
+export async function sendPushToUser(userType: string, userIds: string | string[], payload: PushPayload): Promise<void> {
+  const identities = (Array.isArray(userIds) ? userIds : [userIds])
+    .map(identity => identity.trim())
+    .filter(Boolean);
+  if (!identities.length) return;
+
   const subs = await db.select().from(pushSubscriptionsTable)
-    .where(eq(pushSubscriptionsTable.userId, userId));
+    .where(or(...identities.map(identity => eq(pushSubscriptionsTable.userId, identity))));
   if (!subs.length) return;
   const wp = getWebPush();
   const json = JSON.stringify(payload);
@@ -75,6 +82,8 @@ export async function sendPushToUser(userType: string, userId: string, payload: 
         const status = (err as { statusCode?: number }).statusCode;
         if (status === 410 || status === 404) {
           await db.delete(pushSubscriptionsTable).where(eq(pushSubscriptionsTable.id, sub.id));
+        } else {
+          logger.warn({ err, endpoint: sub.endpoint.slice(0, 80), status, identities }, "Customer push delivery failed");
         }
       }
     })

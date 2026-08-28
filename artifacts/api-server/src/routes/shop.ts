@@ -359,8 +359,9 @@ router.post("/shop/orders", async (req, res): Promise<void> => {
     url: "/web-orders",
     tag: "new-order",
   }).catch(() => {});
-  if (customerEmail) {
-    sendPushToUser("shop", customerEmail, {
+  const customerPushIdentities = [customerEmail, customerMobile].filter((value): value is string => Boolean(value?.trim()));
+  if (customerPushIdentities.length) {
+    sendPushToUser("shop", customerPushIdentities, {
       title: "✅ Order Placed!",
       body: `Your order ${orderNumber} has been received. We'll confirm it soon.`,
       url: "/shop/account",

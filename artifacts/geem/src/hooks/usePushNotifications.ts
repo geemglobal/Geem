@@ -30,7 +30,7 @@ export function usePushNotifications(opts: PushSubscribeOptions) {
   // Core subscribe logic — call this from a user-gesture handler on mobile
   const subscribe = useCallback(async (): Promise<boolean> => {
     if (!opts.userId) return false;
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
       setStatus("unsupported");
       return false;
     }
@@ -97,7 +97,7 @@ export function usePushNotifications(opts: PushSubscribeOptions) {
   // On mount: check current permission + try silent subscribe if already granted
   useEffect(() => {
     if (!opts.userId) return;
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
       setStatus("unsupported");
       return;
     }

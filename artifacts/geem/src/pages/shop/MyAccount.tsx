@@ -13,7 +13,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useShopAuth, SHOP_TOKEN_KEY } from "@/lib/shopAuth";
-import { usePushNotifications } from "@/hooks/usePushNotifications";
 import {
   Package, Truck, CheckCircle2, User, LogIn, Mail, Phone,
   MapPin, ShoppingBag, Clock, ChevronRight, Star, HeadphonesIcon,
@@ -417,15 +416,6 @@ function SignedInAccount() {
   const [infoForm, setInfoForm] = useState({ name: "", mobile: "" });
   const [returnOrder, setReturnOrder] = useState<WebOrder | null>(null);
   const [returnForm, setReturnForm] = useState({ reason: "", description: "" });
-
-  usePushNotifications({
-    authHeader: () => {
-      const t = getToken();
-      return t ? { Authorization: `Bearer ${t}` } : ({} as Record<string, string>);
-    },
-    userType: "shop",
-    userId: customer?.email ?? undefined,
-  });
 
   const authHeader = () => {
     const token = getToken();
