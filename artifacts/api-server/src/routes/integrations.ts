@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import nodemailer from "nodemailer";
-import { db, integrationSettingsTable } from "@workspace/db";
+import { db, integrationSettingsTable, couriersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { getUserIdFromToken } from "../lib/auth";
 
@@ -29,6 +29,17 @@ interface WhatsappConfig {
   phoneNumberId?: string; accessToken?: string;    // WhatsApp Business (Meta)
   apiUrl?: string; apiKey?: string;                // Generic
 }
+interface LeopardConfig {
+  apiKey?: string;
+  apiPassword?: string;
+  mode?: "live" | "test";
+}
+
+function environmentLeopardConfig(): LeopardConfig | null {
+  const apiKey = process.env.LEOPARD_API_KEY?.trim();
+  const apiPassword = process.env.LEOPARD_API_PASSWORD?.trim();
+  return apiKey && apiPassword ? { apiKey, apiPassword, mode: "live" } : null;
+}
 
 async function getConfig<T>(type: string): Promise<{ enabled: boolean; config: T } | null> {
   const [row] = await db.select().from(integrationSettingsTable).where(eq(integrationSettingsTable.type, type));
@@ -51,7 +62,29 @@ async function upsertConfig(type: string, enabled: boolean, config: unknown): Pr
 router.get("/settings/integrations/:type", async (req: Request, res: Response): Promise<void> => {
   if (!await auth(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
   const { type } = req.params as { type: string };
-  const row = await getConfig(type);
+  let row = await getConfig(type);
+  // Keep the original Master Data → Couriers credentials usable while the
+  // dedicated integration card is being introduced.
+  if (!row && type === "leopard") {
+    const [courier] = await db
+      .select({ apiKey: couriersTable.apiKey, apiPassword: couriersTable.apiPassword })
+      .from(couriersTable)
+      .where(eq(couriersTable.apiProvider, "leopard"));
+    if (courier?.apiKey || courier?.apiPassword) {
+      row = {
+        enabled: Boolean(courier.apiKey && courier.apiPassword),
+        config: {
+          apiKey: courier.apiKey ?? "",
+          apiPassword: courier.apiPassword ?? "",
+          mode: "live",
+        } satisfies LeopardConfig,
+      };
+    }
+    if (!row) {
+      const config = environmentLeopardConfig();
+      if (config) row = { enabled: true, config };
+    }
+  }
   if (!row) {
     res.json({ enabled: false, config: {} });
     return;
@@ -214,8 +247,47 @@ router.post("/settings/integrations/ai/test", async (req: Request, res: Response
   }
 });
 
+// ── POST /settings/integrations/leopard/test ───────────────────────────────
+router.post("/settings/integrations/leopard/test", async (req: Request, res: Response): Promise<void> => {
+  if (!await auth(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const row = await getConfig<LeopardConfig>("leopard");
+  const environmentConfig = environmentLeopardConfig();
+  const apiKey = row?.config?.apiKey && row.config.apiKey !== MASK
+    ? row.config.apiKey
+    : environmentConfig?.apiKey;
+  const apiPassword = row?.config?.apiPassword && row.config.apiPassword !== MASK
+    ? row.config.apiPassword
+    : environmentConfig?.apiPassword;
+  if (!apiKey || !apiPassword || apiKey === MASK || apiPassword === MASK) {
+    res.status(400).json({ error: "Leopard Courier is not configured — save the API Key and API Password first." });
+    return;
+  }
+
+  try {
+    const endpoint = row?.config?.mode === "test"
+      ? "https://merchantapistaging.leopardscourier.com/api/getAllCities/format/json/"
+      : "https://merchantapi.leopardscourier.com/api/getAllCities/format/json/";
+    const params = new URLSearchParams({ api_key: apiKey, api_password: apiPassword });
+    const response = await fetch(`${endpoint}?${params.toString()}`, {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(15_000),
+    });
+    const payload = await response.json() as Record<string, unknown>;
+    if (!response.ok) throw new Error(`Leopard API returned HTTP ${response.status}`);
+    if (payload.status === false || payload.status === 0) {
+      throw new Error(String(payload.error ?? payload.message ?? "API credentials were rejected"));
+    }
+    const cities = Array.isArray(payload.city_list)
+      ? payload.city_list.length
+      : Array.isArray(payload.data) ? payload.data.length : undefined;
+    res.json({ ok: true, message: cities === undefined ? "Leopard Courier connection accepted." : `Connection accepted — ${cities} cities available.` });
+  } catch (err) {
+    res.status(502).json({ error: `Leopard Courier connection failed: ${err instanceof Error ? err.message : String(err)}` });
+  }
+});
+
 // ── helpers ────────────────────────────────────────────────────────────────
-const SECRET_KEYS = new Set(["password", "authToken", "token", "accessToken", "apiKey", "accountSid"]);
+const SECRET_KEYS = new Set(["password", "apiPassword", "authToken", "token", "accessToken", "apiKey", "accountSid"]);
 const MASK = "••••••••";
 
 function maskSecrets(obj: Record<string, unknown>): Record<string, unknown> {

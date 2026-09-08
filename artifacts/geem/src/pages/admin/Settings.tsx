@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useOtpTimer } from "@/hooks/useOtpTimer";
-import { Building2, FileText, Users, Plus, Mail, MessageSquare, Send, Loader2, CheckCircle2, Zap, Globe, Upload, X, Palette, KeyRound, Eye, EyeOff, Pencil, Trash2, ShieldCheck, User, Phone, AtSign, UserCog, Smartphone, MessageCircle, Clock, Sparkles } from "lucide-react";
+import { Building2, FileText, Users, Plus, Mail, MessageSquare, Send, Loader2, CheckCircle2, Zap, Globe, Upload, X, Palette, KeyRound, Eye, EyeOff, Pencil, Trash2, ShieldCheck, User, Phone, AtSign, UserCog, Smartphone, MessageCircle, Clock, Sparkles, Truck } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useUpload } from "@workspace/object-storage-web";
 import { applyPrimaryColor, applyBorderRadius } from "@/lib/theme";
@@ -216,6 +216,12 @@ export default function Settings() {
   const [testEmailTo, setTestEmailTo] = useState("");
   const [testEmailLoading, setTestEmailLoading] = useState(false);
 
+  const [leopardEnabled, setLeopardEnabled] = useState(false);
+  const [leopardCfg, setLeopardCfg] = useState<Record<string, string | number | boolean>>({
+    apiKey: "", apiPassword: "", mode: "live",
+  });
+  const [testLeopardLoading, setTestLeopardLoading] = useState(false);
+
   const [smsEnabled, setSmsEnabled] = useState(false);
   const [smsCfg, setSmsCfg] = useState<Record<string, string | number | boolean>>({
     provider: "twilio", accountSid: "", authToken: "", fromNumber: "",
@@ -258,6 +264,7 @@ export default function Settings() {
   const { data: me }      = useQuery({ queryKey: ["auth-me"], queryFn: () => axiosInstance.get<UserRecord>("/auth/me").then(r => r.data), enabled: tab === "users" });
 
   const { data: emailInt } = useQuery<IntegrationData>({ queryKey: ["int-email"], queryFn: () => axiosInstance.get("/settings/integrations/email").then(r => r.data), enabled: tab === "integrations" });
+  const { data: leopardInt } = useQuery<IntegrationData>({ queryKey: ["int-leopard"], queryFn: () => axiosInstance.get("/settings/integrations/leopard").then(r => r.data), enabled: tab === "integrations" });
   const { data: smsInt }   = useQuery<IntegrationData>({ queryKey: ["int-sms"],   queryFn: () => axiosInstance.get("/settings/integrations/sms").then(r => r.data),   enabled: tab === "integrations" });
   const { data: waInt }    = useQuery<IntegrationData>({ queryKey: ["int-whatsapp"], queryFn: () => axiosInstance.get("/settings/integrations/whatsapp").then(r => r.data), enabled: tab === "integrations" });
   const { data: aiInt }    = useQuery<IntegrationData>({ queryKey: ["int-ai"],        queryFn: () => axiosInstance.get("/settings/integrations/ai").then(r => r.data),        enabled: tab === "integrations" });
@@ -277,6 +284,7 @@ export default function Settings() {
   useEffect(() => { if (invoice) setInvoiceForm(invoice); }, [invoice]);
 
   useEffect(() => { if (emailInt) { setEmailEnabled(emailInt.enabled); setEmailCfg(v => ({ ...v, ...emailInt.config })); } }, [emailInt]);
+  useEffect(() => { if (leopardInt) { setLeopardEnabled(leopardInt.enabled); setLeopardCfg(v => ({ ...v, ...leopardInt.config })); } }, [leopardInt]);
   useEffect(() => { if (smsInt)   { setSmsEnabled(smsInt.enabled);     setSmsCfg(v => ({ ...v, ...smsInt.config }));     } }, [smsInt]);
   useEffect(() => { if (waInt)    { setWaEnabled(waInt.enabled);       setWaCfg(v => ({ ...v, ...waInt.config }));       } }, [waInt]);
   useEffect(() => { if (aiInt)    { setAiEnabled(aiInt.enabled);       setAiCfg(v => ({ ...v, ...aiInt.config }));       } }, [aiInt]);
@@ -363,6 +371,17 @@ export default function Settings() {
     } finally { setTestEmailLoading(false); }
   };
 
+  const handleTestLeopard = async () => {
+    setTestLeopardLoading(true);
+    try {
+      await axiosInstance.post("/settings/integrations/leopard/test");
+      toast({ title: "Leopard Courier connection passed" });
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      toast({ title: `Test failed: ${err?.response?.data?.error ?? String(e)}`, variant: "destructive" });
+    } finally { setTestLeopardLoading(false); }
+  };
+
   const handleTestSms = async () => {
     setTestSmsLoading(true);
     try {
@@ -401,6 +420,7 @@ export default function Settings() {
   const sc = (k: string) => String(smsCfg[k] ?? "");
   const wc = (k: string) => String(waCfg[k] ?? "");
   const ac = (k: string) => String(aiCfg[k] ?? "");
+  const lc = (k: string) => String(leopardCfg[k] ?? "");
 
   return (
     <div className="space-y-6">
@@ -760,6 +780,76 @@ export default function Settings() {
             {!emailEnabled && (
               <CardContent>
                 <p className="text-sm text-muted-foreground">Toggle the switch above to configure email settings.</p>
+              </CardContent>
+            )}
+          </Card>
+
+          {/* LEOPARD COURIER ─────────────────────────────────────────────── */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2"><Truck className="h-5 w-5 text-red-600" />Leopard Courier</CardTitle>
+                <div className="flex items-center gap-2">
+                  {leopardEnabled && <Badge className="bg-green-100 text-green-700 border-green-200"><CheckCircle2 className="h-3 w-3 mr-1" />Enabled</Badge>}
+                  <Switch checked={leopardEnabled} onCheckedChange={setLeopardEnabled} />
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground">Create COD parcels and receive Leopard tracking numbers directly from invoice booking.</p>
+            </CardHeader>
+            {leopardEnabled && leopardInt && editingInt !== "leopard" && (
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-100 rounded-lg text-xs text-green-800">
+                  <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+                  <span>Leopard Courier active — settings are read-only. Click <strong>Edit</strong> to make changes.</span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                  <div><p className="text-xs text-muted-foreground mb-0.5">API Key</p><p className="font-medium tracking-widest text-muted-foreground">••••••••</p></div>
+                  <div><p className="text-xs text-muted-foreground mb-0.5">API Password</p><p className="font-medium tracking-widest text-muted-foreground">••••••••</p></div>
+                  <div><p className="text-xs text-muted-foreground mb-0.5">API Mode</p><p className="font-medium capitalize">{lc("mode") || "live"}</p></div>
+                </div>
+                <div className="flex justify-end">
+                  <Button size="sm" variant="outline" onClick={() => setEditingInt("leopard")}>
+                    <Pencil className="h-3.5 w-3.5 mr-1.5" />Edit Settings
+                  </Button>
+                </div>
+              </CardContent>
+            )}
+            {leopardEnabled && (!leopardInt || editingInt === "leopard") && (
+              <CardContent className="space-y-4">
+                <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-blue-800 space-y-1">
+                  <p className="font-semibold">Use the credentials from your Leopard Courier account.</p>
+                  <p>Live mode books real parcels. Use test mode only when Leopard has enabled the staging account for you.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="API Key">
+                    <Input type="password" value={lc("apiKey")} onChange={e => setLeopardCfg(f => ({ ...f, apiKey: e.target.value }))} placeholder="••••••••" />
+                  </Field>
+                  <Field label="API Password">
+                    <Input type="password" value={lc("apiPassword")} onChange={e => setLeopardCfg(f => ({ ...f, apiPassword: e.target.value }))} placeholder="••••••••" />
+                  </Field>
+                </div>
+                <Field label="API Mode">
+                  <Select value={lc("mode") || "live"} onValueChange={v => setLeopardCfg(f => ({ ...f, mode: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="live">Live</SelectItem>
+                      <SelectItem value="test">Test / Staging</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Separator />
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" onClick={handleTestLeopard} disabled={testLeopardLoading || !lc("apiKey") || !lc("apiPassword")}>
+                    {testLeopardLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                    <span className="ml-2">Test Connection</span>
+                  </Button>
+                  <Button onClick={() => { saveIntegration("leopard", leopardEnabled, leopardCfg, "int-leopard"); setEditingInt(null); }}>Save</Button>
+                </div>
+              </CardContent>
+            )}
+            {!leopardEnabled && (
+              <CardContent>
+                <p className="text-sm text-muted-foreground">Toggle the switch above to configure Leopard Courier parcel booking.</p>
               </CardContent>
             )}
           </Card>

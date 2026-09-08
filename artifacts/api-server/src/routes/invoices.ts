@@ -4,13 +4,107 @@ import {
   db, invoicesTable, invoiceItemsTable, paymentsTable, posDraftsTable,
   customersTable, inventoryItemsTable, invoiceSettingsTable, companySettingsTable,
   brandsTable, deviceModelsTable, ledgerEntriesTable, walletTransactionsTable,
-  webOrdersTable, couriersTable,
+  webOrdersTable, couriersTable, integrationSettingsTable,
 } from "@workspace/db";
 import { sendInvoiceEmail } from "../lib/mailer";
 import { sendSms, sendWhatsApp } from "../lib/sms";
 import { toWaPhone } from "../lib/format";
 
 const router: IRouter = Router();
+
+type LeopardConfig = {
+  apiKey: string;
+  apiPassword: string;
+  mode?: "live" | "test";
+};
+
+function leopardBaseUrl(mode?: "live" | "test"): string {
+  return mode === "test"
+    ? "https://merchantapistaging.leopardscourier.com/api"
+    : "https://merchantapi.leopardscourier.com/api";
+}
+
+async function leopardRequest(
+  method: "GET" | "POST",
+  endpoint: string,
+  config: LeopardConfig,
+  data: Record<string, string | number | undefined> = {},
+): Promise<unknown> {
+  const params = new URLSearchParams({
+    api_key: config.apiKey,
+    api_password: config.apiPassword,
+  });
+  for (const [key, value] of Object.entries(data)) {
+    if (value !== undefined) params.set(key, String(value));
+  }
+
+  const url = `${leopardBaseUrl(config.mode)}/${endpoint}/format/json/`;
+  const response = await fetch(method === "GET" ? `${url}?${params.toString()}` : url, {
+    method,
+    headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
+    ...(method === "POST" ? { body: params.toString() } : {}),
+    signal: AbortSignal.timeout(20_000),
+  });
+  const text = await response.text();
+  let payload: unknown;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    throw new Error(`Leopard API returned a non-JSON response (HTTP ${response.status})`);
+  }
+  if (!response.ok) throw new Error(`Leopard API returned HTTP ${response.status}`);
+  return payload;
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function leopardResponseBody(payload: unknown): Record<string, unknown> {
+  const root = objectValue(payload);
+  return objectValue(root.response).status !== undefined ? objectValue(root.response) : root;
+}
+
+function leopardError(payload: unknown): string | null {
+  const body = leopardResponseBody(payload);
+  const status = body.status;
+  if (status === false || status === 0 || status === "0") {
+    return String(body.error ?? body.error_msg ?? body.message ?? "Leopard Courier rejected the request");
+  }
+  return null;
+}
+
+function leopardCityId(payload: unknown, cityName: string): string | number | null {
+  const root = objectValue(payload);
+  const lists = [payload, root.city_list, root.cities, root.data, root.result]
+    .filter(Array.isArray) as unknown[][];
+  const wanted = cityName.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (!wanted) return null;
+  for (const list of lists) {
+    for (const row of list) {
+      const item = objectValue(row);
+      const name = String(item.name ?? item.city_name ?? item.cityName ?? item.city ?? "")
+        .toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (name && (name === wanted || name.includes(wanted) || wanted.includes(name))) {
+        const id = item.id ?? item.city_id ?? item.cityId ?? item.value;
+        if (typeof id === "string" || typeof id === "number") return id;
+      }
+    }
+  }
+  return null;
+}
+
+function leopardTrackingNumber(payload: unknown): string | null {
+  const body = leopardResponseBody(payload);
+  const candidates = [
+    body.track_number, body.tracking_number, body.trackNumber,
+    body.consignment_no, body.consignment_number, body.cn, body.CN,
+  ];
+  const value = candidates.find(candidate => candidate !== undefined && candidate !== null && String(candidate).trim());
+  return value === undefined ? null : String(value).trim();
+}
 
 // Shared inline logo paths (all 5 paths) — used in HTML email/print templates
 const _GEEM_LOGO_PATHS = `<path transform="translate(1635,135)" d="m0 0h32l23 4 18 6 16 8 14 10 10 9 8 8 3 4v2l5-3 9-9 13-10 13-8 16-8 16-6 23-5 14-2h36l25 4 17 5 20 9 15 10 14 12 11 13 10 15 8 17 7 23 3 17 1 11v252h-103l-1-232-3-16-5-12-6-10-7-8-10-7-12-5-10-2h-22l-14 3-12 5-11 7-8 7-9 13-6 13-3 11-1 7-1 24v201l-1 1h-102l-1-229-3-18-5-13-7-11-5-6-11-8-12-5-10-2h-22l-18 4-14 7-11 9-9 11-7 14-4 14-2 16-1 217h-103l-1-1v-380h103v36l8-7 11-9 16-10 17-8 16-5z" fill="#EC2029"/><path transform="translate(1195,134)" d="m0 0h35l24 3 25 6 17 6 19 9 17 11 14 11 14 14 11 14 9 14 8 15 9 23 5 19 3 18 1 11v45l-1 11-2 1h-290l7 21 8 15 8 10 12 12 13 8 13 6 15 4 13 2h26l22-4 15-5 19-10 14-11 10-10 7-9 5 2 15 9 28 17 24 15 6 4-7 11-11 13-9 10-11 10-16 12-17 10-19 9-24 8-26 5-27 3h-29l-25-3-20-4-27-9-16-8-14-8-11-8-10-8-19-19-10-13-12-20-10-22-6-19-4-19-3-27v-24l3-26 6-25 8-20 8-17 12-19 12-14 9-10 7-7 14-11 15-10 19-10 24-9 21-5zm2 85-20 4-16 7-11 7-12 11-10 13-9 17-3 10h186l-3-12-8-16-8-11-12-12-13-8-14-6-12-3-7-1z" fill="#EC2029"/><path transform="translate(769,134)" d="m0 0h36l23 3 22 5 18 6 16 7 17 10 17 13 18 18 13 17 11 19 10 24 6 21 3 17 2 25v18l-1 25-2 3h-291l7 20 9 17 9 11 8 8 15 10 11 5 17 5 13 2h26l23-4 19-7 16-9 11-9 4-2 2-4 5-5 7-9 4 1 28 17 26 16 19 12 1 2-9 13-11 13-12 12-11 9-14 10-14 8-16 8-27 9-25 5-28 3h-28l-25-3-20-4-17-5-21-9-17-9-19-14-12-11-8-8-11-14-7-10-9-16-7-15-6-18-5-20-3-22-1-25 2-24 4-22 6-20 8-19 9-17 11-16 11-13 8-9 8-7 15-12 18-11 16-8 21-8 21-5zm2 85-16 3-16 6-13 8-9 7-7 8-8 10-8 16-3 8v3h185l-2-10-7-16-8-11-9-10-12-9-17-8-14-4-8-1z" fill="#EC2029"/><path transform="translate(278,4)" d="m0 0h13l27 2 10 1-2 4-9 9-7 8-28 28-7 8-21 21-7 8-3 3-29 10-23 12-14 10-11 9-15 15-13 17-9 15-9 19-6 18-5 25-1 8v28l3 21 6 23 9 21 8 15 10 14 11 13 10 10 14 11 10 7 14 8 24 10 23 6 18 3h34l24-4 20-6 18-8 16-9 16-12 10-9 11-11 9-11 11-17 2-4-33-1-32-32v-2h-2l-7-8-12-12-5-4-7-8-16-16v-1h224v21l-3 23-6 27-8 24-12 26-11 19-12 17-8 10-12 14-14 14-8 7-18 14-19 12-23 12-19 8-26 8-20 4-15 2-13 1h-41l-18-2-24-5-20-6-20-8-23-11-19-12-11-8-14-11-13-12-13-13-9-11-10-13-10-15-12-22-10-23-8-26-5-23-2-15-1-13v-30l2-20 4-23 7-25 8-21 10-21 12-20 14-19 12-14 21-21 14-11 17-12 19-11 23-11 25-9 29-7 24-3z" fill="#EC2029"/><path transform="translate(402,33)" d="m0 0 6 1 24 14 11 8 13 10 13 12 3 2-2 4-12 13-43 43-2 3-4-1-11-10-15-11-14-8-14-7-16-6 2-4 15-15 7-8 23-23 7-8z" fill="#EC2029"/>`;
@@ -1047,8 +1141,34 @@ router.post("/invoices/:id/book-shipment", async (req, res): Promise<void> => {
 
   const [courier] = await db.select().from(couriersTable).where(eq(couriersTable.id, courierId));
   if (!courier) { res.status(404).json({ error: "Courier not found" }); return; }
-  if (!courier.apiKey || !courier.apiPassword) {
-    res.status(400).json({ error: "Courier API credentials not set — go to Master Data → Couriers and add the API Key and API Password." });
+
+  // Leopard credentials may be configured in Settings → Integrations, with
+  // the original Master Data → Couriers fields kept as a backwards-compatible
+  // fallback for existing installations.
+  let bookingApiKey = courier.apiKey ?? "";
+  let bookingApiPassword = courier.apiPassword ?? "";
+  let leopardMode: "live" | "test" = "live";
+  if (courier.apiProvider === "leopard") {
+    bookingApiKey = process.env.LEOPARD_API_KEY?.trim() || bookingApiKey;
+    bookingApiPassword = process.env.LEOPARD_API_PASSWORD?.trim() || bookingApiPassword;
+    const [setting] = await db.select()
+      .from(integrationSettingsTable)
+      .where(eq(integrationSettingsTable.type, "leopard"));
+    if (setting) {
+      try {
+        const config = JSON.parse(setting.config) as { apiKey?: string; apiPassword?: string; mode?: "live" | "test" };
+        if (config.apiKey && config.apiKey !== "••••••••") bookingApiKey = config.apiKey;
+        if (config.apiPassword && config.apiPassword !== "••••••••") bookingApiPassword = config.apiPassword;
+        if (config.mode === "test") leopardMode = "test";
+      } catch {
+        // The missing/invalid credentials error below is more useful than a
+        // JSON parsing error to the person booking the parcel.
+      }
+    }
+  }
+
+  if (!bookingApiKey || !bookingApiPassword) {
+    res.status(400).json({ error: "Courier API credentials not set — configure Leopard Courier in Settings → Integrations or add the API Key and API Password in Master Data → Couriers." });
     return;
   }
   if (!courier.apiProvider) {
@@ -1073,7 +1193,7 @@ router.post("/invoices/:id/book-shipment", async (req, res): Promise<void> => {
       const authResp = await fetch("https://webapi.tcscourier.com/shippingapi.svc/Login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ UserName: courier.apiKey, Password: courier.apiPassword }),
+        body: JSON.stringify({ UserName: bookingApiKey, Password: bookingApiPassword }),
         signal: AbortSignal.timeout(10_000),
       });
       const auth = await authResp.json() as Record<string, unknown>;
@@ -1114,10 +1234,59 @@ router.post("/invoices/:id/book-shipment", async (req, res): Promise<void> => {
     }
   }
 
+  // ── Leopards Courier ─────────────────────────────────────────────────────────
+  else if (courier.apiProvider === "leopard") {
+    const leopardConfig: LeopardConfig = {
+      apiKey: bookingApiKey,
+      apiPassword: bookingApiPassword,
+      mode: leopardMode,
+    };
+
+    try {
+      // The Leopards API expects city IDs. Existing Geem records store city
+      // names, so resolve the name against the merchant city list first.
+      const cities = await leopardRequest("GET", "getAllCities", leopardConfig);
+      const destinationCity = leopardCityId(cities, recipientCity) ?? (recipientCity || "self");
+      const raw = await leopardRequest("POST", "bookPacket", leopardConfig, {
+        booked_packet_weight: Math.max(1, Math.round(parsedWeight * 1000)),
+        booked_packet_vol_weight_w: "",
+        booked_packet_vol_weight_h: "",
+        booked_packet_vol_weight_l: "",
+        booked_packet_no_piece: parsedPieces,
+        booked_packet_collect_amount: Math.max(0, Math.round(codAmount)),
+        booked_packet_order_id: inv.invoiceNumber,
+        origin_city: "self",
+        destination_city: destinationCity,
+        shipment_name_eng: "self",
+        shipment_email: "self",
+        shipment_phone: "self",
+        shipment_address: "self",
+        consignment_name_eng: recipientName || "Customer",
+        consignment_email: recipientEmail || "",
+        consignment_phone: recipientPhone,
+        consignment_address: recipientAddress || "—",
+        special_instructions: inv.notes || "Geem ERP",
+      });
+      const apiError = leopardError(raw);
+      if (apiError) {
+        res.status(502).json({ error: `Leopard booking failed: ${apiError}` });
+        return;
+      }
+      cn = leopardTrackingNumber(raw);
+      if (!cn) {
+        res.status(502).json({ error: "Leopard booking returned no tracking number. Check the API response and merchant account settings." });
+        return;
+      }
+    } catch (error) {
+      res.status(502).json({ error: `Cannot reach Leopard Courier API: ${error instanceof Error ? error.message : String(error)}` });
+      return;
+    }
+  }
+
   // ── Unknown provider ─────────────────────────────────────────────────────────
   else {
     res.status(400).json({
-      error: `API booking not supported for provider "${courier.apiProvider}". Only "tcs" is supported. You can enter the tracking number manually.`,
+      error: `API booking not supported for provider "${courier.apiProvider}". Supported providers are TCS and Leopard Courier. You can enter the tracking number manually.`,
     });
     return;
   }

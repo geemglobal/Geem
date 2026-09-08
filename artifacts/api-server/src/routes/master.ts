@@ -205,6 +205,8 @@ function serialiseCoveredCities(cities: unknown): string | null {
 function formatCourier(c: typeof couriersTable.$inferSelect) {
   return {
     ...c,
+    apiKey: c.apiKey ? "••••••••" : null,
+    apiPassword: c.apiPassword ? "••••••••" : null,
     ledgerBalance: parseFloat(String(c.ledgerBalance)),
     apiProvider: c.apiProvider ?? null,
     createdAt: c.createdAt.toISOString(),
@@ -234,8 +236,8 @@ router.patch("/couriers/:id", async (req, res): Promise<void> => {
   if (req.body.name !== undefined) updates.name = req.body.name;
   if (req.body.active !== undefined) updates.active = req.body.active;
   if (req.body.apiProvider !== undefined) updates.apiProvider = req.body.apiProvider;
-  if (req.body.apiKey !== undefined) updates.apiKey = req.body.apiKey;
-  if (req.body.apiPassword !== undefined) updates.apiPassword = req.body.apiPassword;
+  if (req.body.apiKey !== undefined && req.body.apiKey !== "••••••••") updates.apiKey = req.body.apiKey;
+  if (req.body.apiPassword !== undefined && req.body.apiPassword !== "••••••••") updates.apiPassword = req.body.apiPassword;
   if (req.body.trackingUrl !== undefined) updates.trackingUrl = req.body.trackingUrl;
   if (req.body.coveredCities !== undefined) updates.coveredCities = serialiseCoveredCities(req.body.coveredCities);
   const [courier] = await db.update(couriersTable).set(updates).where(eq(couriersTable.id, id)).returning();
