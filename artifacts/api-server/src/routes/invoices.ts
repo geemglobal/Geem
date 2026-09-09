@@ -16,6 +16,7 @@ type LeopardConfig = {
   apiKey: string;
   apiPassword: string;
   mode?: "live" | "test";
+  shipmentId?: number;
 };
 
 function leopardBaseUrl(mode?: "live" | "test"): string {
@@ -30,30 +31,35 @@ async function leopardRequest(
   config: LeopardConfig,
   data: Record<string, string | number | undefined> = {},
 ): Promise<unknown> {
-  const params = new URLSearchParams({
+  const requestPayload: Record<string, string | number> = {
     api_key: config.apiKey,
     api_password: config.apiPassword,
-  });
+  };
   for (const [key, value] of Object.entries(data)) {
-    if (value !== undefined) params.set(key, String(value));
+    if (value !== undefined) requestPayload[key] = value;
   }
 
   const url = `${leopardBaseUrl(config.mode)}/${endpoint}/format/json/`;
-  const response = await fetch(method === "GET" ? `${url}?${params.toString()}` : url, {
+  const query = new URLSearchParams(
+    Object.fromEntries(Object.entries(requestPayload).map(([key, value]) => [key, String(value)])),
+  );
+  const response = await fetch(method === "GET" ? `${url}?${query.toString()}` : url, {
     method,
-    headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
-    ...(method === "POST" ? { body: params.toString() } : {}),
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    ...(method === "POST" ? { body: JSON.stringify(requestPayload) } : {}),
     signal: AbortSignal.timeout(20_000),
   });
   const text = await response.text();
-  let payload: unknown;
+  let responsePayload: unknown;
   try {
-    payload = JSON.parse(text);
+    responsePayload = JSON.parse(text);
   } catch {
     throw new Error(`Leopard API returned a non-JSON response (HTTP ${response.status})`);
   }
-  if (!response.ok) throw new Error(`Leopard API returned HTTP ${response.status}`);
-  return payload;
+  if (!response.ok) {
+    throw new Error(`Leopard API returned HTTP ${response.status}${leopardMessage(responsePayload) ? `: ${leopardMessage(responsePayload)}` : ""}`);
+  }
+  return responsePayload;
 }
 
 function objectValue(value: unknown): Record<string, unknown> {
@@ -67,11 +73,36 @@ function leopardResponseBody(payload: unknown): Record<string, unknown> {
   return objectValue(root.response).status !== undefined ? objectValue(root.response) : root;
 }
 
+function leopardMessage(payload: unknown): string | null {
+  const root = objectValue(payload);
+  const candidates = [
+    root.error,
+    root.error_msg,
+    root.errorMessage,
+    root.message,
+    root.msg,
+    root.detail,
+    objectValue(root.response).error,
+    objectValue(root.response).message,
+    objectValue(root.data).error,
+    objectValue(root.data).message,
+  ];
+  const message = candidates.find(value => typeof value === "string" && value.trim());
+  return message ? String(message).trim() : null;
+}
+
 function leopardError(payload: unknown): string | null {
   const body = leopardResponseBody(payload);
   const status = body.status;
-  if (status === false || status === 0 || status === "0") {
-    return String(body.error ?? body.error_msg ?? body.message ?? "Leopard Courier rejected the request");
+  const error = leopardMessage(payload);
+  if (
+    status === false ||
+    status === 0 ||
+    status === "0" ||
+    body.success === false ||
+    (typeof error === "string" && body.success !== true && status === undefined && body.error !== undefined)
+  ) {
+    return error ?? "Leopard Courier rejected the request";
   }
   return null;
 }
@@ -85,10 +116,10 @@ function leopardCityId(payload: unknown, cityName: string): string | number | nu
   for (const list of lists) {
     for (const row of list) {
       const item = objectValue(row);
-      const name = String(item.name ?? item.city_name ?? item.cityName ?? item.city ?? "")
+      const name = String(item.name ?? item.city_name ?? item.city_name_eng ?? item.cityName ?? item.city ?? "")
         .toLowerCase().replace(/[^a-z0-9]/g, "");
       if (name && (name === wanted || name.includes(wanted) || wanted.includes(name))) {
-        const id = item.id ?? item.city_id ?? item.cityId ?? item.value;
+        const id = item.id ?? item.city_id ?? item.cityId ?? item.city_code ?? item.value;
         if (typeof id === "string" || typeof id === "number") return id;
       }
     }
@@ -97,13 +128,29 @@ function leopardCityId(payload: unknown, cityName: string): string | number | nu
 }
 
 function leopardTrackingNumber(payload: unknown): string | null {
-  const body = leopardResponseBody(payload);
-  const candidates = [
-    body.track_number, body.tracking_number, body.trackNumber,
-    body.consignment_no, body.consignment_number, body.cn, body.CN,
-  ];
-  const value = candidates.find(candidate => candidate !== undefined && candidate !== null && String(candidate).trim());
-  return value === undefined ? null : String(value).trim();
+  const keys = new Set([
+    "track_number", "tracking_number", "trackNumber", "consignment_no",
+    "consignment_number", "packet_track_number", "packet_number", "awb", "cn", "CN",
+  ]);
+  const visit = (value: unknown): string | null => {
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const found = visit(item);
+        if (found) return found;
+      }
+      return null;
+    }
+    if (!value || typeof value !== "object") return null;
+    for (const [key, candidate] of Object.entries(value)) {
+      if (keys.has(key) && candidate !== undefined && candidate !== null && String(candidate).trim()) {
+        return String(candidate).trim();
+      }
+      const found = visit(candidate);
+      if (found) return found;
+    }
+    return null;
+  };
+  return visit(payload);
 }
 
 // Shared inline logo paths (all 5 paths) — used in HTML email/print templates
@@ -1148,6 +1195,8 @@ router.post("/invoices/:id/book-shipment", async (req, res): Promise<void> => {
   let bookingApiKey = courier.apiKey ?? "";
   let bookingApiPassword = courier.apiPassword ?? "";
   let leopardMode: "live" | "test" = "live";
+  let leopardShipmentId = Number.parseInt(process.env.LEOPARD_SHIPMENT_ID ?? "", 10);
+  if (!Number.isInteger(leopardShipmentId) || leopardShipmentId < 1) leopardShipmentId = 1;
   if (courier.apiProvider === "leopard") {
     bookingApiKey = process.env.LEOPARD_API_KEY?.trim() || bookingApiKey;
     bookingApiPassword = process.env.LEOPARD_API_PASSWORD?.trim() || bookingApiPassword;
@@ -1156,10 +1205,16 @@ router.post("/invoices/:id/book-shipment", async (req, res): Promise<void> => {
       .where(eq(integrationSettingsTable.type, "leopard"));
     if (setting) {
       try {
-        const config = JSON.parse(setting.config) as { apiKey?: string; apiPassword?: string; mode?: "live" | "test" };
+        const config = JSON.parse(setting.config) as {
+          apiKey?: string; apiPassword?: string; mode?: "live" | "test"; shipmentId?: string | number;
+        };
         if (config.apiKey && config.apiKey !== "••••••••") bookingApiKey = config.apiKey;
         if (config.apiPassword && config.apiPassword !== "••••••••") bookingApiPassword = config.apiPassword;
         if (config.mode === "test") leopardMode = "test";
+        const configuredShipmentId = Number.parseInt(String(config.shipmentId ?? ""), 10);
+        if (Number.isInteger(configuredShipmentId) && configuredShipmentId > 0) {
+          leopardShipmentId = configuredShipmentId;
+        }
       } catch {
         // The missing/invalid credentials error below is more useful than a
         // JSON parsing error to the person booking the parcel.
@@ -1180,6 +1235,22 @@ router.post("/invoices/:id/book-shipment", async (req, res): Promise<void> => {
   const codAmount = collectAmount !== undefined
     ? Math.max(0, parseFloat(String(collectAmount)))
     : Math.max(0, parseFloat(String(inv.total)) - parseFloat(String(inv.paid)));
+  if (!Number.isFinite(codAmount) || codAmount < 0) {
+    res.status(400).json({ error: "COD amount must be zero or a valid positive number." });
+    return;
+  }
+  if (!recipientCity.trim()) {
+    res.status(400).json({ error: "Customer delivery city is required before booking a Leopard parcel." });
+    return;
+  }
+  if (!recipientPhone.trim()) {
+    res.status(400).json({ error: "Customer mobile number is required before booking a Leopard parcel." });
+    return;
+  }
+  if (!recipientAddress.trim()) {
+    res.status(400).json({ error: "Customer delivery address is required before booking a Leopard parcel." });
+    return;
+  }
 
   let cn: string | null = null;
 
@@ -1240,22 +1311,28 @@ router.post("/invoices/:id/book-shipment", async (req, res): Promise<void> => {
       apiKey: bookingApiKey,
       apiPassword: bookingApiPassword,
       mode: leopardMode,
+      shipmentId: leopardShipmentId,
     };
 
     try {
       // The Leopards API expects city IDs. Existing Geem records store city
       // names, so resolve the name against the merchant city list first.
-      const cities = await leopardRequest("GET", "getAllCities", leopardConfig);
-      const destinationCity = leopardCityId(cities, recipientCity) ?? (recipientCity || "self");
+      const cities = await leopardRequest("POST", "getAllCities", leopardConfig);
+      const destinationCity = leopardCityId(cities, recipientCity);
+      if (destinationCity === null) {
+        res.status(400).json({
+          error: `Leopard does not recognize destination city "${recipientCity}". Select a valid city in the customer delivery address and try again.`,
+        });
+        return;
+      }
+      const originCityId = leopardCityId(cities, String(originCity));
       const raw = await leopardRequest("POST", "bookPacket", leopardConfig, {
+        shipment_id: leopardShipmentId,
         booked_packet_weight: Math.max(1, Math.round(parsedWeight * 1000)),
-        booked_packet_vol_weight_w: "",
-        booked_packet_vol_weight_h: "",
-        booked_packet_vol_weight_l: "",
         booked_packet_no_piece: parsedPieces,
         booked_packet_collect_amount: Math.max(0, Math.round(codAmount)),
         booked_packet_order_id: inv.invoiceNumber,
-        origin_city: "self",
+        origin_city: originCityId ?? "self",
         destination_city: destinationCity,
         shipment_name_eng: "self",
         shipment_email: "self",
@@ -1274,7 +1351,12 @@ router.post("/invoices/:id/book-shipment", async (req, res): Promise<void> => {
       }
       cn = leopardTrackingNumber(raw);
       if (!cn) {
-        res.status(502).json({ error: "Leopard booking returned no tracking number. Check the API response and merchant account settings." });
+        const responseMessage = leopardMessage(raw);
+        res.status(502).json({
+          error: responseMessage
+            ? `Leopard booking returned no tracking number: ${responseMessage}`
+            : "Leopard booking returned no tracking number. Check the API response and merchant account settings.",
+        });
         return;
       }
     } catch (error) {

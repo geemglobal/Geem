@@ -218,7 +218,7 @@ export default function Settings() {
 
   const [leopardEnabled, setLeopardEnabled] = useState(false);
   const [leopardCfg, setLeopardCfg] = useState<Record<string, string | number | boolean>>({
-    apiKey: "", apiPassword: "", mode: "live",
+    apiKey: "", apiPassword: "", mode: "live", shipmentId: 1,
   });
   const [testLeopardLoading, setTestLeopardLoading] = useState(false);
 
@@ -836,6 +836,17 @@ export default function Settings() {
                       <SelectItem value="test">Test / Staging</SelectItem>
                     </SelectContent>
                   </Select>
+                </Field>
+                <Field label="Shipment ID">
+                  <Input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={lc("shipmentId") || "1"}
+                    onChange={e => setLeopardCfg(f => ({ ...f, shipmentId: e.target.value }))}
+                    placeholder="Usually 1"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">Leopards requires this service ID for every booking. Use the value provided for your merchant account; 1 is the usual default.</p>
                 </Field>
                 <Separator />
                 <div className="flex gap-2 justify-end">

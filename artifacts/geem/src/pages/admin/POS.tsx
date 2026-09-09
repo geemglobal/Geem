@@ -399,7 +399,7 @@ export default function POS() {
     },
     onError: (e: unknown) => {
       const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Booking failed";
-      toast({ title: msg, variant: "destructive" });
+      toast({ title: "Parcel booking failed", description: msg, variant: "destructive" });
     },
   });
 

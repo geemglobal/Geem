@@ -33,12 +33,16 @@ interface LeopardConfig {
   apiKey?: string;
   apiPassword?: string;
   mode?: "live" | "test";
+  shipmentId?: number;
 }
 
 function environmentLeopardConfig(): LeopardConfig | null {
   const apiKey = process.env.LEOPARD_API_KEY?.trim();
   const apiPassword = process.env.LEOPARD_API_PASSWORD?.trim();
-  return apiKey && apiPassword ? { apiKey, apiPassword, mode: "live" } : null;
+  const shipmentId = Number.parseInt(process.env.LEOPARD_SHIPMENT_ID ?? "", 10);
+  return apiKey && apiPassword
+    ? { apiKey, apiPassword, mode: "live", ...(Number.isInteger(shipmentId) && shipmentId > 0 ? { shipmentId } : {}) }
+    : null;
 }
 
 async function getConfig<T>(type: string): Promise<{ enabled: boolean; config: T } | null> {
@@ -267,9 +271,10 @@ router.post("/settings/integrations/leopard/test", async (req: Request, res: Res
     const endpoint = row?.config?.mode === "test"
       ? "https://merchantapistaging.leopardscourier.com/api/getAllCities/format/json/"
       : "https://merchantapi.leopardscourier.com/api/getAllCities/format/json/";
-    const params = new URLSearchParams({ api_key: apiKey, api_password: apiPassword });
-    const response = await fetch(`${endpoint}?${params.toString()}`, {
+    const response = await fetch(endpoint, {
+      method: "POST",
       headers: { Accept: "application/json" },
+      body: JSON.stringify({ api_key: apiKey, api_password: apiPassword }),
       signal: AbortSignal.timeout(15_000),
     });
     const payload = await response.json() as Record<string, unknown>;
